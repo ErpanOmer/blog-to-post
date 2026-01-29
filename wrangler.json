@@ -17,7 +17,34 @@
 	"assets": {
 		"directory": "./dist/client",
 		"not_found_handling": "single-page-application"
-	}
+	},
+	"vars": {
+		"AI_PROVIDER": "cloudflare",
+		"OLLAMA_BASE_URL": "http://localhost:11434",
+		"OLLAMA_MODEL": "qwen2.5:7b"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "blog-to-post",
+			"database_id": "621e916e-fbb3-4e06-b58d-855d9de021c2"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "PROMPTS",
+			"id": "3e8f221b3ceb4c0c8078b61810cd4579"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "DRAFTS",
+			"bucket_name": "blog-to-post"
+		}
+	],
+	// "triggers": {
+	// 	"crons": ["0 2 * * *"]
+	// }
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
