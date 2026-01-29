@@ -18,7 +18,7 @@ export class CloudflareAIProvider implements AIProvider {
 	async generateArticle(input: GenerateInput) {
 		const template = await resolveTemplate(this.env, input.platform);
 		const prompt = buildPrompt(template, input);
-		const result = (await this.env.AI.run(DEFAULT_MODEL, {
+		const result = (await this.env.AI.run(DEFAULT_MODEL as any, {
 			messages: [
 				{ role: "system", content: "你是资深技术写作者，输出可直接发布的正文。" },
 				{ role: "user", content: prompt },

@@ -9,7 +9,7 @@ export async function createTask(db: D1Database, payload: Task) {
 
 export async function listTasks(db: D1Database) {
 	const result = await db.prepare("SELECT * FROM tasks ORDER BY rowid DESC").all<{ id: string; type: string; status: string; payload: string }>();
-	return (result.results ?? []).map((row) => ({
+	return (result.results ?? []).map((row: any) => ({
 		id: row.id,
 		type: row.type as Task["type"],
 		status: row.status as Task["status"],

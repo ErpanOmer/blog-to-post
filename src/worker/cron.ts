@@ -24,7 +24,7 @@ export async function generateDailyDrafts(env: Env) {
 	const provider = createAIProvider(env);
 	const candidateRaw = await env.PROMPTS.get(CANDIDATE_KEY);
 	const fallbackTitle = "AI 驱动的多平台内容分发流程实践";
-	const title = candidateRaw?.split("\n").find((line) => line.trim()) ?? fallbackTitle;
+	const title = candidateRaw?.split("\n").find((line: string) => line.trim()) ?? fallbackTitle;
 
 	await Promise.all(
 		PLATFORMS.map(async (platform) => {
