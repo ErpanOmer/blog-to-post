@@ -82,8 +82,15 @@ app.post("/api/articles/generate-title", async (c) => {
 
 	const userPrompt = titleUserPromptTpl.replace("{{JUEJIN_TOP_20_TITLES}}", (sourceTitles ?? []).join("\n") || "无数据");
 	const titleRaw = await provider.generateTitleText(titleSystemPrompt, userPrompt);
-	const title = pickFirstLine(titleRaw);
-	return c.json({ title });
+	
+	// 解析多个标题，每行一个
+	const titles = titleRaw
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0 && !line.startsWith("-") && !line.startsWith("*") && !/^\d+[.)/]/.test(line))
+		.slice(0, 5);
+	
+	return c.json({ titles, count: titles.length });
 });
 
 app.post("/api/articles/generate-content", async (c) => {

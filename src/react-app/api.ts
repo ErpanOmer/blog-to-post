@@ -25,8 +25,8 @@ export async function getJuejinTopTitles(): Promise<string[]> {
 	return data.titles ?? [];
 }
 
-export async function generateTitle(input: { titleSource: "juejin" | "custom"; sourceTitles?: string[]; platform?: PlatformType }): Promise<{ title: string }> {
-	return parseJson<{ title: string }>(
+export async function generateTitle(input: { titleSource: "juejin" | "custom"; sourceTitles?: string[]; platform?: PlatformType }): Promise<{ titles: string[]; count: number }> {
+	return parseJson<{ titles: string[]; count: number }>(
 		await fetch("/api/articles/generate-title", {
 			method: "POST",
 			headers: jsonHeaders,
