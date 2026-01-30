@@ -13,13 +13,22 @@ export function ArticleList({ articles, selectedId, onSelect }: { articles: Arti
 					onClick={() => onSelect(article.id)}
 					type="button"
 				>
-					<div className="flex items-center justify-between">
-						<h3 className="text-sm font-semibold text-slate-900">{article.title}</h3>
+					<div className="flex items-center justify-between gap-2">
+						<h3 className="text-sm font-semibold text-slate-900 line-clamp-2">{article.title}</h3>
 						<StatusBadge status={article.status} />
 					</div>
-					<p className="text-xs text-slate-500">平台：{article.platform} · 更新：{new Date(article.updatedAt).toLocaleString()}</p>
+					<p className="text-xs text-slate-500">
+						平台：{article.platform} · 更新：{new Date(article.updatedAt).toLocaleString()}
+					</p>
+					<p className="text-xs text-slate-500">
+						发布：{article.publishedAt ? new Date(article.publishedAt).toLocaleString() : "未发布"}
+					</p>
+					{article.tags?.length ? (
+						<p className="text-xs text-slate-500">标签：{article.tags.join(" · ")}</p>
+					) : null}
 				</button>
 			))}
 		</div>
 	);
 }
+

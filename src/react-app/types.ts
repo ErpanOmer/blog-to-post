@@ -1,12 +1,17 @@
 export type PlatformType = "juejin" | "zhihu" | "xiaohongshu" | "wechat";
 export type ArticleStatus = "draft" | "reviewed" | "scheduled" | "published" | "failed";
+export type PromptKey = "title" | "content" | "summary" | "tags" | "cover";
 
 export interface Article {
 	id: string;
 	title: string;
 	content: string;
+	summary?: string | null;
+	tags?: string[] | null;
+	coverImage?: string | null;
 	platform: PlatformType;
 	status: ArticleStatus;
+	publishedAt?: number | null;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -26,6 +31,9 @@ export interface ProviderStatus {
 }
 
 export interface PromptTemplate {
-	key: PlatformType;
+	key: PromptKey;
 	template: string;
 }
+
+
+

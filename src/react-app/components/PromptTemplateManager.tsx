@@ -1,13 +1,14 @@
-import type { PlatformType, PromptTemplate } from "../types";
+import type { PromptKey, PromptTemplate } from "../types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
-const labels: Record<PlatformType, string> = {
-	juejin: "掘金",
-	zhihu: "知乎",
-	xiaohongshu: "小红书",
-	wechat: "公众号",
+const labels: Record<PromptKey, string> = {
+	title: "标题生成",
+	content: "正文生成",
+	summary: "摘要生成",
+	tags: "标签生成",
 };
+
 
 export function PromptTemplateManager({ templates, onChange, onSave }: {
 	templates: PromptTemplate[];

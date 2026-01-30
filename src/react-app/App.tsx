@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import type { Article, PlatformType, PromptTemplate } from "./types";
-import { generateArticle, getArticles, getPromptTemplates, getProviderStatus, distributeArticle, transitionArticle, updateArticle, updatePromptTemplate } from "./api";
+import { distributeArticle, getArticles, getPromptTemplates, getProviderStatus, transitionArticle, updateArticle, updatePromptTemplate, createArticle } from "./api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SectionCard } from "./components/SectionCard";
 import { ArticleList } from "./components/ArticleList";
@@ -13,34 +13,19 @@ import { ArticleEditor } from "./components/ArticleEditor";
 import { DistributionPanel } from "./components/DistributionPanel";
 import { ProviderStatusPanel } from "./components/ProviderStatusPanel";
 import { PromptTemplateManager } from "./components/PromptTemplateManager";
-import { GenerateForm } from "./components/GenerateForm";
-
-type GenerateFormState = {
-	title: string;
-	outline: string;
-	platform: PlatformType;
-	tone: "technical" | "casual" | "marketing";
-	length: "short" | "medium" | "long";
-};
-
-const defaultForm: GenerateFormState = {
-	title: "",
-	outline: "",
-	platform: "juejin",
-	tone: "technical",
-	length: "medium",
-};
+import { GenerationPanel } from "./components/GenerationPanel.tsx";
 
 function App() {
 	const [articles, setArticles] = useState<Article[]>([]);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [draft, setDraft] = useState<Article | null>(null);
-	const [form, setForm] = useState<GenerateFormState>(defaultForm);
 	const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([]);
 	const [providerStatus, setProviderStatus] = useState<{ provider: string; ready: boolean; lastCheckedAt: number; message: string } | null>(null);
 	const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformType[]>(["juejin"]);
-	const [message, setMessage] = useState("系统已就绪，等待触发任务。");
+	const [message, setMessage] = useState("系统已就绪，先生成标题。");
 	const [isLoading, setIsLoading] = useState(false);
+	const [activeTab, setActiveTab] = useState("articles");
+	const [isEditorOpen, setIsEditorOpen] = useState(false);
 
 	const selectedArticle = useMemo(() => articles.find((article) => article.id === selectedId) ?? null, [articles, selectedId]);
 
@@ -51,70 +36,67 @@ function App() {
 	}, []);
 
 	useEffect(() => {
-		setDraft(selectedArticle);
+		setDraft(selectedArticle ?? null);
 	}, [selectedArticle]);
 
 	const refreshArticles = () => {
 		getArticles().then(setArticles).catch((error) => console.error("刷新文章失败", error));
 	};
 
-	const handleGenerate = () => {
-		setIsLoading(true);
-		generateArticle({
-			title: form.title,
-			outline: form.outline || undefined,
-			platform: form.platform,
-			tone: form.tone,
-			length: form.length,
-		})
-			.then((article) => {
-				setArticles((prev) => [article, ...prev]);
-				setSelectedId(article.id);
-				setDraft(article);
-				setMessage("草稿已生成并保存至 D1 + R2。可继续编辑或分发。");
-				setForm(defaultForm);
-			})
-			.catch((error) => {
-				console.error("生成失败", error);
-				setMessage("生成失败，请检查 AI Provider 状态与绑定配置。");
-			})
-			.finally(() => setIsLoading(false));
+	const handleOpenEditor = () => {
+		setIsEditorOpen(true);
+	};
+
+	const handleArticleCreated = (article: Article) => {
+		setSelectedId(article.id);
+		setDraft(article);
+		setMessage("标题已生成，继续生成正文与元信息，最终保存才会创建草稿。");
+	};
+
+	const handleArticleUpdate = (updates: Partial<Article>) => {
+		setDraft((prev) => {
+			if (!prev) {
+				return prev;
+			}
+			const merged = { ...prev, ...updates } as Article;
+			setArticles((list) => list.map((item) => (item.id === merged.id ? merged : item)));
+			return merged;
+		});
 	};
 
 	const handleSave = () => {
 		if (!draft) {
 			return;
 		}
-		updateArticle(draft.id, {
-			title: draft.title,
-			content: draft.content,
-			platform: draft.platform,
-		})
-			.then((article) => {
-				setArticles((prev) => prev.map((item) => (item.id === article.id ? article : item)));
-				setDraft(article);
-				setMessage("草稿已保存。");
-			})
-			.catch((error) => console.error("保存失败", error));
-	};
-
-	const handleRegenerate = () => {
-		if (!draft) {
+		if (!draft.title || !draft.content || !draft.summary || !draft.tags?.length || !draft.coverImage) {
+			setMessage("请先生成/填写 标题、正文、摘要、标签、封面，再保存。");
 			return;
 		}
 		setIsLoading(true);
-		generateArticle({
-			title: draft.title,
-			platform: draft.platform,
-			tone: "technical",
-			length: "medium",
-		})
-			.then((article) => {
-				setArticles((prev) => prev.map((item) => (item.id === draft.id ? article : item)));
-				setDraft(article);
-				setMessage("已生成新版本草稿。");
+		const exists = articles.some((item) => item.id === draft.id);
+		const action = exists
+			? updateArticle(draft.id, {
+				title: draft.title,
+				content: draft.content,
+				platform: draft.platform,
+				summary: draft.summary,
+				tags: draft.tags,
+				coverImage: draft.coverImage,
 			})
-			.catch((error) => console.error("重新生成失败", error))
+			: createArticle({ ...draft, status: "draft" });
+
+		action
+			.then((article) => {
+				setArticles((prev) => {
+					return exists ? prev.map((item) => (item.id === article.id ? article : item)) : [article, ...prev];
+				});
+				setDraft(article);
+				setMessage("草稿已保存。");
+			})
+			.catch((error) => {
+				console.error("保存失败", error);
+				setMessage("保存失败，请稍后再试。");
+			})
 			.finally(() => setIsLoading(false));
 	};
 
@@ -173,23 +155,8 @@ function App() {
 							<p className="text-xs text-slate-500">Cloudflare Workers + Hono + D1 / KV / R2</p>
 						</div>
 						<div className="flex items-center gap-3">
+							<Button size="sm" onClick={handleOpenEditor} type="button">生成文章</Button>
 							<Button variant="secondary" size="sm" onClick={refreshArticles} type="button">刷新数据</Button>
-							<Dialog>
-								<DialogTrigger asChild>
-									<Button size="sm" type="button">流程示例</Button>
-								</DialogTrigger>
-								<DialogContent>
-									<DialogHeader>
-										<DialogTitle>生成 → 适配 → 分发流程</DialogTitle>
-										<DialogDescription>本文流程直接对应 Worker 内的任务与状态机。</DialogDescription>
-									</DialogHeader>
-									<div className="mt-4 space-y-2 text-sm text-slate-600">
-										<p>1. 输入标题 + 大纲，触发 AI 生成草稿并写入 D1 / R2。</p>
-										<p>2. 后端按平台适配内容，生成可发布版本。</p>
-										<p>3. 状态机推进：draft → reviewed → scheduled → published。</p>
-									</div>
-								</DialogContent>
-							</Dialog>
 						</div>
 					</div>
 				</header>
@@ -202,45 +169,26 @@ function App() {
 						</div>
 						<Tooltip>
 							<TooltipTrigger asChild>
-								<Button variant="outline" size="sm" type="button" onClick={() => setMessage("状态机遵循 draft → reviewed → scheduled → published → failed。")}>状态机说明</Button>
+								<Button variant="outline" size="sm" type="button" onClick={() => setMessage("流程：先生成标题 → 生成正文 → AI 补齐封面/摘要/标签。")}>状态机说明</Button>
 							</TooltipTrigger>
-							<TooltipContent>状态流转在 Worker 侧强校验</TooltipContent>
+							<TooltipContent>全流程均在 Worker 托管。</TooltipContent>
 						</Tooltip>
 					</div>
 
-					<Tabs defaultValue="articles">
+					<Tabs value={activeTab} onValueChange={setActiveTab}>
 						<TabsList>
 							<TabsTrigger value="articles">文章列表</TabsTrigger>
-							<TabsTrigger value="editor">文章编辑</TabsTrigger>
 							<TabsTrigger value="distribution">分发状态</TabsTrigger>
 							<TabsTrigger value="ai">AI Provider</TabsTrigger>
 							<TabsTrigger value="prompts">Prompt 模板</TabsTrigger>
 						</TabsList>
 
 						<TabsContent value="articles">
-							<div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-								<SectionCard title="文章清单" description="D1 中的草稿与发布状态。">
-									<ScrollArea className="h-[420px] pr-4">
-										<ArticleList articles={articles} selectedId={selectedId ?? undefined} onSelect={setSelectedId} />
-									</ScrollArea>
-								</SectionCard>
-								<SectionCard title="AI 生成" description="生成草稿并写入 R2 + D1。">
-									<GenerateForm value={form} onChange={(next) => setForm(next)} onSubmit={handleGenerate} isLoading={isLoading} />
-								</SectionCard>
-							</div>
-						</TabsContent>
-
-						<TabsContent value="editor">
-							<div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-								<SectionCard title="文章清单" description="选择后进入编辑态。">
-									<ScrollArea className="h-[420px] pr-4">
-										<ArticleList articles={articles} selectedId={selectedId ?? undefined} onSelect={setSelectedId} />
-									</ScrollArea>
-								</SectionCard>
-								<SectionCard title="编辑草稿" description="支持在线修改与 AI 重新生成。">
-									<ArticleEditor article={draft} onChange={setDraft} onSave={handleSave} onRegenerate={handleRegenerate} />
-								</SectionCard>
-							</div>
+							<SectionCard title="文章清单" description="仅展示文章列表与状态。">
+								<ScrollArea className="h-[520px] pr-4">
+									<ArticleList articles={articles} selectedId={selectedId ?? undefined} onSelect={setSelectedId} />
+								</ScrollArea>
+							</SectionCard>
 						</TabsContent>
 
 						<TabsContent value="distribution">
@@ -276,9 +224,9 @@ function App() {
 								</SectionCard>
 								<SectionCard title="运行参数" description="后端统一托管 AI 模型与 Prompt。">
 									<div className="space-y-3 text-sm text-slate-600">
-										<p>AI_PROVIDER：{providerStatus?.provider ?? "未配置"}</p>
+										<p>AI_PROVIDER：{providerStatus?.provider ?? "ollama"}</p>
 										<p>Ollama URL：在 Worker 变量中配置 OLLAMA_BASE_URL。</p>
-										<p>Cloudflare AI：绑定 AI 并启用 @cloudflare/ai。</p>
+										<p>当前模式：仅使用本地 Ollama。</p>
 									</div>
 								</SectionCard>
 							</div>
@@ -291,6 +239,31 @@ function App() {
 						</TabsContent>
 					</Tabs>
 				</main>
+
+				<Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
+					<DialogContent className="h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none overflow-hidden">
+						<div className="flex items-start justify-between gap-6">
+							<DialogHeader className="space-y-2">
+								<DialogTitle>文章编辑</DialogTitle>
+								<DialogDescription>全屏编辑 Markdown，先生成标题，再一键生成正文，左侧补齐封面/摘要/标签。</DialogDescription>
+							</DialogHeader>
+							<div className="flex items-center gap-3">
+								<Button variant="outline" size="sm" onClick={() => setIsEditorOpen(false)} type="button">关闭</Button>
+								<Button size="sm" onClick={handleSave} disabled={!draft || isLoading} type="button">保存草稿</Button>
+							</div>
+						</div>
+						<div className="grid h-[calc(100vh-8rem)] gap-6 overflow-hidden lg:grid-cols-[380px_1fr]">
+							<div className="space-y-6 overflow-auto pr-2">
+								<GenerationPanel article={draft} onArticleCreated={handleArticleCreated} onArticleUpdate={handleArticleUpdate} onMessage={setMessage} />
+							</div>
+							<div className="h-full overflow-auto">
+								<SectionCard title="内容编辑" description="ByteMD 编辑器，生成内容自动填充。">
+									<ArticleEditor article={draft} onChange={handleArticleUpdate} />
+								</SectionCard>
+							</div>
+						</div>
+					</DialogContent>
+				</Dialog>
 			</div>
 		</TooltipProvider>
 	);

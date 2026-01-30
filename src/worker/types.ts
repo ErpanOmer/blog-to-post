@@ -1,14 +1,17 @@
-import type { Ai } from "@cloudflare/ai";
-
 export type PlatformType = "juejin" | "zhihu" | "xiaohongshu" | "wechat";
 export type ArticleStatus = "draft" | "reviewed" | "scheduled" | "published" | "failed";
+export type PromptKey = "title" | "content" | "summary" | "tags" | "cover";
 
 export interface Article {
 	id: string;
 	title: string;
 	content: string;
+	summary?: string | null;
+	tags?: string[] | null;
+	coverImage?: string | null;
 	platform: PlatformType;
 	status: ArticleStatus;
+	publishedAt?: number | null;
 	createdAt: number;
 	updatedAt: number;
 }
@@ -20,24 +23,53 @@ export interface Task {
 	payload: Record<string, unknown>;
 }
 
-export interface GenerateInput {
+export interface GenerateTitleInput {
+	titleSource: "juejin" | "custom";
+	sourceTitles?: string[];
+	platform?: PlatformType;
+}
+
+export interface GenerateContentInput {
 	title: string;
-	outline?: string;
-	platform: PlatformType;
-	tone: "technical" | "casual" | "marketing";
-	length: "short" | "medium" | "long";
+	platform?: PlatformType;
+}
+
+export interface GenerateSummaryInput {
+	title: string;
+	content: string;
+}
+
+export interface GenerateTagsInput {
+	title: string;
+	content: string;
+}
+
+export interface GenerateCoverInput {
+	title: string;
+	content: string;
 }
 
 export interface AIProvider {
-	generateArticle(input: GenerateInput): Promise<string>;
+	generateTitleText(systemPrompt: string, userPrompt: string): Promise<string>;
+	generateMarkdownContent(systemPrompt: string, userPrompt: string): Promise<string>;
+	generateSummary(systemPrompt: string, userPrompt: string): Promise<string>;
+	generateTags(systemPrompt: string, userPrompt: string): Promise<string>;
+	generateImage(systemPrompt: string, userPrompt: string): Promise<string>;
 }
 
 export interface Env {
 	DB: D1Database;
 	PROMPTS: KVNamespace;
 	DRAFTS: R2Bucket;
-	AI: Ai;
-	AI_PROVIDER: string;
 	OLLAMA_BASE_URL?: string;
 	OLLAMA_MODEL?: string;
+	OLLAMA_API_KEY?: string;
+	ENVIRONMENT?: "production" | "development";
 }
+
+
+
+
+
+
+

@@ -1,61 +1,140 @@
-import type { AIProvider, Env, GenerateInput, PlatformType } from "../types";
-import { getPromptTemplate } from "../services/prompts";
+import type { AIProvider, Env } from "../types";
+import summaryPrompt from "../prompts/summary.prompt.txt?raw";
+import tagsPrompt from "../prompts/tags.prompt.txt?raw";
+import coverPrompt from "../prompts/cover.prompt.txt?raw";
 
-const DEFAULT_MODEL = "@cf/meta/llama-3.1-8b-instruct";
-
-function buildPrompt(template: string, input: GenerateInput) {
-	return `${template}\n\n标题：${input.title}\n语气：${input.tone}\n长度：${input.length}\n大纲：${input.outline ?? "无"}`;
-}
-
-async function resolveTemplate(env: Env, platform: PlatformType) {
-	const template = await getPromptTemplate(env, platform);
-	return template ?? "请生成高质量技术文章，结构清晰、可直接发布。";
-}
-
-export class CloudflareAIProvider implements AIProvider {
-	constructor(private env: Env) {}
-
-	async generateArticle(input: GenerateInput) {
-		const template = await resolveTemplate(this.env, input.platform);
-		const prompt = buildPrompt(template, input);
-		const result = (await this.env.AI.run(DEFAULT_MODEL as any, {
-			messages: [
-				{ role: "system", content: "你是资深技术写作者，输出可直接发布的正文。" },
-				{ role: "user", content: prompt },
-			],
-		})) as { response?: string } | string;
-		if (typeof result === "string") {
-			return result;
-		}
-		return result.response ?? JSON.stringify(result);
-	}
-}
+const DEFAULT_MODEL = "qwen2:7b";
 
 export class OllamaProvider implements AIProvider {
 	constructor(private env: Env) {}
 
-	async generateArticle(input: GenerateInput) {
-		const template = await resolveTemplate(this.env, input.platform);
-		const prompt = buildPrompt(template, input);
-		const baseUrl = this.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
-		const model = this.env.OLLAMA_MODEL ?? "qwen2.5:7b";
-		const response = await fetch(new URL("/api/generate", baseUrl), {
+	private get baseUrl() {
+		return (this.env.OLLAMA_BASE_URL ?? "http://localhost:11434").replace(/\/$/, "");
+	}
+
+	private getModel(fallback?: string) {
+		return this.env.OLLAMA_MODEL ?? fallback ?? DEFAULT_MODEL;
+	}
+
+	private async callModel(systemPrompt: string, userPrompt: string, model?: string) {
+		const body = {
+			model: this.getModel(model),
+            system: systemPrompt,
+			prompt: userPrompt,
+			stream: false,
+			options: {
+				temperature: 0.6,
+				top_p: 0.9,
+				num_ctx: 8192,
+				repeat_penalty: 1.1,
+			},
+		};
+		const response = await fetch(`${this.baseUrl}/api/generate`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ model, prompt, stream: false }),
+			headers: {
+				"Content-Type": "application/json",
+				...(this.env.OLLAMA_API_KEY ? { Authorization: `Bearer ${this.env.OLLAMA_API_KEY}` } : {}),
+			},
+			body: JSON.stringify(body),
 		});
 		if (!response.ok) {
-			console.error("Ollama 请求失败", response.status);
-			return "生成失败，请检查 Ollama 服务状态。";
+			console.error("Ollama 请求失败", response.status, await response.text());
+			return "";
 		}
 		const data = (await response.json()) as { response?: string };
-		return data.response ?? "生成失败，请检查 Ollama 返回值。";
+		return data.response?.trim() ?? "";
+	}
+
+	private async callModelStream(systemPrompt: string, userPrompt: string, model?: string) {
+		const body = {
+			model,
+            system: systemPrompt,
+			prompt: userPrompt,
+			stream: true,
+			options: {
+				temperature: 0.7,
+				top_p: 0.9,
+				num_ctx: 32768,
+				repeat_penalty: 1.1,
+			},
+		};
+		const response = await fetch(`${this.baseUrl}/api/generate`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				...(this.env.OLLAMA_API_KEY ? { Authorization: `Bearer ${this.env.OLLAMA_API_KEY}` } : {}),
+			},
+			body: JSON.stringify(body),
+		});
+		if (!response.ok) {
+			console.error("Ollama 流式请求失败", response.status, await response.text());
+			return null;
+		}
+		return response.body;
+	}
+
+	async generateTitleText(systemPrompt: string, userPrompt: string) {
+		return this.callModel(systemPrompt, userPrompt, "gemma3:12b-cloud");
+	}
+
+	async generateMarkdownContent(systemPrompt: string, userPrompt: string) {
+		console.log("[OllamaProvider] 开始生成 Markdown 内容");
+		const stream = await this.callModelStream(systemPrompt, userPrompt, "deepseek-v3.1:671b-cloud");
+		if (!stream) {
+			console.error("[OllamaProvider] 流式请求失败");
+			return "";
+		}
+		
+		let fullContent = "";
+		let buffer = "";
+		const reader = stream.getReader();
+		const decoder = new TextDecoder();
+		
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				
+				const chunk = decoder.decode(value, { stream: true });
+				buffer += chunk;
+				
+				const lines = buffer.split("\n");
+				buffer = lines.pop() || "";
+				
+				for (const line of lines) {
+					if (!line.trim()) continue;
+					
+					try {
+						const json = JSON.parse(line);
+						if (json.response) {
+							fullContent += json.response;
+						}
+					} catch (parseError) {
+						console.warn("[OllamaProvider] JSON 解析失败:", line.substring(0, 100), parseError);
+					}
+				}
+			}
+			console.log("[OllamaProvider] Markdown 内容生成完成，总字符数:", fullContent.length);
+		} finally {
+			reader.releaseLock();
+		}
+		
+		return fullContent;
+	}
+
+	async generateSummary(systemPrompt: string, userPrompt: string) {
+		return this.callModel(systemPrompt, userPrompt, "qwen2:7b");
+	}
+
+	async generateTags(systemPrompt: string, userPrompt: string) {
+		return this.callModel(systemPrompt, userPrompt, "qwen2:7b");
+	}
+
+	async generateImage(systemPrompt: string, userPrompt: string) {
+		return this.callModel(systemPrompt, userPrompt, "qwen2:7b");
 	}
 }
 
 export function createAIProvider(env: Env): AIProvider {
-	if (env.AI_PROVIDER === "ollama") {
-		return new OllamaProvider(env);
-	}
-	return new CloudflareAIProvider(env);
+	return new OllamaProvider(env);
 }

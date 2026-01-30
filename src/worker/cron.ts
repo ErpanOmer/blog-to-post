@@ -1,51 +1,60 @@
-import type { Env, GenerateInput, PlatformType } from "./types";
+import type { Env, PlatformType } from "./types";
 import { createAIProvider } from "./ai/providers";
 import { createArticle } from "./db/articles";
 import { createTask } from "./db/tasks";
 import { saveDraft } from "./services/storage";
+import titleSystemPrompt from "./prompts/generate-title-system-prompt.txt?raw";
+import titleUserPromptTpl from "./prompts/generate-title-user-prompt.txt?raw";
+import generateContentSystemPrompt from "./prompts/generate-content-system-prompt.txt?raw";
+import generateContentUserPrompt from "./prompts/generate-content-user-prompt.txt?raw";
+
 
 const CANDIDATE_KEY = "candidate_titles";
 const PLATFORMS: PlatformType[] = ["juejin", "zhihu", "xiaohongshu", "wechat"];
+const fallbackTitle = "AI 驱动的多平台内容分发流程实践";
+
+function pickFirstLine(text: string, fallback: string) {
+	const line = text.split("\n").find((item) => item.trim());
+	return line?.trim() ?? fallback;
+}
 
 export async function generateCandidateTitles(env: Env) {
 	const provider = createAIProvider(env);
-	const prompt: GenerateInput = {
-		title: "生成 5 个技术文章标题，围绕工程效率与多平台分发。",
-		platform: "juejin",
-		tone: "technical",
-		length: "short",
-	};
-	const content = await provider.generateArticle(prompt);
+	const userPrompt = titleUserPromptTpl.replace("{{JUEJIN_TOP_20_TITLES}}", fallbackTitle);
+	const content = await provider.generateTitleText(titleSystemPrompt, userPrompt);
 	await env.PROMPTS.put(CANDIDATE_KEY, content);
 	return content;
 }
 
+
 export async function generateDailyDrafts(env: Env) {
 	const provider = createAIProvider(env);
 	const candidateRaw = await env.PROMPTS.get(CANDIDATE_KEY);
-	const fallbackTitle = "AI 驱动的多平台内容分发流程实践";
-	const title = candidateRaw?.split("\n").find((line: string) => line.trim()) ?? fallbackTitle;
+	const title = pickFirstLine(candidateRaw ?? "", fallbackTitle);
 
 	await Promise.all(
 		PLATFORMS.map(async (platform) => {
-			const draftContent = await provider.generateArticle({
-				title,
-				platform,
-				tone: "technical",
-				length: "medium",
-			});
+			const userPrompt = generateContentUserPrompt.replace("{{TITLE}}", title);
+			const systemPrompt = generateContentSystemPrompt.replace("{{TITLE}}", title);
+			const draftContent = await provider.generateMarkdownContent(systemPrompt, userPrompt);
+
+			const content = draftContent || `# ${title}\n\n待补充正文内容。`;
 			const id = crypto.randomUUID();
 			const now = Date.now();
 			await createArticle(env.DB, {
 				id,
 				title,
-				content: draftContent,
+				content,
+				summary: "摘要待补充",
+				tags: ["draft"],
+				coverImage: "/vite.svg",
 				platform,
 				status: "draft",
 				createdAt: now,
 				updatedAt: now,
 			});
-			await saveDraft(env, id, draftContent);
+			await saveDraft(env, id, content);
+
 			await createTask(env.DB, {
 				id: crypto.randomUUID(),
 				type: "generate",
@@ -65,3 +74,4 @@ export async function runDailyCron(env: Env) {
 	await generateDailyDrafts(env);
 	await autoReviewDrafts(env);
 }
+

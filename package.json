@@ -12,7 +12,10 @@
 		"publish": true
 	},
 	"dependencies": {
+		"@bytemd/plugin-gfm": "^1.22.0",
+		"@bytemd/react": "^1.22.0",
 		"@cloudflare/ai": "1.2.2",
+		"bytemd": "^1.22.0",
 		"hono": "4.11.1",
 		"react": "19.2.1",
 		"react-dom": "19.2.1"
