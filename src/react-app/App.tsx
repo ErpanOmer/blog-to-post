@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import "./App.css";
 import type { Article, PlatformType, PromptTemplate } from "./types";
-import { distributeArticle, getArticles, getPromptTemplates, getProviderStatus, transitionArticle, updateArticle, updatePromptTemplate, createArticle } from "./api";
+import { distributeArticle, getArticles, getPromptTemplates, getProviderStatus, transitionArticle, updateArticle, updatePromptTemplate, createArticle, deleteArticle } from "./api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { SectionCard } from "./components/SectionCard";
 import { ArticleList } from "./components/ArticleList";
 import { ArticleEditor } from "./components/ArticleEditor";
+import { ArticleDetailDialog } from "./components/ArticleDetailDialog";
 import { DistributionPanel } from "./components/DistributionPanel";
 import { ProviderStatusPanel } from "./components/ProviderStatusPanel";
 import { PromptTemplateManager } from "./components/PromptTemplateManager";
@@ -41,7 +42,7 @@ function createEmptyArticle(): Article {
     summary: "",
     tags: [],
     coverImage: "",
-    platform: "juejin",
+    platform: "",
     status: "draft",
     createdAt: now,
     updatedAt: now,
@@ -60,6 +61,8 @@ function App() {
   const [activeTab, setActiveTab] = useState("articles");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [detailArticle, setDetailArticle] = useState<Article | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   const selectedArticle = useMemo(() => articles.find((article) => article.id === selectedId) ?? null, [articles, selectedId]);
 
@@ -134,7 +137,6 @@ function App() {
       ? updateArticle(draft.id, {
         title: draft.title,
         content: draft.content,
-        platform: draft.platform,
         summary: draft.summary,
         tags: draft.tags,
         coverImage: draft.coverImage,
@@ -179,6 +181,41 @@ function App() {
 
   const handleSchedule = () => {
     handleTransition("scheduled");
+  };
+
+  const handleViewDetail = (article: Article) => {
+    setDetailArticle(article);
+    setIsDetailOpen(true);
+  };
+
+  const handleEdit = (article: Article) => {
+    // 只有草稿状态才能编辑
+    if (article.status !== 'draft') {
+      setMessage("只有草稿状态的文章才能编辑");
+      return;
+    }
+    setDraft({ ...article });
+    setIsEditorOpen(true);
+  };
+
+  const handleDelete = (article: Article) => {
+    // 只有草稿状态才能删除
+    if (article.status !== 'draft') {
+      setMessage("只有草稿状态的文章才能删除");
+      return;
+    }
+    if (!confirm(`确定要删除文章 "${article.title || '未命名文章'}" 吗？`)) {
+      return;
+    }
+    deleteArticle(article.id)
+      .then(() => {
+        setArticles((prev) => prev.filter((item) => item.id !== article.id));
+        setMessage("文章已删除");
+      })
+      .catch((error) => {
+        console.error("删除失败", error);
+        setMessage("删除失败，请稍后再试");
+      });
   };
 
   const togglePlatform = (platform: PlatformType) => {
@@ -251,21 +288,21 @@ function App() {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full max-w-md grid-cols-4 bg-white/80 p-1 shadow-soft backdrop-blur-sm">
+            <TabsList className="grid w-full max-w-screen-sm grid-cols-4 bg-white/80 p-1 shadow-soft backdrop-blur-sm">
               <TabsTrigger value="articles" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
-                <FileText className="h-4 w-4" />
+                <FileText className="h-8 w-4" />
                 文章列表
               </TabsTrigger>
               <TabsTrigger value="distribution" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
-                <Share2 className="h-4 w-4" />
+                <Share2 className="h-8 w-4" />
                 分发状态
               </TabsTrigger>
               <TabsTrigger value="ai" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
-                <Cpu className="h-4 w-4" />
+                <Cpu className="h-8 w-4" />
                 AI Provider
               </TabsTrigger>
               <TabsTrigger value="prompts" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
-                <Settings2 className="h-4 w-4" />
+                <Settings2 className="h-8 w-4" />
                 Prompt 模板
               </TabsTrigger>
             </TabsList>
@@ -277,7 +314,12 @@ function App() {
                 icon={<FileText className="h-5 w-5" />}
               >
                 <ScrollArea className="h-[520px] pr-4">
-                  <ArticleList articles={articles} selectedId={selectedId ?? undefined} onSelect={setSelectedId} />
+                  <ArticleList 
+                    articles={articles} 
+                    onViewDetail={handleViewDetail}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                  />
                 </ScrollArea>
               </SectionCard>
             </TabsContent>
@@ -378,7 +420,8 @@ function App() {
           }}
         >
           <DialogContent 
-            className="h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none overflow-hidden border-slate-200/60 bg-white/95 backdrop-blur-xl p-0 gap-0"
+            className="flex flex-col h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none overflow-hidden border-slate-200/60 bg-white/95 backdrop-blur-xl p-0 gap-0"
+            hideClose
             onPointerDownOutside={(e) => {
               if (isGenerating) e.preventDefault();
             }}
@@ -387,7 +430,7 @@ function App() {
             }}
           >
             {/* Dialog Header */}
-            <DialogHeader className="flex-shrink-0 border-b border-slate-200/60 px-6 py-4">
+            <DialogHeader className="flex-shrink-0 border-b border-slate-200/60 px-6 py-4 pr-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-lg shadow-brand-500/25">
@@ -399,17 +442,6 @@ function App() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleCloseEditor} 
-                    disabled={isGenerating}
-                    type="button"
-                    className="gap-2"
-                  >
-                    <X className="h-4 w-4" />
-                    关闭
-                  </Button>
                   <Button 
                     variant="gradient" 
                     size="sm" 
@@ -425,14 +457,25 @@ function App() {
                     )}
                     保存草稿
                   </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleCloseEditor} 
+                    disabled={isGenerating}
+                    type="button"
+                    className="gap-2"
+                  >
+                    <X className="h-4 w-4" />
+                    关闭
+                  </Button>
                 </div>
               </div>
             </DialogHeader>
 
             {/* Dialog Body - Two Column Layout */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className="relative flex flex-1 overflow-hidden">
               {/* Left Column - Title & Meta */}
-              <div className="h-full w-[400px] flex-shrink-0 overflow-y-auto border-r border-slate-200/60 bg-slate-50/50">
+              <div className="absolute inset-y-0 left-0 w-[400px] overflow-y-auto border-r border-slate-200/60 bg-slate-50/50">
                 <div className="space-y-4 p-4">
                   {/* Title Generator */}
                   <div className="rounded-xl border border-slate-200/60 bg-white p-4">
@@ -453,8 +496,8 @@ function App() {
               </div>
 
               {/* Right Column - Content Editor */}
-              <div className="flex h-full flex-1 flex-col bg-white">
-                <div className="flex-1 p-4">
+              <div className="ml-[400px] flex flex-1 flex-col overflow-hidden bg-white">
+                <div className="flex-1 overflow-hidden p-4">
                   <ArticleEditor
                     article={draft}
                     onChange={handleArticleUpdate}
@@ -465,6 +508,13 @@ function App() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Article Detail Dialog */}
+        <ArticleDetailDialog
+          article={detailArticle}
+          open={isDetailOpen}
+          onOpenChange={setIsDetailOpen}
+        />
       </div>
     </TooltipProvider>
   );

@@ -10,8 +10,14 @@ import {
   Loader2,
   AlertCircle
 } from "lucide-react";
+import breaks from "@bytemd/plugin-breaks";
+import frontmatter from "@bytemd/plugin-frontmatter";
+import gemoji from "@bytemd/plugin-gemoji";
+import highlight from "@bytemd/plugin-highlight";
+import math from "@bytemd/plugin-math";
+import "../jueijn.css";
 
-const plugins = [gfm()];
+const plugins = [gfm(), breaks(), frontmatter(), gemoji(), highlight(), math()];  
 
 interface ArticleEditorProps {
   article: Article | null;
@@ -30,11 +36,8 @@ export function ArticleEditor({ article, onChange, disabled }: ArticleEditorProp
     window.dispatchEvent(event);
     
     try {
-      let streamedContent = "";
-      await generateContent(article.title, (chunk) => {
-        streamedContent += chunk;
-        onChange({ ...article, content: streamedContent });
-      });
+      const result = await generateContent(article.title);
+      onChange({ ...article, content: result.content });
     } catch (error) {
       console.error("生成正文失败", error);
     } finally {
@@ -60,7 +63,7 @@ export function ArticleEditor({ article, onChange, disabled }: ArticleEditorProp
           variant="gradient"
           size="sm"
           onClick={handleGenerateContent}
-          disabled={!article || disabled}
+          disabled={!article || !article.title?.trim() || disabled}
           type="button"
           className="gap-2"
         >
@@ -76,7 +79,7 @@ export function ArticleEditor({ article, onChange, disabled }: ArticleEditorProp
       {/* Editor Container - Takes remaining height */}
       <div className="flex-1 min-h-0">
         <div className={`h-full rounded-xl border border-slate-200/60 bg-white overflow-hidden ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
-          <div className="h-full bytemd-container">
+          <div className="h-full bytemd-container flex flex-col">
             <Editor
               value={content}
               plugins={plugins}

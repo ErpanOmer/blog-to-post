@@ -8,7 +8,8 @@ import titleUserPromptTpl from "./prompts/generate-title-user-prompt.txt?raw";
 import generateContentSystemPrompt from "./prompts/generate-content-system-prompt.txt?raw";
 import generateContentUserPrompt from "./prompts/generate-content-user-prompt.txt?raw";
 
-import { fetchJuejinTopTitles, pickFirstLine } from "./index";
+import fetchJuejinTopTitles from "./juejin";
+import { pickFirstLine } from "./index";
 
 const CANDIDATE_KEY = "candidate_titles";
 const PLATFORMS: PlatformType[] = ["juejin", "zhihu", "xiaohongshu", "wechat"];
@@ -16,8 +17,10 @@ const fallbackTitle = "AI 驱动的多平台内容分发流程实践";
 
 export async function generateCandidateTitles(env: Env) {
 	const provider = createAIProvider(env);
-	const topTitles = await fetchJuejinTopTitles();
-	const userPrompt = titleUserPromptTpl.replace("{{JUEJIN_TOP_20_TITLES}}", topTitles.join("\n") || fallbackTitle);
+	const titlesData = await fetchJuejinTopTitles();
+	const userPrompt = titleUserPromptTpl
+		.replace("{{USER_PAST_TITLES}}", titlesData.userTitles.join("\n") || "无数据")
+		.replace("{{JUEJIN_TOP_20_TITLES}}", titlesData.juejinTitles.join("\n") || fallbackTitle);
 	const content = await provider.generateTitleText(titleSystemPrompt, userPrompt);
 	await env.PROMPTS.put(CANDIDATE_KEY, content);
 	return content;

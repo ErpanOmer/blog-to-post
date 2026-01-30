@@ -12,7 +12,12 @@
 		"publish": true
 	},
 	"dependencies": {
+		"@bytemd/plugin-breaks": "^1.22.0",
+		"@bytemd/plugin-frontmatter": "^1.22.0",
+		"@bytemd/plugin-gemoji": "^1.22.0",
 		"@bytemd/plugin-gfm": "^1.22.0",
+		"@bytemd/plugin-highlight": "^1.22.0",
+		"@bytemd/plugin-math": "^1.22.0",
 		"@bytemd/react": "^1.22.0",
 		"@cloudflare/ai": "1.2.2",
 		"bytemd": "^1.22.0",

@@ -110,3 +110,16 @@ export async function updateArticleStatus(db: D1Database, id: string, status: Ar
 	return { ...current, status, updatedAt, publishedAt } as Article;
 }
 
+export async function deleteArticle(db: D1Database, id: string): Promise<boolean> {
+	const current = await getArticle(db, id);
+	if (!current) {
+		return false;
+	}
+	// 只允许删除草稿状态的文章
+	if (current.status !== 'draft') {
+		return false;
+	}
+	await db.prepare("DELETE FROM articles WHERE id = ?").bind(id).run();
+	return true;
+}
+

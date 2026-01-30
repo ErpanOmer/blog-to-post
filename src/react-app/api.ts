@@ -20,22 +20,20 @@ export async function getArticles(): Promise<Article[]> {
 	return parseJson<Article[]>(await fetch("/api/articles"));
 }
 
-export async function getJuejinTopTitles(): Promise<string[]> {
-	const data = await parseJson<{ titles: string[] }>(await fetch("/api/juejin/top"));
-	return data.titles ?? [];
+export async function getJuejinTopTitles(): Promise<{ userTitles: string[]; juejinTitles: string[] }> {
+	return parseJson<{ userTitles: string[]; juejinTitles: string[] }>(await fetch("/api/juejin/top"));
 }
 
-export async function generateTitle(input: { titleSource: "juejin" | "custom"; sourceTitles?: string[]; platform?: PlatformType }): Promise<{ titles: string[]; count: number }> {
+export async function generateTitle(): Promise<{ titles: string[]; count: number }> {
 	return parseJson<{ titles: string[]; count: number }>(
 		await fetch("/api/articles/generate-title", {
 			method: "POST",
 			headers: jsonHeaders,
-			body: JSON.stringify(input),
 		}),
 	);
 }
 
-export async function generateContent(title: string, onChunk?: (chunk: string) => void): Promise<{ content: string }> {
+export async function generateContent(title: string): Promise<{ content: string }> {
 	const response = await fetch("/api/articles/generate-content", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -43,57 +41,26 @@ export async function generateContent(title: string, onChunk?: (chunk: string) =
 	});
 	
 	if (!response.ok) throw new Error("Generate content failed");
-	
-	let fullContent = "";
-	const reader = response.body?.getReader();
-	const decoder = new TextDecoder();
-	
-	if (!reader) return { content: "" };
-	
-	try {
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			
-			const chunk = decoder.decode(value);
-			const lines = chunk.split("\n").filter(Boolean);
-			
-			for (const line of lines) {
-				try {
-					const json = JSON.parse(line);
-					if (json.chunk) {
-						fullContent += json.chunk;
-						onChunk?.(json.chunk);
-					}
-					if (json.done) break;
-				} catch {
-					// 忽略解析错误
-				}
-			}
-		}
-	} finally {
-		reader?.releaseLock();
-	}
-	
-	return { content: fullContent };
+
+	const data = await response.json() as { content: string };
+
+	console.log('Generated content:', data);
+
+	return data;
 }
 
-export async function generateSummary(title: string, content: string): Promise<{ summary: string }> {
-	return parseJson<{ summary: string }>(
+// 文章摘要数据结构
+export interface ArticleSummary {
+	summary: string;
+	tags: string[];
+}
+
+export async function generateSummary(content: string): Promise<ArticleSummary> {
+	return parseJson<ArticleSummary>(
 		await fetch(`/api/articles/generate-summary`, {
 			method: "POST",
 			headers: jsonHeaders,
-			body: JSON.stringify({ title, content }),
-		}),
-	);
-}
-
-export async function generateTags(title: string, content: string): Promise<{ tags: string[] }> {
-	return parseJson<{ tags: string[] }>(
-		await fetch(`/api/articles/generate-tags`, {
-			method: "POST",
-			headers: jsonHeaders,
-			body: JSON.stringify({ title, content }),
+			body: JSON.stringify({ content }),
 		}),
 	);
 }
@@ -128,6 +95,15 @@ export async function updateArticle(id: string, payload: Partial<Article>): Prom
 	);
 }
 
+export async function deleteArticle(id: string): Promise<void> {
+	const response = await fetch(`/api/articles/${id}`, {
+		method: "DELETE",
+		headers: jsonHeaders,
+	});
+	if (!response.ok) {
+		throw new Error("删除文章失败");
+	}
+}
 
 export async function transitionArticle(id: string, status: ArticleStatus): Promise<Article> {
 	return parseJson<Article>(

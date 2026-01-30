@@ -1,4 +1,4 @@
-export type PlatformType = "juejin" | "zhihu" | "xiaohongshu" | "wechat";
+export type PlatformType = "juejin" | "zhihu" | "xiaohongshu" | "wechat" | "";
 export type ArticleStatus = "draft" | "reviewed" | "scheduled" | "published" | "failed";
 export type PromptKey = "title" | "content" | "summary" | "tags" | "cover";
 
@@ -23,15 +23,8 @@ export interface Task {
 	payload: Record<string, unknown>;
 }
 
-export interface GenerateTitleInput {
-	titleSource: "juejin" | "custom";
-	sourceTitles?: string[];
-	platform?: PlatformType;
-}
-
 export interface GenerateContentInput {
 	title: string;
-	platform?: PlatformType;
 }
 
 export interface GenerateSummaryInput {
@@ -52,7 +45,6 @@ export interface GenerateCoverInput {
 export interface AIProvider {
 	generateTitleText(systemPrompt: string, userPrompt: string, model?: string): Promise<string>;
 	generateMarkdownContent(systemPrompt: string, userPrompt: string, model?: string): Promise<string>;
-	generateMarkdownStream(systemPrompt: string, userPrompt: string, model?: string): Promise<ReadableStream<Uint8Array>>;
 	generateSummary(systemPrompt: string, userPrompt: string, model?: string): Promise<string>;
 	generateTags(systemPrompt: string, userPrompt: string, model?: string): Promise<string>;
 	generateImage(systemPrompt: string, userPrompt: string, model?: string): Promise<string>;
