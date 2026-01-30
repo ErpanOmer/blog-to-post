@@ -8,19 +8,16 @@ import titleUserPromptTpl from "./prompts/generate-title-user-prompt.txt?raw";
 import generateContentSystemPrompt from "./prompts/generate-content-system-prompt.txt?raw";
 import generateContentUserPrompt from "./prompts/generate-content-user-prompt.txt?raw";
 
+import { fetchJuejinTopTitles, pickFirstLine } from "./index";
 
 const CANDIDATE_KEY = "candidate_titles";
 const PLATFORMS: PlatformType[] = ["juejin", "zhihu", "xiaohongshu", "wechat"];
 const fallbackTitle = "AI 驱动的多平台内容分发流程实践";
 
-function pickFirstLine(text: string, fallback: string) {
-	const line = text.split("\n").find((item) => item.trim());
-	return line?.trim() ?? fallback;
-}
-
 export async function generateCandidateTitles(env: Env) {
 	const provider = createAIProvider(env);
-	const userPrompt = titleUserPromptTpl.replace("{{JUEJIN_TOP_20_TITLES}}", fallbackTitle);
+	const topTitles = await fetchJuejinTopTitles();
+	const userPrompt = titleUserPromptTpl.replace("{{JUEJIN_TOP_20_TITLES}}", topTitles.join("\n") || fallbackTitle);
 	const content = await provider.generateTitleText(titleSystemPrompt, userPrompt);
 	await env.PROMPTS.put(CANDIDATE_KEY, content);
 	return content;
@@ -30,7 +27,7 @@ export async function generateCandidateTitles(env: Env) {
 export async function generateDailyDrafts(env: Env) {
 	const provider = createAIProvider(env);
 	const candidateRaw = await env.PROMPTS.get(CANDIDATE_KEY);
-	const title = pickFirstLine(candidateRaw ?? "", fallbackTitle);
+	const title = pickFirstLine(candidateRaw ?? "") || fallbackTitle;
 
 	await Promise.all(
 		PLATFORMS.map(async (platform) => {

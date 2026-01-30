@@ -50,11 +50,12 @@ export interface GenerateCoverInput {
 }
 
 export interface AIProvider {
-	generateTitleText(systemPrompt: string, userPrompt: string): Promise<string>;
-	generateMarkdownContent(systemPrompt: string, userPrompt: string): Promise<string>;
-	generateSummary(systemPrompt: string, userPrompt: string): Promise<string>;
-	generateTags(systemPrompt: string, userPrompt: string): Promise<string>;
-	generateImage(systemPrompt: string, userPrompt: string): Promise<string>;
+	generateTitleText(systemPrompt: string, userPrompt: string, model?: string): Promise<string>;
+	generateMarkdownContent(systemPrompt: string, userPrompt: string, model?: string): Promise<string>;
+	generateMarkdownStream(systemPrompt: string, userPrompt: string, model?: string): Promise<ReadableStream<Uint8Array>>;
+	generateSummary(systemPrompt: string, userPrompt: string, model?: string): Promise<string>;
+	generateTags(systemPrompt: string, userPrompt: string, model?: string): Promise<string>;
+	generateImage(systemPrompt: string, userPrompt: string, model?: string): Promise<string>;
 }
 
 export interface Env {

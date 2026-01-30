@@ -7,6 +7,7 @@ const labels: Record<PromptKey, string> = {
 	content: "正文生成",
 	summary: "摘要生成",
 	tags: "标签生成",
+	cover: "封面生成",
 };
 
 

@@ -1,25 +1,31 @@
 import type { AIProvider, Env } from "../types";
-import summaryPrompt from "../prompts/summary.prompt.txt?raw";
-import tagsPrompt from "../prompts/tags.prompt.txt?raw";
-import coverPrompt from "../prompts/cover.prompt.txt?raw";
 
-const DEFAULT_MODEL = "qwen2:7b";
+const DEFAULT_MODELS = {
+	title: "gemma3:12b-cloud",
+	content: "deepseek-v3.1:671b-cloud",
+	summary: "qwen2:7b",
+	tags: "qwen2:7b",
+	cover: "qwen2:7b",
+};
 
 export class OllamaProvider implements AIProvider {
-	constructor(private env: Env) {}
+	constructor(private env: Env) { }
 
 	private get baseUrl() {
 		return (this.env.OLLAMA_BASE_URL ?? "http://localhost:11434").replace(/\/$/, "");
 	}
 
-	private getModel(fallback?: string) {
-		return this.env.OLLAMA_MODEL ?? fallback ?? DEFAULT_MODEL;
+	private getModel(type: keyof typeof DEFAULT_MODELS, override?: string) {
+		if (override) return override;
+		// 优先使用环境变量中指定的具体模型，例如 OLLAMA_CONTENT_MODEL
+		const envKey = `OLLAMA_${type.toUpperCase()}_MODEL` as keyof Env;
+		return (this.env[envKey] as string) ?? this.env.OLLAMA_MODEL ?? DEFAULT_MODELS[type];
 	}
 
-	private async callModel(systemPrompt: string, userPrompt: string, model?: string) {
+	private async callModel(systemPrompt: string, userPrompt: string, model: string) {
 		const body = {
-			model: this.getModel(model),
-            system: systemPrompt,
+			model,
+			system: systemPrompt,
 			prompt: userPrompt,
 			stream: false,
 			options: {
@@ -45,10 +51,10 @@ export class OllamaProvider implements AIProvider {
 		return data.response?.trim() ?? "";
 	}
 
-	private async callModelStream(systemPrompt: string, userPrompt: string, model?: string) {
+	private async callModelStream(systemPrompt: string, userPrompt: string, model: string) {
 		const body = {
 			model,
-            system: systemPrompt,
+			system: systemPrompt,
 			prompt: userPrompt,
 			stream: true,
 			options: {
@@ -73,65 +79,95 @@ export class OllamaProvider implements AIProvider {
 		return response.body;
 	}
 
-	async generateTitleText(systemPrompt: string, userPrompt: string) {
-		return this.callModel(systemPrompt, userPrompt, "gemma3:12b-cloud");
-	}
-
-	async generateMarkdownContent(systemPrompt: string, userPrompt: string) {
-		console.log("[OllamaProvider] 开始生成 Markdown 内容");
-		const stream = await this.callModelStream(systemPrompt, userPrompt, "deepseek-v3.1:671b-cloud");
-		if (!stream) {
-			console.error("[OllamaProvider] 流式请求失败");
-			return "";
-		}
-		
-		let fullContent = "";
-		let buffer = "";
-		const reader = stream.getReader();
+	/**
+	 * 将 Ollama 的 NDJSON 流转换为纯文本流
+	 */
+	private processOllamaStream(rawStream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+		const reader = rawStream.getReader();
 		const decoder = new TextDecoder();
-		
-		try {
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				
-				const chunk = decoder.decode(value, { stream: true });
-				buffer += chunk;
-				
-				const lines = buffer.split("\n");
-				buffer = lines.pop() || "";
-				
-				for (const line of lines) {
-					if (!line.trim()) continue;
-					
-					try {
-						const json = JSON.parse(line);
-						if (json.response) {
-							fullContent += json.response;
+		const encoder = new TextEncoder();
+		let buffer = "";
+
+		return new ReadableStream({
+			async pull(controller) {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) {
+						if (buffer.trim()) {
+							// 处理剩余的可能不完整的行（虽然 Ollama 应该是完整的行）
 						}
-					} catch (parseError) {
-						console.warn("[OllamaProvider] JSON 解析失败:", line.substring(0, 100), parseError);
+						controller.close();
+						break;
+					}
+
+					buffer += decoder.decode(value, { stream: true });
+					const lines = buffer.split("\n");
+					buffer = lines.pop() || "";
+
+					for (const line of lines) {
+						if (!line.trim()) continue;
+						try {
+							const json = JSON.parse(line);
+							if (json.response) {
+								controller.enqueue(encoder.encode(json.response));
+							}
+							if (json.done) {
+								// 可以选择在这里 close，但通常等 done: true
+							}
+						} catch (e) {
+							console.warn("Ollama stream line parse error:", e);
+						}
+					}
+
+					if (lines.length > 0) {
+						// 只要处理了行，就跳回 pull 循环外，让 fetch 继续拉取
+						break;
 					}
 				}
-			}
-			console.log("[OllamaProvider] Markdown 内容生成完成，总字符数:", fullContent.length);
-		} finally {
-			reader.releaseLock();
+			},
+			cancel() {
+				reader.cancel();
+			},
+		});
+	}
+
+	async generateTitleText(systemPrompt: string, userPrompt: string, model?: string) {
+		return this.callModel(systemPrompt, userPrompt, this.getModel("title", model));
+	}
+
+	async generateMarkdownContent(systemPrompt: string, userPrompt: string, model?: string) {
+		const stream = await this.generateMarkdownStream(systemPrompt, userPrompt, model);
+		const reader = stream.getReader();
+		const decoder = new TextDecoder();
+		let fullContent = "";
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			fullContent += decoder.decode(value);
 		}
-		
 		return fullContent;
 	}
 
-	async generateSummary(systemPrompt: string, userPrompt: string) {
-		return this.callModel(systemPrompt, userPrompt, "qwen2:7b");
+	async generateMarkdownStream(systemPrompt: string, userPrompt: string, model?: string) {
+		const rawStream = await this.callModelStream(systemPrompt, userPrompt, this.getModel("content", model));
+		if (!rawStream) {
+			throw new Error("Failed to start AI stream");
+		}
+		return this.processOllamaStream(rawStream);
 	}
 
-	async generateTags(systemPrompt: string, userPrompt: string) {
-		return this.callModel(systemPrompt, userPrompt, "qwen2:7b");
+	async generateSummary(systemPrompt: string, userPrompt: string, model?: string) {
+		return this.callModel(systemPrompt, userPrompt, this.getModel("summary", model));
 	}
 
-	async generateImage(systemPrompt: string, userPrompt: string) {
-		return this.callModel(systemPrompt, userPrompt, "qwen2:7b");
+	async generateTags(systemPrompt: string, userPrompt: string, model?: string) {
+		return this.callModel(systemPrompt, userPrompt, this.getModel("tags", model));
+	}
+
+	async generateImage(systemPrompt: string, userPrompt: string, model?: string) {
+		// 目前 Ollama 主要用于 LLM，此处如果是生成图像 Prompt 或是集成 SD 需另作考虑
+		// 暂时保持现状，但修正接口签名
+		return this.callModel(systemPrompt, userPrompt, this.getModel("cover", model));
 	}
 }
 

@@ -21,12 +21,12 @@ const JUEJIN_TOP_URL = "https://api.juejin.cn/content_api/v1/content/article_ran
 
 const fallbackCover = "/vite.svg";
 
-function pickFirstLine(text: string) {
+export function pickFirstLine(text: string) {
 	const line = text.split("\n").find((item) => item.trim());
 	return line?.trim() ?? "";
 }
 
-function normalizeTags(text: string) {
+export function normalizeTags(text: string) {
 	return text
 		.split(/[,，\n]/)
 		.map((item) => item.trim())
@@ -34,7 +34,7 @@ function normalizeTags(text: string) {
 		.slice(0, 6);
 }
 
-async function fetchJuejinTopTitles() {
+export async function fetchJuejinTopTitles() {
 	try {
 		const response = await fetch(JUEJIN_TOP_URL, {
 			method: "GET",
@@ -88,85 +88,53 @@ app.post("/api/articles/generate-title", async (c) => {
 
 app.post("/api/articles/generate-content", async (c) => {
 	const { title } = (await c.req.json()) as { title: string };
-	
+
 	if (!title || !title.trim()) {
 		return c.json({ error: "Title is required" }, 400);
 	}
-	
+
 	console.log("[generate-content] 开始生成内容，标题:", title);
-	
+
 	const provider = createAIProvider(c.env);
 	const userPrompt = generateContentUserPrompt.replace("{{TITLE}}", title);
 	const systemPrompt = generateContentSystemPrompt.replace("{{TITLE}}", title);
-	
-	console.log("[generate-content] 准备调用 AI Provider");
-	
-	return new Response(
-		new ReadableStream({
-			async start(controller) {
-				let totalChunks = 0;
-				let totalContent = "";
-				let buffer = "";
-				
-				try {
-					console.log("[generate-content] 开始流式生成");
-					const stream = await (provider as any).callModelStream(systemPrompt, userPrompt, "deepseek-v3.1:671b-cloud");
-					
-					if (!stream) {
-						console.error("[generate-content] AI Provider 返回 null");
-						controller.enqueue(new TextEncoder().encode(JSON.stringify({ error: "Failed to get stream from AI provider" }) + "\n"));
-						controller.close();
-						return;
-					}
 
+	console.log("[generate-content] 准备调用 AI Provider");
+
+	try {
+		const stream = await provider.generateMarkdownStream(systemPrompt, userPrompt);
+
+		return new Response(
+			new ReadableStream({
+				async start(controller) {
 					const reader = stream.getReader();
 					const decoder = new TextDecoder();
+					const encoder = new TextEncoder();
 
 					try {
 						while (true) {
 							const { done, value } = await reader.read();
 							if (done) {
-								console.log("[generate-content] 流式生成完成，总块数:", totalChunks, "总字符数:", totalContent.length);
+								controller.enqueue(encoder.encode(JSON.stringify({ done: true }) + "\n"));
 								break;
 							}
-
-							const chunk = decoder.decode(value, { stream: true });
-							buffer += chunk;
-							
-							const lines = buffer.split("\n");
-							buffer = lines.pop() || "";
-
-							for (const line of lines) {
-								if (!line.trim()) continue;
-								
-								try {
-									const json = JSON.parse(line);
-									if (json.response) {
-										totalChunks++;
-										totalContent += json.response;
-										controller.enqueue(new TextEncoder().encode(JSON.stringify({ chunk: json.response }) + "\n"));
-									}
-								} catch (parseError) {
-									console.warn("[generate-content] JSON 解析失败:", line.substring(0, 100), parseError);
-								}
-							}
+							const text = decoder.decode(value);
+							controller.enqueue(encoder.encode(JSON.stringify({ chunk: text }) + "\n"));
 						}
+					} catch (err) {
+						console.error("[generate-content] 流处理错误:", err);
+						controller.enqueue(encoder.encode(JSON.stringify({ error: String(err) }) + "\n"));
 					} finally {
-						reader.releaseLock();
+						controller.close();
 					}
-
-					controller.enqueue(new TextEncoder().encode(JSON.stringify({ done: true }) + "\n"));
-					console.log("[generate-content] 响应发送完成");
-				} catch (err) {
-					console.error("[generate-content] 生成过程中发生错误:", err);
-					controller.enqueue(new TextEncoder().encode(JSON.stringify({ error: `Generation failed: ${err instanceof Error ? err.message : String(err)}` }) + "\n"));
-				} finally {
-					controller.close();
 				}
-			}
-		}),
-		{ headers: { "Content-Type": "application/x-ndjson" } }
-	);
+			}),
+			{ headers: { "Content-Type": "application/x-ndjson" } }
+		);
+	} catch (err) {
+		console.error("[generate-content] 启动流生成失败:", err);
+		return c.json({ error: String(err) }, 500);
+	}
 });
 
 app.post("/api/articles/generate-summary", async (c) => {
