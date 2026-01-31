@@ -16,6 +16,7 @@ import generateContentUserPrompt from "./prompts/generate-content-user-prompt.tx
 import summarySystemPrompt from "./prompts/generate-summary-system-prompt.txt?raw";
 import summaryUserPromptTpl from "./prompts/generate-summary-user-prompt.txt?raw";
 import coverPrompt from "./prompts/cover.prompt.txt?raw";
+import localContent from './prompts/conetent.md?raw';
 
 
 
@@ -91,6 +92,10 @@ app.post("/api/articles/generate-title", async (c) => {
 });
 
 app.post("/api/articles/generate-content", async (c) => {
+	if (c.env.ENVIRONMENT === "development") {
+		return c.json({ content: localContent });
+	}
+
 	const { title } = (await c.req.json()) as { title: string };
 
 	if (!title || !title.trim()) {

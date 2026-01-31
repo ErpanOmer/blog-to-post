@@ -9,7 +9,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Viewer } from "@bytemd/react";
-import { format } from "@/lib/utils";
 import {
 	Calendar,
 	Clock,
@@ -124,6 +123,9 @@ export function ArticleDetailDialog({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+				<DialogTitle className="sr-only">
+					{article.title || "文章详情"}
+				</DialogTitle>
 				{/* 头部区域 */}
 				<div className="relative">
 					{/* 封面图背景 */}
@@ -192,7 +194,7 @@ export function ArticleDetailDialog({
 					</div>
 				</div>
 
-				<ScrollArea className="max-h-[calc(90vh-300px)]">
+				<ScrollArea className="max-h-[calc(90vh-300px)] overflow-y-auto">
 					<div className="p-6">
 						{/* 摘要区域 */}
 						{article.summary && (

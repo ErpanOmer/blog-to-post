@@ -106,7 +106,10 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete }: Articl
             <div className="flex gap-4 p-5 pl-6">
               {/* 封面图 */}
               <div className="flex-shrink-0">
-                <div className="relative group/cover">
+                <div 
+                  className="relative group/cover cursor-pointer"
+                  onClick={() => onViewDetail(article)}
+                >
                   {article.coverImage ? (
                     <img
                       src={article.coverImage}
@@ -134,7 +137,10 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete }: Articl
               <div className="flex flex-1 flex-col min-w-0">
                 {/* 标题行 */}
                 <div className="flex items-start justify-between gap-3 mb-2">
-                  <h3 className="text-lg font-semibold text-slate-800 line-clamp-1 group-hover:text-brand-600 transition-colors">
+                  <h3 
+                    className="text-lg font-semibold text-slate-800 line-clamp-1 group-hover:text-brand-600 transition-colors cursor-pointer"
+                    onClick={() => onViewDetail(article)}
+                  >
                     {article.title || "未命名文章"}
                   </h3>
                   <StatusBadge status={article.status} />
