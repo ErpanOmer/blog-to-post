@@ -3,6 +3,8 @@ import type { Env, GenerateCoverInput, PlatformType, PromptKey } from "./types";
 import { createAIProvider } from "./ai/providers";
 import { getPlatformAdapter } from "./platform/adapters";
 import { listArticles, getArticle, createArticle, updateArticle, deleteArticle } from "./db/articles";
+import { listPlatformAccounts, getPlatformAccount, createPlatformAccount, updatePlatformAccount, deletePlatformAccount, verifyPlatformAccount } from "./db/platform-accounts";
+import "./accounts";
 import { createTask } from "./db/tasks";
 import { listPromptTemplates, setPromptTemplate } from "./services/prompts";
 import { saveDraft, savePublished } from "./services/storage";
@@ -283,6 +285,72 @@ app.get("/api/ai/status", (c) => {
 		lastCheckedAt: Date.now(),
 		message: "使用本地 Ollama",
 	});
+});
+
+app.get("/api/platform-accounts", async (c) => {
+	const platform = c.req.query("platform") as PlatformType | undefined;
+	const accounts = await listPlatformAccounts(c.env.DB, platform);
+	return c.json(accounts);
+});
+
+app.get("/api/platform-accounts/:id", async (c) => {
+	const account = await getPlatformAccount(c.env.DB, c.req.param("id"));
+	if (!account) {
+		return c.json({ message: "not found" }, 404);
+	}
+	return c.json(account);
+});
+
+app.post("/api/platform-accounts", async (c) => {
+	const payload = (await c.req.json()) as { platform: PlatformType; authToken?: string; description?: string };
+	if (!payload.platform) {
+		return c.json({ message: "platform is required" }, 400);
+	}
+	const now = Date.now();
+	const { account, verifyResult, isDuplicate } = await createPlatformAccount(c.env.DB, {
+		id: crypto.randomUUID(),
+		platform: payload.platform,
+		authToken: payload.authToken ?? null,
+		description: payload.description ?? null,
+		createdAt: now,
+		updatedAt: now,
+	});
+
+	if (!account) {
+		return c.json(
+			{ message: verifyResult.message, valid: verifyResult.valid },
+			verifyResult.valid ? 200 : 400,
+		);
+	}
+
+	return c.json({
+		...account,
+		verifyMessage: verifyResult.message,
+		isVerified: verifyResult.valid,
+		isDuplicate,
+	});
+});
+
+app.put("/api/platform-accounts/:id", async (c) => {
+	const payload = (await c.req.json()) as { authToken?: string | null; description?: string | null; isActive?: boolean };
+	const account = await updatePlatformAccount(c.env.DB, c.req.param("id"), payload);
+	if (!account) {
+		return c.json({ message: "not found" }, 404);
+	}
+	return c.json(account);
+});
+
+app.post("/api/platform-accounts/:id/verify", async (c) => {
+	const result = await verifyPlatformAccount(c.env.DB, c.req.param("id"));
+	return c.json(result);
+});
+
+app.delete("/api/platform-accounts/:id", async (c) => {
+	const success = await deletePlatformAccount(c.env.DB, c.req.param("id"));
+	if (!success) {
+		return c.json({ message: "not found" }, 404);
+	}
+	return c.json({ success: true });
 });
 
 export default {

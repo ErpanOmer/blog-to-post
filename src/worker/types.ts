@@ -1,4 +1,4 @@
-export type PlatformType = "juejin" | "zhihu" | "xiaohongshu" | "wechat" | "";
+export type PlatformType = "juejin" | "zhihu" | "xiaohongshu" | "wechat" | "csdn" | "";
 export type ArticleStatus = "draft" | "reviewed" | "scheduled" | "published" | "failed";
 export type PromptKey = "title" | "content" | "summary" | "tags" | "cover";
 
@@ -14,6 +14,28 @@ export interface Article {
 	publishedAt?: number | null;
 	createdAt: number;
 	updatedAt: number;
+}
+
+export interface PlatformAccount {
+	id: string;
+	platform: PlatformType;
+	authToken?: string | null;
+	description?: string | null;
+	isActive: boolean;
+	isVerified: boolean;
+	lastVerifiedAt?: number | null;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface VerifyAccountResult {
+	valid: boolean;
+	message: string;
+	accountInfo?: {
+		id: string;
+		name: string;
+		isLogin: boolean;
+	};
 }
 
 export interface Task {

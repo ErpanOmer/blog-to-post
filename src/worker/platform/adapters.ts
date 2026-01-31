@@ -38,5 +38,15 @@ export function getPlatformAdapter(platform: PlatformType): PlatformAdapter {
 			return new XiaohongshuAdapter();
 		case "wechat":
 			return new WechatAdapter();
+		case "csdn":
+			return new CSDNAdapter();
+		default:
+			throw new Error(`Unsupported platform: ${platform}`);
+	}
+}
+
+class CSDNAdapter implements PlatformAdapter {
+	adapt(content: string) {
+		return `# CSDN 技术发布\n\n${content}\n\n> 本文由自动发布工具生成。`;
 	}
 }

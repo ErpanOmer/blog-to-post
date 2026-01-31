@@ -1,8 +1,19 @@
 import type { Article, ArticleStatus, PlatformType, PromptKey, PromptTemplate, ProviderStatus } from "./types";
+export type { PlatformType };
 
 const jsonHeaders = {
 	"Content-Type": "application/json",
 };
+
+export async function getArticle(id: string): Promise<Article> {
+	return parseJson<Article>(await fetch(`/api/articles/${id}`));
+}
+
+export async function searchArticles(query: string): Promise<Article[]> {
+	return parseJson<Article[]>(
+		await fetch(`/api/articles/search?q=${encodeURIComponent(query)}`),
+	);
+}
 
 async function parseJson<T>(response: Response): Promise<T> {
 	const text = await response.text();
@@ -143,6 +154,85 @@ export async function updatePromptTemplate(key: PromptKey, template: string): Pr
 	);
 }
 
+export type PlatformAccount = {
+	id: string;
+	platform: PlatformType;
+	userId?: string | null;
+	userName?: string | null;
+	avatar?: string | null;
+	authToken?: string | null;
+	description?: string | null;
+	isActive: boolean;
+	isVerified: boolean;
+	lastVerifiedAt?: number | null;
+	createdAt: number;
+	updatedAt: number;
+};
+
+export type VerifyAccountResult = {
+	valid: boolean;
+	message: string;
+	accountInfo?: {
+		id: string;
+		name: string;
+		isLogin: boolean;
+	};
+};
+
+export async function getPlatformAccounts(platform?: PlatformType): Promise<PlatformAccount[]> {
+	const url = platform ? `/api/platform-accounts?platform=${platform}` : "/api/platform-accounts";
+	return parseJson<PlatformAccount[]>(await fetch(url));
+}
+
+export async function getPlatformAccount(id: string): Promise<PlatformAccount> {
+	return parseJson<PlatformAccount>(await fetch(`/api/platform-accounts/${id}`));
+}
+
+export async function createPlatformAccount(payload: {
+	platform: PlatformType;
+	authToken?: string;
+	description?: string;
+}): Promise<PlatformAccount> {
+	return parseJson<PlatformAccount>(
+		await fetch("/api/platform-accounts", {
+			method: "POST",
+			headers: jsonHeaders,
+			body: JSON.stringify(payload),
+		}),
+	);
+}
+
+export async function updatePlatformAccount(
+	id: string,
+	payload: Partial<Omit<PlatformAccount, "id" | "platform" | "createdAt" | "updatedAt">>,
+): Promise<PlatformAccount> {
+	return parseJson<PlatformAccount>(
+		await fetch(`/api/platform-accounts/${id}`, {
+			method: "PUT",
+			headers: jsonHeaders,
+			body: JSON.stringify(payload),
+		}),
+	);
+}
+
+export async function verifyPlatformAccount(id: string): Promise<VerifyAccountResult> {
+	return parseJson<VerifyAccountResult>(
+		await fetch(`/api/platform-accounts/${id}/verify`, {
+			method: "POST",
+			headers: jsonHeaders,
+		}),
+	);
+}
+
+export async function deletePlatformAccount(id: string): Promise<void> {
+	const response = await fetch(`/api/platform-accounts/${id}`, {
+		method: "DELETE",
+		headers: jsonHeaders,
+	});
+	if (!response.ok) {
+		throw new Error("删除平台帐号失败");
+	}
+}
 
 
 

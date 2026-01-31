@@ -17,6 +17,7 @@ import { PromptTemplateManager } from "./components/PromptTemplateManager";
 import { TitleGenerator } from "./components/TitleGenerator";
 import { GenerationPanel } from "./components/GenerationPanel";
 import { GlobalLoadingOverlay } from "./components/GlobalLoadingOverlay";
+import { PlatformAccountsPanel } from "./components/PlatformAccountsPanel";
 import { 
   Sparkles, 
   RefreshCw, 
@@ -29,7 +30,8 @@ import {
   LayoutGrid,
   Save,
   X,
-  Loader2
+  Loader2,
+  User
 } from "lucide-react";
 
 // 创建一个新的文章对象
@@ -327,7 +329,7 @@ function App() {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full max-w-screen-sm grid-cols-4 bg-white/80 p-1 shadow-soft backdrop-blur-sm">
+            <TabsList className="grid w-full max-w-screen-sm grid-cols-5 bg-white/80 p-1 shadow-soft backdrop-blur-sm">
               <TabsTrigger value="articles" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
                 <FileText className="h-8 w-4" />
                 文章列表
@@ -335,6 +337,10 @@ function App() {
               <TabsTrigger value="distribution" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
                 <Share2 className="h-8 w-4" />
                 分发状态
+              </TabsTrigger>
+              <TabsTrigger value="accounts" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
+                <User className="h-8 w-4" />
+                平台帐号
               </TabsTrigger>
               <TabsTrigger value="ai" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
                 <Cpu className="h-8 w-4" />
@@ -402,6 +408,16 @@ function App() {
                   />
                 </SectionCard>
               </div>
+            </TabsContent>
+
+            <TabsContent value="accounts" className="animate-in">
+              <SectionCard 
+                title="平台帐号管理" 
+                description="管理多平台发布所需的认证信息。"
+                icon={<User className="h-5 w-5" />}
+              >
+                <PlatformAccountsPanel />
+              </SectionCard>
             </TabsContent>
 
             <TabsContent value="ai" className="animate-in">
