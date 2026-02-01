@@ -1,5 +1,6 @@
 import type { Article } from "../types";
 import { StatusBadge } from "./StatusBadge";
+import { ArticlePublicationStatus } from "./ArticlePublicationStatus";
 import { cn } from "@/lib/utils";
 import { 
   FileText, 
@@ -10,15 +11,23 @@ import {
   Eye, 
   Pencil, 
   Trash2,
-  Sparkles
+  Sparkles,
+  Send,
+  CheckSquare,
+  Square,
+  Layers,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useState, useMemo } from "react";
 
 interface ArticleListProps {
   articles: Article[];
   onViewDetail: (article: Article) => void;
   onEdit?: (article: Article) => void;
   onDelete?: (article: Article) => void;
+  onPublish?: (articles: Article[]) => void;
 }
 
 const platformLabels: Record<string, string> = {
@@ -62,7 +71,51 @@ function getRelativeTime(timestamp: number): string {
   return formatDateTime(timestamp);
 }
 
-export function ArticleList({ articles, onViewDetail, onEdit, onDelete }: ArticleListProps) {
+export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublish }: ArticleListProps) {
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // 计算选中的文章
+  const selectedArticles = useMemo(() => {
+    return articles.filter(a => selectedIds.has(a.id));
+  }, [articles, selectedIds]);
+
+  // 切换批量模式
+  const toggleBatchMode = () => {
+    setIsBatchMode(!isBatchMode);
+    setSelectedIds(new Set()); // 退出批量模式时清空选择
+  };
+
+  // 切换单篇文章选择
+  const toggleArticle = (articleId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(articleId)) {
+        next.delete(articleId);
+      } else {
+        next.add(articleId);
+      }
+      return next;
+    });
+  };
+
+  // 全选/取消全选
+  const toggleSelectAll = () => {
+    if (selectedIds.size === articles.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(articles.map(a => a.id)));
+    }
+  };
+
+  // 处理批量发布
+  const handleBatchPublish = () => {
+    if (selectedArticles.length === 0) return;
+    onPublish?.(selectedArticles);
+    setIsBatchMode(false);
+    setSelectedIds(new Set());
+  };
+
   if (articles.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -81,8 +134,74 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete }: Articl
 
   return (
     <div className="space-y-3">
+      {/* 批量操作工具栏 */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          {!isBatchMode ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleBatchMode}
+              className="gap-2"
+            >
+              <CheckSquare className="h-4 w-4" />
+              批量选择
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={toggleSelectAll}
+                className="gap-2"
+              >
+                {selectedIds.size === articles.length ? (
+                  <>
+                    <Square className="h-4 w-4" />
+                    取消全选
+                  </>
+                ) : (
+                  <>
+                    <CheckSquare className="h-4 w-4" />
+                    全选
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleBatchMode}
+                className="gap-2"
+              >
+                <X className="h-4 w-4" />
+                退出批量
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* 批量操作按钮 */}
+        {isBatchMode && selectedArticles.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-500">
+              已选择 <span className="font-medium text-slate-700">{selectedArticles.length}</span> 篇文章
+            </span>
+            <Button
+              variant="gradient"
+              size="sm"
+              onClick={handleBatchPublish}
+              className="gap-2"
+            >
+              <Layers className="h-4 w-4" />
+              批量发布
+            </Button>
+          </div>
+        )}
+      </div>
+
       {articles.map((article) => {
         const isDraft = article.status === 'draft';
+        const isSelected = selectedIds.has(article.id);
         
         return (
           <div
@@ -90,7 +209,8 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete }: Articl
             className={cn(
               "group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white",
               "transition-all duration-300 ease-out",
-              "hover:shadow-xl hover:shadow-slate-200/60 hover:-translate-y-0.5 hover:border-brand-200"
+              "hover:shadow-xl hover:shadow-slate-200/60 hover:-translate-y-0.5 hover:border-brand-200",
+              isBatchMode && isSelected && "ring-2 ring-brand-500 border-brand-300"
             )}
           >
             {/* 左侧状态指示条 */}
@@ -104,11 +224,22 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete }: Articl
             )} />
 
             <div className="flex gap-4 p-5 pl-6">
+              {/* 批量选择复选框 */}
+              {isBatchMode && (
+                <div className="flex items-center">
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => toggleArticle(article.id)}
+                    className="h-5 w-5"
+                  />
+                </div>
+              )}
+
               {/* 封面图 */}
               <div className="flex-shrink-0">
                 <div 
                   className="relative group/cover cursor-pointer"
-                  onClick={() => onViewDetail(article)}
+                  onClick={() => !isBatchMode && onViewDetail(article)}
                 >
                   {article.coverImage ? (
                     <img
@@ -139,7 +270,7 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete }: Articl
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <h3 
                     className="text-lg font-semibold text-slate-800 line-clamp-1 group-hover:text-brand-600 transition-colors cursor-pointer"
-                    onClick={() => onViewDetail(article)}
+                    onClick={() => !isBatchMode && onViewDetail(article)}
                   >
                     {article.title || "未命名文章"}
                   </h3>
@@ -154,82 +285,102 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete }: Articl
                 )}
 
                 {/* 底部信息栏 */}
-                <div className="mt-auto flex items-center justify-between">
-                  {/* 左侧：时间和标签 */}
-                  <div className="flex items-center gap-4 text-xs">
-                    {/* 时间 */}
-                    <div className="flex items-center gap-1.5 text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full">
-                      <Clock className="h-3.5 w-3.5" />
-                      <span>{getRelativeTime(article.updatedAt)}</span>
+                <div className="mt-auto space-y-2">
+                  {/* 第一行：时间和标签 */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4 text-xs">
+                      {/* 时间 */}
+                      <div className="flex items-center gap-1.5 text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>{getRelativeTime(article.updatedAt)}</span>
+                      </div>
+
+                      {/* 发布时间（仅已发布） */}
+                      {article.publishedAt && (
+                        <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>{formatDateTime(article.publishedAt)}</span>
+                        </div>
+                      )}
+
+                      {/* 标签 */}
+                      {article.tags && article.tags.length > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <Hash className="h-3.5 w-3.5 text-slate-300" />
+                          <div className="flex items-center gap-1.5">
+                            {article.tags.slice(0, 3).map((tag, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600 hover:bg-brand-100 hover:text-brand-700 transition-colors cursor-default"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                            {article.tags.length > 3 && (
+                              <span className="text-[11px] text-slate-400 bg-slate-50 px-2 py-1 rounded-full">
+                                +{article.tags.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    {/* 发布时间（仅已发布） */}
-                    {article.publishedAt && (
-                      <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
-                        <Calendar className="h-3.5 w-3.5" />
-                        <span>{formatDateTime(article.publishedAt)}</span>
-                      </div>
-                    )}
+                    {/* 右侧：操作按钮（仅在非批量模式下显示） */}
+                    {!isBatchMode && (
+                      <div className="flex items-center gap-1">
+                        {/* 发布按钮 */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 px-3 text-xs gap-1.5 text-slate-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
+                          onClick={() => onPublish?.([article])}
+                        >
+                          <Send className="h-4 w-4" />
+                          发布
+                        </Button>
 
-                    {/* 标签 */}
-                    {article.tags && article.tags.length > 0 && (
-                      <div className="flex items-center gap-1.5">
-                        <Hash className="h-3.5 w-3.5 text-slate-300" />
-                        <div className="flex items-center gap-1.5">
-                          {article.tags.slice(0, 3).map((tag, i) => (
-                            <span
-                              key={i}
-                              className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600 hover:bg-brand-100 hover:text-brand-700 transition-colors cursor-default"
+                        {/* 查看按钮 */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 px-3 text-xs gap-1.5 text-slate-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
+                          onClick={() => onViewDetail(article)}
+                        >
+                          <Eye className="h-4 w-4" />
+                          查看
+                        </Button>
+
+                        {/* 草稿状态显示编辑和删除 */}
+                        {isDraft && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-9 px-3 text-xs gap-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                              onClick={() => onEdit?.(article)}
                             >
-                              {tag}
-                            </span>
-                          ))}
-                          {article.tags.length > 3 && (
-                            <span className="text-[11px] text-slate-400 bg-slate-50 px-2 py-1 rounded-full">
-                              +{article.tags.length - 3}
-                            </span>
-                          )}
-                        </div>
+                              <Pencil className="h-4 w-4" />
+                              编辑
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-9 px-3 text-xs gap-1.5 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                              onClick={() => onDelete?.(article)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              删除
+                            </Button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
-
-                  {/* 右侧：操作按钮 */}
-                  <div className="flex items-center gap-1">
-                    {/* 查看按钮 */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-9 px-3 text-xs gap-1.5 text-slate-600 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
-                      onClick={() => onViewDetail(article)}
-                    >
-                      <Eye className="h-4 w-4" />
-                      查看
-                    </Button>
-
-                    {/* 草稿状态显示编辑和删除 */}
-                    {isDraft && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-9 px-3 text-xs gap-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                          onClick={() => onEdit?.(article)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                          编辑
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-9 px-3 text-xs gap-1.5 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                          onClick={() => onDelete?.(article)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          删除
-                        </Button>
-                      </>
-                    )}
+                  
+                  {/* 第二行：发布状态 */}
+                  <div className="flex items-center">
+                    <ArticlePublicationStatus articleId={article.id} />
                   </div>
                 </div>
               </div>

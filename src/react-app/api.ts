@@ -1,4 +1,14 @@
 import type { Article, ArticleStatus, PlatformType, PromptKey, PromptTemplate, ProviderStatus } from "./types";
+import type { 
+  PublishTask, 
+  PublishTaskStep, 
+  AccountConfig,
+  ArticlePublication,
+  AccountStatistics,
+  CreatePublishTaskRequest,
+  PublishTaskResponse,
+  PublishTaskStatusResponse
+} from "./types/publications";
 export type { PlatformType };
 
 const jsonHeaders = {
@@ -234,5 +244,93 @@ export async function deletePlatformAccount(id: string): Promise<void> {
 	}
 }
 
+// ==================== 发布相关 API ====================
 
+// 创建发布任务（支持批量发布和定时发布）
+export async function createPublishTask(request: CreatePublishTaskRequest): Promise<PublishTaskResponse> {
+	return parseJson<PublishTaskResponse>(
+		await fetch("/api/publish/tasks", {
+			method: "POST",
+			headers: jsonHeaders,
+			body: JSON.stringify(request),
+		}),
+	);
+}
 
+// 获取发布任务列表
+export async function getPublishTasks(status?: PublishTask['status'], limit?: number): Promise<PublishTask[]> {
+	const params = new URLSearchParams();
+	if (status) params.append("status", status);
+	if (limit) params.append("limit", limit.toString());
+	
+	const url = `/api/publish/tasks${params.toString() ? `?${params.toString()}` : ""}`;
+	return parseJson<PublishTask[]>(await fetch(url));
+}
+
+// 获取单个发布任务详情
+export async function getPublishTask(taskId: string): Promise<PublishTaskStatusResponse> {
+	return parseJson<PublishTaskStatusResponse>(await fetch(`/api/publish/tasks/${taskId}`));
+}
+
+// 获取发布任务步骤列表
+export async function getPublishTaskSteps(taskId: string): Promise<PublishTaskStep[]> {
+	return parseJson<PublishTaskStep[]>(await fetch(`/api/publish/tasks/${taskId}/steps`));
+}
+
+// 取消发布任务
+export async function cancelPublishTask(taskId: string): Promise<{ success: boolean; message: string }> {
+	return parseJson<{ success: boolean; message: string }>(
+		await fetch(`/api/publish/tasks/${taskId}/cancel`, {
+			method: "POST",
+			headers: jsonHeaders,
+		}),
+	);
+}
+
+// 快速发布
+export async function quickPublish(
+	articleId: string, 
+	accountId: string, 
+	draftOnly: boolean = false
+): Promise<{ success: boolean; message: string; publicationId?: string }> {
+	return parseJson<{ success: boolean; message: string; publicationId?: string }>(
+		await fetch("/api/publish/quick", {
+			method: "POST",
+			headers: jsonHeaders,
+			body: JSON.stringify({ articleId, accountId, draftOnly }),
+		}),
+	);
+}
+
+// 获取文章的发布记录
+export async function getArticlePublications(articleId: string): Promise<ArticlePublication[]> {
+	return parseJson<ArticlePublication[]>(await fetch(`/api/articles/${articleId}/publications`));
+}
+
+// 获取所有发布记录
+export async function getPublications(filters?: {
+	articleId?: string;
+	accountId?: string;
+	platform?: PlatformType;
+	status?: ArticlePublication['status'];
+}): Promise<ArticlePublication[]> {
+	const params = new URLSearchParams();
+	if (filters?.articleId) params.append("articleId", filters.articleId);
+	if (filters?.accountId) params.append("accountId", filters.accountId);
+	if (filters?.platform) params.append("platform", filters.platform);
+	if (filters?.status) params.append("status", filters.status);
+	
+	const url = `/api/publications${params.toString() ? `?${params.toString()}` : ""}`;
+	return parseJson<ArticlePublication[]>(await fetch(url));
+}
+
+// 获取所有账号的发布统计
+export async function getAccountStatistics(platform?: PlatformType): Promise<AccountStatistics[]> {
+	const url = platform ? `/api/account-statistics?platform=${platform}` : "/api/account-statistics";
+	return parseJson<AccountStatistics[]>(await fetch(url));
+}
+
+// 获取单个账号的发布统计
+export async function getPlatformAccountStatistics(accountId: string): Promise<AccountStatistics> {
+	return parseJson<AccountStatistics>(await fetch(`/api/platform-accounts/${accountId}/statistics`));
+}

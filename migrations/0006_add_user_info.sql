@@ -1,0 +1,4 @@
+-- 这些字段已在数据库中存在，此处设为空以防止重复执行报错
+-- ALTER TABLE platform_accounts ADD COLUMN userId TEXT;
+-- ALTER TABLE platform_accounts ADD COLUMN userName TEXT;
+-- ALTER TABLE platform_accounts ADD COLUMN avatar TEXT;

@@ -1,37 +1,37 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import "./App.css";
-import type { Article, PlatformType, PromptTemplate } from "./types";
-import { distributeArticle, getArticles, getPromptTemplates, getProviderStatus, transitionArticle, updateArticle, updatePromptTemplate, createArticle, deleteArticle } from "./api";
+import type { Article } from "./types";
+import { getArticles, getProviderStatus, updateArticle, createArticle, deleteArticle, createPublishTask } from "./api";
+import { PublishDialog } from "./components/PublishDialog";
+import { Dashboard } from "./components/Dashboard";
+import { PlatformSettings } from "./components/PlatformSettings";
+import { DistributionStatus } from "./components/DistributionStatus";
+import { NotificationContainer, notify } from "./components/NotificationSystem";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SectionCard } from "./components/SectionCard";
 import { ArticleList } from "./components/ArticleList";
 import { ArticleEditor } from "./components/ArticleEditor";
 import { ArticleDetailDialog } from "./components/ArticleDetailDialog";
-import { DistributionPanel } from "./components/DistributionPanel";
-import { ProviderStatusPanel } from "./components/ProviderStatusPanel";
-import { PromptTemplateManager } from "./components/PromptTemplateManager";
 import { TitleGenerator } from "./components/TitleGenerator";
 import { GenerationPanel } from "./components/GenerationPanel";
 import { GlobalLoadingOverlay } from "./components/GlobalLoadingOverlay";
 import { PlatformAccountsPanel } from "./components/PlatformAccountsPanel";
+import type { AccountConfig } from "./types/publications";
 import { 
   Sparkles, 
-  RefreshCw, 
   FileText, 
   Share2, 
-  Cpu, 
-  Settings2, 
-  HelpCircle,
   Zap,
-  LayoutGrid,
   Save,
   X,
   Loader2,
-  User
+  User,
+  Home,
+  Rocket,
+  Settings
 } from "lucide-react";
 
 // 创建一个新的文章对象
@@ -92,18 +92,18 @@ function createEmptyArticle(): Article {
 
 function App() {
   const [articles, setArticles] = useState<Article[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Article | null>(null);
-  const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([]);
   const [providerStatus, setProviderStatus] = useState<{ provider: string; ready: boolean; lastCheckedAt: number; message: string } | null>(null);
-  const [selectedPlatforms, setSelectedPlatforms] = useState<PlatformType[]>(["juejin"]);
-  const [message, setMessage] = useState("系统已就绪，点击生成文章开始创作。");
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("articles");
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [detailArticle, setDetailArticle] = useState<Article | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
+  const [articlesToPublish, setArticlesToPublish] = useState<Article[]>([]);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const selectedArticle = useMemo(() => articles.find((article) => article.id === selectedId) ?? null, [articles, selectedId]);
 
@@ -131,29 +131,31 @@ function App() {
   }, []);
 
   useEffect(() => {
-    getArticles().then(setArticles).catch((error) => console.error("加载文章失败", error));
-    getProviderStatus().then(setProviderStatus).catch((error) => console.error("加载 Provider 失败", error));
-    getPromptTemplates().then(setPromptTemplates).catch((error) => console.error("加载模板失败", error));
+    getArticles().then(setArticles).catch((error: Error) => {
+      console.error("加载文章失败", error);
+      notify.error("加载文章失败", error.message);
+    });
+    getProviderStatus().then(setProviderStatus).catch((error: Error) => {
+      console.error("加载 Provider 失败", error);
+    });
   }, []);
 
+  // 当选择的文章变化时更新草稿
   useEffect(() => {
-    setDraft(selectedArticle ?? null);
+    if (selectedArticle) {
+      setDraft(selectedArticle);
+    }
   }, [selectedArticle]);
 
-  const refreshArticles = () => {
-    getArticles().then(setArticles).catch((error) => console.error("刷新文章失败", error));
-  };
-
   const handleOpenEditor = () => {
-    // 创建新文章草稿
     const newArticle = createEmptyArticle();
     setDraft(newArticle);
     setIsEditorOpen(true);
-    setMessage("请填写文章标题，然后生成正文和元信息。");
+    notify.info("请填写文章标题，然后生成正文和元信息。");
   };
 
   const handleCloseEditor = () => {
-    if (isGenerating) return; // 生成中不能关闭
+    if (isGenerating) return;
     setIsEditorOpen(false);
     setDraft(null);
   };
@@ -189,39 +191,80 @@ function App() {
         setArticles((prev) => {
           return exists ? prev.map((item) => (item.id === article.id ? article : item)) : [article, ...prev];
         });
-        setMessage("草稿已保存。");
+        notify.success("草稿已保存");
         setIsEditorOpen(false);
         setDraft(null);
       })
-      .catch((error) => {
+      .catch((error: Error) => {
         console.error("保存失败", error);
-        setMessage("保存失败，请稍后再试。");
+        notify.error("保存失败", error.message);
       })
       .finally(() => setIsLoading(false));
   };
 
-  const handleTransition = (status: "reviewed" | "scheduled" | "published") => {
-    if (!selectedArticle) return;
-    transitionArticle(selectedArticle.id, status)
-      .then((article) => {
-        setArticles((prev) => prev.map((item) => (item.id === article.id ? article : item)));
-        setMessage(`状态已更新为 ${status}。`);
-      })
-      .catch((error) => console.error("更新状态失败", error));
+  // BUG FIX: 快速发布 - 先打开发布弹窗，等发布成功后再保存草稿
+  const handleQuickPublish = async () => {
+    if (!draft || !isFormValid) return;
+    
+    // 先打开发布弹窗，让用户选择发布配置
+    setArticlesToPublish([draft]);
+    setIsPublishDialogOpen(true);
+    // 注意：此时不保存草稿到数据库，等发布任务创建成功后再保存
   };
 
-  const handlePublish = () => {
-    if (!selectedArticle) return;
-    distributeArticle(selectedArticle.id, selectedPlatforms)
-      .then((data) => {
-        setArticles((prev) => prev.map((item) => (item.id === data.article.id ? data.article : item)));
-        setMessage("已生成多平台发布内容，状态已进入 published。");
-      })
-      .catch((error) => console.error("发布失败", error));
-  };
-
-  const handleSchedule = () => {
-    handleTransition("scheduled");
+  // 处理快速发布的实际发布逻辑
+  const handleQuickPublishConfirm = async (accountConfigs: AccountConfig[], scheduleTime: number | null) => {
+    if (!draft) return;
+    
+    setIsPublishing(true);
+    const loadingId = notify.loading("正在创建发布任务...");
+    
+    try {
+      // 1. 先创建发布任务
+      const result = await createPublishTask({
+        articleIds: [draft.id], // 临时ID，实际发布时需要先保存
+        accountConfigs,
+        scheduleTime,
+      });
+      
+      // 2. 发布任务创建成功后，才保存草稿到数据库
+      const exists = articles.some((item) => item.id === draft.id);
+      const savedArticle = exists
+        ? await updateArticle(draft.id, {
+            title: draft.title,
+            content: draft.content,
+            summary: draft.summary,
+            tags: draft.tags,
+            coverImage: draft.coverImage,
+          })
+        : await createArticle({ ...draft, status: "draft" });
+      
+      // 3. 更新文章列表
+      setArticles((prev) => {
+        return exists 
+          ? prev.map((item) => (item.id === savedArticle.id ? savedArticle : item)) 
+          : [savedArticle, ...prev];
+      });
+      
+      // 4. 关闭编辑器
+      setIsEditorOpen(false);
+      setDraft(null);
+      
+      notify.remove(loadingId);
+      notify.success("发布任务已创建", result.message, { showSystemNotification: true });
+      
+      // 5. 延迟关闭发布弹窗
+      setTimeout(() => {
+        setIsPublishDialogOpen(false);
+        setIsPublishing(false);
+      }, 1500);
+      
+    } catch (error) {
+      notify.remove(loadingId);
+      console.error("快速发布失败", error);
+      notify.error("快速发布失败", error instanceof Error ? error.message : "请稍后再试");
+      setIsPublishing(false);
+    }
   };
 
   const handleViewDetail = (article: Article) => {
@@ -230,9 +273,8 @@ function App() {
   };
 
   const handleEdit = (article: Article) => {
-    // 只有草稿状态才能编辑
     if (article.status !== 'draft') {
-      setMessage("只有草稿状态的文章才能编辑");
+      notify.error("只有草稿状态的文章才能编辑");
       return;
     }
     setDraft({ ...article });
@@ -240,9 +282,8 @@ function App() {
   };
 
   const handleDelete = (article: Article) => {
-    // 只有草稿状态才能删除
     if (article.status !== 'draft') {
-      setMessage("只有草稿状态的文章才能删除");
+      notify.error("只有草稿状态的文章才能删除");
       return;
     }
     if (!confirm(`确定要删除文章 "${article.title || '未命名文章'}" 吗？`)) {
@@ -251,31 +292,78 @@ function App() {
     deleteArticle(article.id)
       .then(() => {
         setArticles((prev) => prev.filter((item) => item.id !== article.id));
-        setMessage("文章已删除");
+        notify.success("文章已删除");
       })
-      .catch((error) => {
+      .catch((error: Error) => {
         console.error("删除失败", error);
-        setMessage("删除失败，请稍后再试");
+        notify.error("删除失败", error.message);
       });
   };
 
-  const togglePlatform = (platform: PlatformType) => {
-    setSelectedPlatforms((prev) =>
-      prev.includes(platform) ? prev.filter((item) => item !== platform) : [...prev, platform],
-    );
+  // BUG FIX: 点击发布按钮时只打开发布弹窗，不显示正在发布中遮罩层
+  const handlePublish = (articles: Article[]) => {
+    setArticlesToPublish(articles);
+    setIsPublishDialogOpen(true);
+    // 注意：这里不设置 setIsPublishing(true)，遮罩层应该在点击发布按钮后才显示
   };
 
-  const handleSaveTemplate = (template: PromptTemplate) => {
-    updatePromptTemplate(template.key, template.template)
-      .then((result) => {
-        setPromptTemplates((prev) => prev.map((item) => (item.key === result.key ? result : item)));
-        setMessage(`${template.key} 模板已保存。`);
-      })
-      .catch((error) => console.error("保存模板失败", error));
+  // 处理文章列表的发布确认
+  const handlePublishConfirm = async (accountConfigs: AccountConfig[], scheduleTime: number | null) => {
+    setIsPublishing(true);
+    const loadingId = notify.loading("正在创建发布任务...");
+    
+    try {
+      const result = await createPublishTask({
+        articleIds: articlesToPublish.map(a => a.id),
+        accountConfigs,
+        scheduleTime,
+      });
+      
+      notify.remove(loadingId);
+      notify.success("发布任务已创建", result.message, { showSystemNotification: true });
+      
+      // 刷新文章列表
+      getArticles().then(setArticles).catch(console.error);
+      
+      // 延迟关闭弹窗
+      setTimeout(() => {
+        setIsPublishDialogOpen(false);
+        setIsPublishing(false);
+      }, 1500);
+      
+    } catch (error) {
+      notify.remove(loadingId);
+      console.error("发布失败", error);
+      notify.error("发布失败", error instanceof Error ? error.message : "请稍后再试");
+      setIsPublishing(false);
+    }
+  };
+
+  // Dashboard 快速入口处理函数
+  const handleDashboardNavigate = (tab: string) => {
+    setActiveTab(tab);
   };
 
   return (
-    <TooltipProvider>
+    <>
+      {/* Notification Container */}
+      <NotificationContainer />
+      
+      {/* Publishing Overlay - 发布时禁用整个页面 - BUG FIX: 只在真正发布时显示 */}
+      {isPublishing && (
+        <div className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-full bg-brand-100 flex items-center justify-center mb-4">
+                <Loader2 className="h-8 w-8 text-brand-600 animate-spin" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">正在发布中</h3>
+              <p className="text-sm text-slate-500">请等待发布任务完成，期间无法操作其他功能</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100/50 to-slate-200/30 text-slate-900">
         {/* Global Loading Overlay */}
         <GlobalLoadingOverlay isLoading={isGenerating} />
@@ -283,6 +371,7 @@ function App() {
         {/* Header */}
         <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200/60 bg-white/80 backdrop-blur-xl">
           <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+            {/* Logo */}
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-lg shadow-brand-500/25">
                 <Sparkles className="h-5 w-5" />
@@ -292,124 +381,79 @@ function App() {
                 <p className="text-xs text-slate-500">Cloudflare Workers + Hono + D1 / KV / R2</p>
               </div>
             </div>
+
+            {/* Navigation Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 mx-8">
+              <TabsList className="bg-slate-100/80 p-1">
+                <TabsTrigger value="dashboard" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                  <Home className="h-4 w-4" />
+                  首页
+                </TabsTrigger>
+                <TabsTrigger value="articles" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                  <FileText className="h-4 w-4" />
+                  文章列表
+                </TabsTrigger>
+                <TabsTrigger value="distribution" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                  <Share2 className="h-4 w-4" />
+                  分发状态
+                </TabsTrigger>
+                <TabsTrigger value="accounts" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                  <User className="h-4 w-4" />
+                  平台帐号
+                </TabsTrigger>
+                <TabsTrigger value="settings" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                  <Settings className="h-4 w-4" />
+                  平台设置
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {/* Right Actions */}
             <div className="flex items-center gap-3">
               <Button variant="gradient" size="sm" onClick={handleOpenEditor} type="button" className="gap-2">
                 <Zap className="h-4 w-4" />
                 生成文章
-              </Button>
-              <Button variant="secondary" size="sm" onClick={refreshArticles} type="button" className="gap-2">
-                <RefreshCw className="h-4 w-4" />
-                刷新数据
               </Button>
             </div>
           </div>
         </header>
 
         <main className="mx-auto max-w-7xl px-6 pb-16 pt-24">
-          {/* System Message */}
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/60 bg-white/80 px-6 py-4 shadow-soft backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/20">
-                <LayoutGrid className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-900">系统消息</p>
-                <p className="text-xs text-slate-500">{message}</p>
-              </div>
-            </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" type="button" className="gap-2">
-                  <HelpCircle className="h-4 w-4" />
-                  状态机说明
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>全流程均在 Worker 托管。</TooltipContent>
-            </Tooltip>
-          </div>
+          {/* Tab Contents */}
+          <Tabs value={activeTab} className="space-y-6">
+            {/* Dashboard */}
+            <TabsContent value="dashboard" className="animate-in">
+              <Dashboard 
+                articles={articles} 
+                onNavigate={handleDashboardNavigate}
+              />
+            </TabsContent>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full max-w-screen-sm grid-cols-5 bg-white/80 p-1 shadow-soft backdrop-blur-sm">
-              <TabsTrigger value="articles" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
-                <FileText className="h-8 w-4" />
-                文章列表
-              </TabsTrigger>
-              <TabsTrigger value="distribution" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
-                <Share2 className="h-8 w-4" />
-                分发状态
-              </TabsTrigger>
-              <TabsTrigger value="accounts" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
-                <User className="h-8 w-4" />
-                平台帐号
-              </TabsTrigger>
-              <TabsTrigger value="ai" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
-                <Cpu className="h-8 w-4" />
-                AI Provider
-              </TabsTrigger>
-              <TabsTrigger value="prompts" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
-                <Settings2 className="h-8 w-4" />
-                Prompt 模板
-              </TabsTrigger>
-            </TabsList>
-
+            {/* Articles */}
             <TabsContent value="articles" className="animate-in">
               <SectionCard 
                 title="文章清单" 
-                description="仅展示文章列表与状态。"
+                description="管理所有文章，支持批量操作和发布。"
                 icon={<FileText className="h-5 w-5" />}
               >
-                <ScrollArea className="h-[520px] pr-4">
-                  <ArticleList 
-                    articles={articles} 
+                <ScrollArea className="h-[600px] pr-4">
+                  <ArticleList
+                    articles={articles}
                     onViewDetail={handleViewDetail}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    onPublish={handlePublish}
                   />
                 </ScrollArea>
               </SectionCard>
             </TabsContent>
 
+            {/* Distribution Status */}
             <TabsContent value="distribution" className="animate-in">
-              <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-                <SectionCard 
-                  title="状态流转" 
-                  description="手动发布 / 排期 / 失败回滚。"
-                  icon={<Share2 className="h-5 w-5" />}
-                >
-                  <div className="space-y-4">
-                    <div className="rounded-xl border border-slate-200/60 bg-gradient-to-br from-slate-50 to-white p-4 text-sm text-slate-600 shadow-sm">
-                      <span className="font-medium text-slate-900">当前文章：</span>
-                      {selectedArticle?.title ?? "未选择"}
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <Button size="sm" onClick={() => handleTransition("reviewed")} disabled={!selectedArticle} type="button">
-                        送审
-                      </Button>
-                      <Button size="sm" variant="secondary" onClick={() => handleTransition("scheduled")} disabled={!selectedArticle} type="button">
-                        排期
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleTransition("published")} disabled={!selectedArticle} type="button">
-                        标记发布
-                      </Button>
-                    </div>
-                  </div>
-                </SectionCard>
-                <SectionCard 
-                  title="分发队列" 
-                  description="选择平台并生成可发布内容。"
-                  icon={<Zap className="h-5 w-5" />}
-                >
-                  <DistributionPanel
-                    article={selectedArticle}
-                    selectedPlatforms={selectedPlatforms}
-                    onToggle={togglePlatform}
-                    onPublish={handlePublish}
-                    onSchedule={handleSchedule}
-                  />
-                </SectionCard>
-              </div>
+              <DistributionStatus />
             </TabsContent>
 
+            {/* Accounts */}
             <TabsContent value="accounts" className="animate-in">
               <SectionCard 
                 title="平台帐号管理" 
@@ -420,48 +464,9 @@ function App() {
               </SectionCard>
             </TabsContent>
 
-            <TabsContent value="ai" className="animate-in">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <SectionCard 
-                  title="Provider 状态" 
-                  description="基于环境变量 AI_PROVIDER 自动切换。"
-                  icon={<Cpu className="h-5 w-5" />}
-                >
-                  <ProviderStatusPanel status={providerStatus} />
-                </SectionCard>
-                <SectionCard 
-                  title="运行参数" 
-                  description="后端统一托管 AI 模型与 Prompt。"
-                  icon={<Settings2 className="h-5 w-5" />}
-                >
-                  <div className="space-y-3 text-sm text-slate-600">
-                    <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
-                      <span className="font-medium text-slate-700">AI_PROVIDER</span>
-                      <span className="rounded-md bg-brand-100 px-2 py-1 text-xs font-semibold text-brand-700">
-                        {providerStatus?.provider ?? "ollama"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
-                      <span className="font-medium text-slate-700">Ollama URL</span>
-                      <span className="text-xs text-slate-500">在 Worker 变量中配置</span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
-                      <span className="font-medium text-slate-700">当前模式</span>
-                      <span className="text-xs text-slate-500">仅使用本地 Ollama</span>
-                    </div>
-                  </div>
-                </SectionCard>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="prompts" className="animate-in">
-              <SectionCard 
-                title="Prompt 模板管理" 
-                description="KV 中的模板可以独立更新。"
-                icon={<Settings2 className="h-5 w-5" />}
-              >
-                <PromptTemplateManager templates={promptTemplates} onChange={setPromptTemplates} onSave={handleSaveTemplate} />
-              </SectionCard>
+            {/* Settings */}
+            <TabsContent value="settings" className="animate-in">
+              <PlatformSettings providerStatus={providerStatus} />
             </TabsContent>
           </Tabs>
         </main>
@@ -470,7 +475,7 @@ function App() {
         <Dialog 
           open={isEditorOpen} 
           onOpenChange={(open) => {
-            if (!open && isGenerating) return; // 生成中不能关闭
+            if (!open && isGenerating) return;
             setIsEditorOpen(open);
           }}
         >
@@ -498,7 +503,7 @@ function App() {
                 </div>
                 <div className="flex items-center gap-3">
                   <Button 
-                    variant="gradient" 
+                    variant="outline" 
                     size="sm" 
                     onClick={handleSave} 
                     disabled={!isFormValid || isLoading || isGenerating}
@@ -512,8 +517,21 @@ function App() {
                     )}
                     保存草稿
                   </Button>
+                  
                   <Button 
-                    variant="outline" 
+                    variant="gradient" 
+                    size="sm" 
+                    onClick={handleQuickPublish}
+                    disabled={!isFormValid || isLoading || isGenerating}
+                    type="button" 
+                    className="gap-2"
+                  >
+                    <Rocket className="h-4 w-4" />
+                    快速发布
+                  </Button>
+                  
+                  <Button 
+                    variant="ghost" 
                     size="sm" 
                     onClick={handleCloseEditor} 
                     disabled={isGenerating}
@@ -529,10 +547,8 @@ function App() {
 
             {/* Dialog Body - Two Column Layout */}
             <div className="relative flex flex-1 overflow-hidden">
-              {/* Left Column - Title & Meta */}
               <div className="absolute inset-y-0 left-0 w-[400px] overflow-y-auto border-r border-slate-200/60 bg-slate-50/50">
                 <div className="space-y-4 p-4">
-                  {/* Title Generator */}
                   <div className="rounded-xl border border-slate-200/60 bg-white p-4">
                     <TitleGenerator
                       title={draft?.title ?? ""}
@@ -541,7 +557,6 @@ function App() {
                     />
                   </div>
 
-                  {/* Meta Info Panel */}
                   <GenerationPanel
                     article={draft}
                     onArticleUpdate={handleArticleUpdate}
@@ -550,7 +565,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Right Column - Content Editor */}
               <div className="ml-[400px] flex flex-1 flex-col overflow-hidden bg-white">
                 <div className="flex-1 overflow-hidden p-4">
                   <ArticleEditor
@@ -570,8 +584,28 @@ function App() {
           open={isDetailOpen}
           onOpenChange={setIsDetailOpen}
         />
+
+        {/* Publish Dialog - BUG FIX: 使用新的发布确认回调 */}
+        {isPublishDialogOpen && (
+          <PublishDialog
+            articles={articlesToPublish}
+            open={isPublishDialogOpen}
+            onOpenChange={(open) => {
+              if (!open) {
+                setIsPublishDialogOpen(false);
+                // 如果取消发布，重置发布状态
+                if (isPublishing) {
+                  setIsPublishing(false);
+                }
+              }
+            }}
+            onPublishConfirm={handlePublishConfirm}
+            onQuickPublishConfirm={draft ? handleQuickPublishConfirm : undefined}
+            isQuickPublish={!!draft}
+          />
+        )}
       </div>
-    </TooltipProvider>
+    </>
   );
 }
 

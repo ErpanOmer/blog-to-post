@@ -1,0 +1,2 @@
+-- 该字段已在基础 schema.sql 中定义，此处设为空以防止重复执行报错
+-- ALTER TABLE articles ADD COLUMN publishedAt INTEGER;

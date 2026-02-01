@@ -11,6 +11,21 @@ import { saveDraft, savePublished } from "./services/storage";
 import { canTransition, transitionArticle } from "./services/distribution";
 import { runDailyCron } from "./cron";
 import { getCachedJuejinTitles } from "./services/juejin-cache";
+import { 
+  createPublishTaskService, 
+  getPublishTaskStatus, 
+  cancelPublishTask,
+  quickPublish,
+  processScheduledTasks 
+} from "./services/publish";
+import { 
+  listArticlePublications, 
+  getArticlePublicationsByArticleId,
+  listPublishTasks,
+  getAccountStatistics,
+  listAccountStatistics 
+} from "./db/publications";
+import type { AccountConfig } from "./types/publications";
 import titleSystemPromptRaw from "./prompts/generate-title-system-prompt.txt?raw";
 import titleUserPromptTplRaw from "./prompts/generate-title-user-prompt.txt?raw";
 import generateContentSystemPrompt from "./prompts/generate-content-system-prompt.txt?raw";
@@ -353,9 +368,162 @@ app.delete("/api/platform-accounts/:id", async (c) => {
 	return c.json({ success: true });
 });
 
+// ==================== 文章发布 API ====================
+
+// 创建发布任务（支持批量发布和定时发布）
+app.post("/api/publish/tasks", async (c) => {
+	try {
+		const { articleIds, accountConfigs, scheduleTime } = await c.req.json() as { 
+			articleIds: string[]; 
+			accountConfigs: AccountConfig[];
+			scheduleTime?: number | null;
+		};
+
+		if (!articleIds?.length || !accountConfigs?.length) {
+			return c.json({ message: "文章ID列表和账号配置不能为空" }, 400);
+		}
+
+		// 至少选择一个账号
+		if (accountConfigs.length === 0) {
+			return c.json({ message: "至少选择一个发布账号" }, 400);
+		}
+
+		const result = await createPublishTaskService(c.env.DB, {
+			articleIds,
+			accountConfigs,
+			scheduleTime,
+		});
+
+		return c.json(result);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "创建发布任务失败";
+		return c.json({ message }, 400);
+	}
+});
+
+// 获取发布任务列表
+app.get("/api/publish/tasks", async (c) => {
+	try {
+		const status = c.req.query("status") as "pending" | "processing" | "completed" | "failed" | "cancelled" | undefined;
+		const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!) : undefined;
+		
+		const tasks = await listPublishTasks(c.env.DB, { status, limit });
+		return c.json(tasks);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "获取任务列表失败";
+		return c.json({ message }, 500);
+	}
+});
+
+// 获取单个发布任务详情
+app.get("/api/publish/tasks/:id", async (c) => {
+	try {
+		const { task, steps } = await getPublishTaskStatus(c.env.DB, c.req.param("id"));
+		return c.json({ task, steps });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "获取任务详情失败";
+		return c.json({ message }, 404);
+	}
+});
+
+// 取消发布任务
+app.post("/api/publish/tasks/:id/cancel", async (c) => {
+	try {
+		const result = await cancelPublishTask(c.env.DB, c.req.param("id"));
+		return c.json(result);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "取消任务失败";
+		return c.json({ message, success: false }, 500);
+	}
+});
+
+// 快速发布（单篇文章到单个账号）
+app.post("/api/publish/quick", async (c) => {
+	try {
+		const { articleId, accountId, draftOnly = false } = await c.req.json() as {
+			articleId: string;
+			accountId: string;
+			draftOnly?: boolean;
+		};
+
+		if (!articleId || !accountId) {
+			return c.json({ message: "文章ID和账号ID不能为空", success: false }, 400);
+		}
+
+		const result = await quickPublish(c.env.DB, articleId, accountId, draftOnly);
+		return c.json(result);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "快速发布失败";
+		return c.json({ message, success: false }, 500);
+	}
+});
+
+// 获取文章的发布记录
+app.get("/api/articles/:id/publications", async (c) => {
+	try {
+		const publications = await getArticlePublicationsByArticleId(c.env.DB, c.req.param("id"));
+		return c.json(publications);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "获取发布记录失败";
+		return c.json({ message }, 500);
+	}
+});
+
+// 获取所有发布记录（支持筛选）
+app.get("/api/publications", async (c) => {
+	try {
+		const articleId = c.req.query("articleId");
+		const accountId = c.req.query("accountId");
+		const platform = c.req.query("platform") as PlatformType | undefined;
+		const status = c.req.query("status") as "pending" | "draft_created" | "publishing" | "published" | "failed" | "cancelled" | undefined;
+		
+		const publications = await listArticlePublications(c.env.DB, { 
+			articleId, 
+			accountId, 
+			platform, 
+			status 
+		});
+		return c.json(publications);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "获取发布记录失败";
+		return c.json({ message }, 500);
+	}
+});
+
+// ==================== 账号统计 API ====================
+
+// 获取所有账号的发布统计
+app.get("/api/account-statistics", async (c) => {
+	try {
+		const platform = c.req.query("platform") as PlatformType | undefined;
+		const statistics = await listAccountStatistics(c.env.DB, platform);
+		return c.json(statistics);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "获取账号统计失败";
+		return c.json({ message }, 500);
+	}
+});
+
+// 获取单个账号的发布统计
+app.get("/api/platform-accounts/:id/statistics", async (c) => {
+	try {
+		const statistics = await getAccountStatistics(c.env.DB, c.req.param("id"));
+		if (!statistics) {
+			return c.json({ message: "暂无统计数据" }, 404);
+		}
+		return c.json(statistics);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "获取账号统计失败";
+		return c.json({ message }, 500);
+	}
+});
+
 export default {
 	fetch: app.fetch,
 	scheduled: async (_event: unknown, env: Env) => {
+		// 执行定时发布任务
+		await processScheduledTasks(env.DB);
+		// 执行日常定时任务
 		await runDailyCron(env);
 	},
 };
