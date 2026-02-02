@@ -27,7 +27,7 @@ interface CallModelOptions {
 }
 
 export class OllamaProvider implements AIProvider {
-	constructor(private env: Env) { 
+	constructor(private env: Env) {
 	}
 
 	private get baseUrl() {
@@ -42,10 +42,36 @@ export class OllamaProvider implements AIProvider {
 	}
 
 	/**
-	 * 通用模型调用方法
+	 * 带超时和重试的 fetch 封装
+	 */
+	private async fetchWithTimeout(
+		url: string,
+		options: RequestInit,
+		timeoutMs: number
+	): Promise<Response> {
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+		try {
+			const response = await fetch(url, {
+				...options,
+				signal: controller.signal,
+			});
+			return response;
+		} finally {
+			clearTimeout(timeoutId);
+		}
+	}
+
+	/**
+	 * 通用模型调用方法（带超时和重试机制）
 	 * @param opts 包含所有参数的对象
 	 */
 	async callModel(opts: CallModelOptions): Promise<string> {
+		const MAX_RETRIES = 3;
+		const TIMEOUT_MS = 120_000; // 120 秒超时
+		const BASE_DELAY_MS = 1000;
+
 		// 构建请求体
 		const body = {
 			model: opts.model || models.default,
@@ -62,22 +88,58 @@ export class OllamaProvider implements AIProvider {
 
 		console.log("请求模型:", body.model);
 
-		const response = await fetch(`${this.baseUrl}/api/generate`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				...(this.env.OLLAMA_API_KEY ? { Authorization: `Bearer ${this.env.OLLAMA_API_KEY}` } : {}),
-			},
-			body: JSON.stringify(body),
-		});
+		let lastError: Error | null = null;
 
-		if (!response.ok) {
-			console.error("Ollama 请求失败", response.status, await response.text());
-			return "";
+		for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+			try {
+				const response = await this.fetchWithTimeout(
+					`${this.baseUrl}/api/generate`,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							...(this.env.OLLAMA_API_KEY ? { Authorization: `Bearer ${this.env.OLLAMA_API_KEY}` } : {}),
+						},
+						body: JSON.stringify(body),
+					},
+					TIMEOUT_MS
+				);
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					console.error(`Ollama 请求失败 (尝试 ${attempt}/${MAX_RETRIES})`, response.status, errorText);
+
+					// 4xx 错误不重试（客户端错误）
+					if (response.status >= 400 && response.status < 500) {
+						return "";
+					}
+
+					throw new Error(`HTTP ${response.status}: ${errorText}`);
+				}
+
+				const data = (await response.json()) as { response?: string };
+				return data.response?.trim() ?? "";
+
+			} catch (error) {
+				lastError = error as Error;
+				const isAbortError = lastError.name === "AbortError";
+
+				console.warn(
+					`AI 调用失败 (尝试 ${attempt}/${MAX_RETRIES}):`,
+					isAbortError ? "请求超时" : lastError.message
+				);
+
+				if (attempt < MAX_RETRIES) {
+					// 指数退避 + 随机抖动
+					const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1) + Math.random() * 500;
+					console.log(`等待 ${Math.round(delay)}ms 后重试...`);
+					await new Promise((resolve) => setTimeout(resolve, delay));
+				}
+			}
 		}
 
-		const data = (await response.json()) as { response?: string };
-		return data.response?.trim() ?? "";
+		console.error("AI 调用最终失败，所有重试已耗尽:", lastError?.message);
+		return "";
 	}
 
 	async generateTitleText(systemPrompt: string, userPrompt: string, model?: string) {

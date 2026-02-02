@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type { Article } from "../types";
-import type { 
-  PublishTask, 
+import type {
+  PublishTask,
   AccountConfig,
   PublicationStatus,
   PublishResult,
@@ -10,13 +10,17 @@ import type {
 import { getAccountService } from "../accounts";
 import { getPlatformAccount } from "../db/platform-accounts";
 import { getArticle } from "../db/articles";
-import { 
-  createPublishTask, 
+import {
+  createPublishTask,
   createPublishTaskStep,
   updatePublishTaskStep,
   createArticlePublication,
   updateArticlePublication,
-  createOrUpdateAccountStatistics
+  createOrUpdateAccountStatistics,
+  getPublishTask,
+  updatePublishTask,
+  listPublishTaskSteps,
+  getPendingScheduledTasks
 } from "../db/publications";
 
 // 发布步骤定义
@@ -75,9 +79,9 @@ const publishSteps: PublishStep[] = [
         }
         return { success: true, draftId: draft.id };
       } catch (error) {
-        return { 
-          success: false, 
-          error: error instanceof Error ? error.message : "创建草稿失败" 
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "创建草稿失败"
         };
       }
     }
@@ -102,20 +106,20 @@ const publishSteps: PublishStep[] = [
           article.content,
           article.coverImage ?? undefined
         );
-        
+
         if (!result.success) {
           return { success: false, error: result.message };
         }
-        
-        return { 
-          success: true, 
+
+        return {
+          success: true,
           draftId: result.articleId,
-          publishedUrl: result.url 
+          publishedUrl: result.url
         };
       } catch (error) {
-        return { 
-          success: false, 
-          error: error instanceof Error ? error.message : "发布文章失败" 
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "发布文章失败"
         };
       }
     }
@@ -162,9 +166,9 @@ export async function createPublishTaskService(
 
   const now = Date.now();
   const isScheduled = scheduleTime && scheduleTime > now;
-  
+
   const taskType = articleIds.length > 1 ? "batch" : isScheduled ? "scheduled" : "single";
-  
+
   const task = await createPublishTask(db, {
     id: crypto.randomUUID(),
     type: taskType,
@@ -181,7 +185,7 @@ export async function createPublishTaskService(
 
   return {
     task,
-    message: isScheduled 
+    message: isScheduled
       ? `定时发布任务已创建，将在 ${new Date(scheduleTime!).toLocaleString()} 执行`
       : "发布任务已创建并开始执行"
   };
@@ -192,8 +196,6 @@ export async function executePublishTask(
   db: D1Database,
   taskId: string
 ): Promise<PublishResult> {
-  const { getPublishTask, updatePublishTask } = await import("../db/publications");
-  
   const task = await getPublishTask(db, taskId);
   if (!task) {
     throw new Error("任务不存在");
@@ -231,7 +233,7 @@ export async function executePublishTask(
     for (let articleIndex = 0; articleIndex < task.articleIds.length; articleIndex++) {
       const articleId = task.articleIds[articleIndex];
       const article = await getArticle(db, articleId);
-      
+
       if (!article) {
         console.error(`文章不存在: ${articleId}`);
         continue;
@@ -240,7 +242,7 @@ export async function executePublishTask(
       // 遍历每个账号
       for (let accountIndex = 0; accountIndex < task.accountConfigs.length; accountIndex++) {
         const accountConfig = task.accountConfigs[accountIndex];
-        
+
         // 更新进度
         await updatePublishTask(db, taskId, {
           progressData: {
@@ -274,7 +276,7 @@ export async function executePublishTask(
         // 执行发布步骤
         for (const step of publishSteps) {
           stepNumber++;
-          
+
           // 如果只需要草稿，跳过发布步骤
           if (accountConfig.draftOnly && step.type === "publish_article") {
             currentStatus = "draft_created";
@@ -414,7 +416,7 @@ export async function executePublishTask(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "未知错误";
-    
+
     // 更新任务状态为失败
     await updatePublishTask(db, taskId, {
       status: "failed",
@@ -441,8 +443,6 @@ export async function cancelPublishTask(
   db: D1Database,
   taskId: string
 ): Promise<{ success: boolean; message: string }> {
-  const { getPublishTask, updatePublishTask } = await import("../db/publications");
-  
   const task = await getPublishTask(db, taskId);
   if (!task) {
     return { success: false, message: "任务不存在" };
@@ -469,8 +469,6 @@ export async function getPublishTaskStatus(
   db: D1Database,
   taskId: string
 ) {
-  const { getPublishTask, listPublishTaskSteps } = await import("../db/publications");
-  
   const task = await getPublishTask(db, taskId);
   if (!task) {
     throw new Error("任务不存在");
@@ -511,10 +509,8 @@ export async function quickPublish(
 
 // 处理定时任务（由 cron 调用）
 export async function processScheduledTasks(db: D1Database): Promise<void> {
-  const { getPendingScheduledTasks } = await import("../db/publications");
-  
   const tasks = await getPendingScheduledTasks(db);
-  
+
   for (const task of tasks) {
     console.log(`执行定时发布任务: ${task.id}`);
     executePublishTask(db, task.id).catch(error => {

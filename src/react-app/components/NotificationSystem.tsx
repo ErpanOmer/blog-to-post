@@ -144,6 +144,24 @@ class NotificationManager {
 
 export const notificationManager = new NotificationManager();
 
+export async function requestNotificationPermission() {
+  if (!("Notification" in window)) {
+    console.warn("此浏览器不支持桌面通知");
+    return false;
+  }
+
+  if (Notification.permission === "granted") {
+    return true;
+  }
+
+  if (Notification.permission !== "denied") {
+    const permission = await Notification.requestPermission();
+    return permission === "granted";
+  }
+
+  return false;
+}
+
 // 便捷方法
 export const notify = {
   success: (title: string, message?: string, options?: { duration?: number; showSystemNotification?: boolean }) => {

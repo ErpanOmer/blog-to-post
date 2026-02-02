@@ -1,13 +1,13 @@
 import type { Article, ArticleStatus, PlatformType, PromptKey, PromptTemplate, ProviderStatus } from "./types";
-import type { 
-  PublishTask, 
-  PublishTaskStep, 
-  AccountConfig,
-  ArticlePublication,
-  AccountStatistics,
-  CreatePublishTaskRequest,
-  PublishTaskResponse,
-  PublishTaskStatusResponse
+import type {
+	PublishTask,
+	PublishTaskStep,
+	AccountConfig,
+	ArticlePublication,
+	AccountStatistics,
+	CreatePublishTaskRequest,
+	PublishTaskResponse,
+	PublishTaskStatusResponse
 } from "./types/publications";
 export type { PlatformType };
 
@@ -60,7 +60,7 @@ export async function generateContent(title: string): Promise<{ content: string 
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ title }),
 	});
-	
+
 	if (!response.ok) throw new Error("Generate content failed");
 
 	const data = await response.json() as { content: string };
@@ -151,12 +151,12 @@ export async function getProviderStatus(): Promise<ProviderStatus> {
 }
 
 export async function getPromptTemplates(): Promise<PromptTemplate[]> {
-	return parseJson<PromptTemplate[]>(await fetch("/api/prompts"));
+	return parseJson<PromptTemplate[]>(await fetch("/api/ai/prompts"));
 }
 
 export async function updatePromptTemplate(key: PromptKey, template: string): Promise<PromptTemplate> {
 	return parseJson<PromptTemplate>(
-		await fetch(`/api/prompts/${key}`, {
+		await fetch(`/api/ai/prompts/${key}`, {
 			method: "PUT",
 			headers: jsonHeaders,
 			body: JSON.stringify({ template }),
@@ -190,12 +190,12 @@ export type VerifyAccountResult = {
 };
 
 export async function getPlatformAccounts(platform?: PlatformType): Promise<PlatformAccount[]> {
-	const url = platform ? `/api/platform-accounts?platform=${platform}` : "/api/platform-accounts";
+	const url = platform ? `/api/accounts?platform=${platform}` : "/api/accounts";
 	return parseJson<PlatformAccount[]>(await fetch(url));
 }
 
 export async function getPlatformAccount(id: string): Promise<PlatformAccount> {
-	return parseJson<PlatformAccount>(await fetch(`/api/platform-accounts/${id}`));
+	return parseJson<PlatformAccount>(await fetch(`/api/accounts/${id}`));
 }
 
 export async function createPlatformAccount(payload: {
@@ -204,7 +204,7 @@ export async function createPlatformAccount(payload: {
 	description?: string;
 }): Promise<PlatformAccount> {
 	return parseJson<PlatformAccount>(
-		await fetch("/api/platform-accounts", {
+		await fetch("/api/accounts", {
 			method: "POST",
 			headers: jsonHeaders,
 			body: JSON.stringify(payload),
@@ -217,7 +217,7 @@ export async function updatePlatformAccount(
 	payload: Partial<Omit<PlatformAccount, "id" | "platform" | "createdAt" | "updatedAt">>,
 ): Promise<PlatformAccount> {
 	return parseJson<PlatformAccount>(
-		await fetch(`/api/platform-accounts/${id}`, {
+		await fetch(`/api/accounts/${id}`, {
 			method: "PUT",
 			headers: jsonHeaders,
 			body: JSON.stringify(payload),
@@ -227,7 +227,7 @@ export async function updatePlatformAccount(
 
 export async function verifyPlatformAccount(id: string): Promise<VerifyAccountResult> {
 	return parseJson<VerifyAccountResult>(
-		await fetch(`/api/platform-accounts/${id}/verify`, {
+		await fetch(`/api/accounts/${id}/verify`, {
 			method: "POST",
 			headers: jsonHeaders,
 		}),
@@ -235,7 +235,7 @@ export async function verifyPlatformAccount(id: string): Promise<VerifyAccountRe
 }
 
 export async function deletePlatformAccount(id: string): Promise<void> {
-	const response = await fetch(`/api/platform-accounts/${id}`, {
+	const response = await fetch(`/api/accounts/${id}`, {
 		method: "DELETE",
 		headers: jsonHeaders,
 	});
@@ -262,7 +262,7 @@ export async function getPublishTasks(status?: PublishTask['status'], limit?: nu
 	const params = new URLSearchParams();
 	if (status) params.append("status", status);
 	if (limit) params.append("limit", limit.toString());
-	
+
 	const url = `/api/publish/tasks${params.toString() ? `?${params.toString()}` : ""}`;
 	return parseJson<PublishTask[]>(await fetch(url));
 }
@@ -289,8 +289,8 @@ export async function cancelPublishTask(taskId: string): Promise<{ success: bool
 
 // 快速发布
 export async function quickPublish(
-	articleId: string, 
-	accountId: string, 
+	articleId: string,
+	accountId: string,
 	draftOnly: boolean = false
 ): Promise<{ success: boolean; message: string; publicationId?: string }> {
 	return parseJson<{ success: boolean; message: string; publicationId?: string }>(
@@ -319,18 +319,18 @@ export async function getPublications(filters?: {
 	if (filters?.accountId) params.append("accountId", filters.accountId);
 	if (filters?.platform) params.append("platform", filters.platform);
 	if (filters?.status) params.append("status", filters.status);
-	
-	const url = `/api/publications${params.toString() ? `?${params.toString()}` : ""}`;
+
+	const url = `/api/publish/history${params.toString() ? `?${params.toString()}` : ""}`;
 	return parseJson<ArticlePublication[]>(await fetch(url));
 }
 
 // 获取所有账号的发布统计
 export async function getAccountStatistics(platform?: PlatformType): Promise<AccountStatistics[]> {
-	const url = platform ? `/api/account-statistics?platform=${platform}` : "/api/account-statistics";
+	const url = platform ? `/api/accounts/statistics?platform=${platform}` : "/api/accounts/statistics";
 	return parseJson<AccountStatistics[]>(await fetch(url));
 }
 
 // 获取单个账号的发布统计
 export async function getPlatformAccountStatistics(accountId: string): Promise<AccountStatistics> {
-	return parseJson<AccountStatistics>(await fetch(`/api/platform-accounts/${accountId}/statistics`));
+	return parseJson<AccountStatistics>(await fetch(`/api/accounts/${accountId}/statistics`));
 }
