@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
-import type { Article, PlatformType } from "../types";
-import { getArticles, createArticle as apiCreateArticle, updateArticle as apiUpdateArticle, deleteArticle as apiDeleteArticle } from "../api";
-import { notify } from "../components/NotificationSystem";
+import type { Article, PlatformType } from "@/react-app/types";
+import { getArticles, createArticle as apiCreateArticle, updateArticle as apiUpdateArticle, deleteArticle as apiDeleteArticle } from "@/react-app/api";
+import { notify } from "@/react-app/components/NotificationSystem";
 
 export function useArticles() {
     const [articles, setArticles] = useState<Article[]>([]);

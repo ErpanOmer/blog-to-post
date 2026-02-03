@@ -1,15 +1,15 @@
 import type { D1Database } from "@cloudflare/workers-types";
-import type { Article } from "../types";
+import type { Article } from "@/worker/types";
 import type {
   PublishTask,
   AccountConfig,
   PublicationStatus,
   PublishResult,
   PublicationDetail
-} from "../types/publications";
-import { getAccountService } from "../accounts";
-import { getPlatformAccount } from "../db/platform-accounts";
-import { getArticle } from "../db/articles";
+} from "@/worker/types/publications";
+import { getAccountService } from "@/worker/accounts";
+import { getPlatformAccount } from "@/worker/db/platform-accounts";
+import { getArticle } from "@/worker/db/articles";
 import {
   createPublishTask,
   createPublishTaskStep,
@@ -21,7 +21,7 @@ import {
   updatePublishTask,
   listPublishTaskSteps,
   getPendingScheduledTasks
-} from "../db/publications";
+} from "@/worker/db/publications";
 
 // 发布步骤定义
 interface PublishStep {

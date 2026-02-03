@@ -1,4 +1,4 @@
-import type { Article } from "../types";
+import type { Article } from "@/react-app/types";
 import { StatusBadge } from "./StatusBadge";
 import { ArticlePublicationStatus } from "./ArticlePublicationStatus";
 import { cn } from "@/lib/utils";

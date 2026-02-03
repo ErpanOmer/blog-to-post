@@ -1,4 +1,4 @@
-export * from "../shared/types";
+export * from "@/shared/types";
 
 // Backend-specific types
 export interface AIProvider {

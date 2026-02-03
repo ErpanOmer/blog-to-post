@@ -1,8 +1,8 @@
 import { FileText } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SectionCard } from "../components/SectionCard";
-import { ArticleList } from "../components/ArticleList";
-import type { Article } from "../types";
+import { SectionCard } from "@/react-app/components/SectionCard";
+import { ArticleList } from "@/react-app/components/ArticleList";
+import type { Article } from "@/react-app/types";
 
 interface ArticlesViewProps {
     articles: Article[];

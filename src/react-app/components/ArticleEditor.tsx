@@ -1,9 +1,9 @@
-import type { Article } from "../types";
+import type { Article } from "@/react-app/types";
 import { Editor } from "@bytemd/react";
 import gfm from "@bytemd/plugin-gfm";
 import "bytemd/dist/index.css";
 import { Button } from "@/components/ui/button";
-import { generateContent } from "../api";
+import { generateContent } from "@/react-app/api";
 import { 
   FileText, 
   Wand2,

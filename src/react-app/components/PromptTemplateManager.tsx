@@ -1,4 +1,4 @@
-import type { PromptKey, PromptTemplate } from "../types";
+import type { PromptKey, PromptTemplate } from "@/react-app/types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 

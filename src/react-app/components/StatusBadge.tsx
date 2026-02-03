@@ -1,4 +1,4 @@
-import type { ArticleStatus } from "../types";
+import type { ArticleStatus } from "@/react-app/types";
 import { cn } from "@/lib/utils";
 import { FileText, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 

@@ -1,4 +1,4 @@
-import { PlatformSettings } from "../components/PlatformSettings";
+import { PlatformSettings } from "@/react-app/components/PlatformSettings";
 
 interface SettingsViewProps {
     providerStatus: {

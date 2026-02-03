@@ -1,4 +1,4 @@
-import type { PlatformAccount, PlatformType } from "../api";
+import type { PlatformAccount, PlatformType } from "@/react-app/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";

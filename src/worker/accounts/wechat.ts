@@ -1,6 +1,6 @@
-import { AbstractAccountService } from "./abstract";
-import { registerAccountService } from "./index";
-import type { VerifyResult, AccountStatus, AccountInfo, ArticleDraft, Article, ArticlePublishResult, ImageUploadResult } from "./index";
+import { AbstractAccountService } from "@/worker/accounts/abstract";
+import { registerAccountService } from "@/worker/accounts/index";
+import type { VerifyResult, AccountStatus, AccountInfo, ArticleDraft, Article, ArticlePublishResult, ImageUploadResult } from "@/worker/accounts/index";
 
 export default class WechatAccountService extends AbstractAccountService {
 	private accessToken: string;

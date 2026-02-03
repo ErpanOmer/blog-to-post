@@ -1,4 +1,4 @@
-import { accountServiceRegistry, registerAccountService, getAccountService } from "./registry";
+import { accountServiceRegistry, registerAccountService, getAccountService } from "@/worker/accounts/registry";
 import type {
 	AccountInfo,
 	AccountStatus,
@@ -9,7 +9,7 @@ import type {
 	ImageUploadResult,
 	AccountService,
 	AccountServiceConstructor
-} from "./types";
+} from "@/worker/accounts/types";
 
 export type {
 	AccountInfo,
@@ -35,4 +35,4 @@ import "./xiaohongshu";
 import "./wechat";
 import "./csdn";
 
-export type { JuejinUserInfo, ZhihuUserInfo, XiaohongshuUserInfo, WechatUserInfo, CSDNUserInfo } from "./abstract";
+export type { JuejinUserInfo, ZhihuUserInfo, XiaohongshuUserInfo, WechatUserInfo, CSDNUserInfo } from "@/worker/accounts/abstract";

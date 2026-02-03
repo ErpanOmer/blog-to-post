@@ -1,6 +1,6 @@
-import type { PlatformType, VerifyAccountResult } from "../types";
+import type { PlatformType, VerifyAccountResult } from "@/worker/types";
 import "../accounts";
-import { getAccountService } from "../accounts";
+import { getAccountService } from "@/worker/accounts";
 
 export interface PlatformAccount {
 	id: string;
@@ -333,4 +333,4 @@ export async function publishArticle(
 	}
 }
 
-import type { AccountStatus } from "../accounts";
+import type { AccountStatus } from "@/worker/accounts";

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { generateTitle, getJuejinTopTitles } from "../api";
+import { generateTitle, getJuejinTopTitles } from "@/react-app/api";
 import { Type, Wand2, Loader2, Check, ExternalLink, Flame, User } from "lucide-react";
 
 interface TitleGeneratorProps {

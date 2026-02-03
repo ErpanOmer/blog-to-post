@@ -1,15 +1,15 @@
-import type { Env, PlatformType } from "./types";
-import { createAIProvider } from "./ai/providers";
-import { createArticle } from "./db/articles";
-import { createTask } from "./db/tasks";
-import { saveDraft } from "./services/storage";
-import titleSystemPrompt from "./prompts/generate-title-system-prompt.txt?raw";
-import titleUserPromptTpl from "./prompts/generate-title-user-prompt.txt?raw";
-import generateContentSystemPrompt from "./prompts/generate-content-system-prompt.txt?raw";
-import generateContentUserPrompt from "./prompts/generate-content-user-prompt.txt?raw";
+import type { Env, PlatformType } from "@/worker/types";
+import { createAIProvider } from "@/worker/ai/providers";
+import { createArticle } from "@/worker/db/articles";
+import { createTask } from "@/worker/db/tasks";
+import { saveDraft } from "@/worker/services/storage";
+import titleSystemPrompt from "@/worker/prompts/generate-title-system-prompt.txt?raw";
+import titleUserPromptTpl from "@/worker/prompts/generate-title-user-prompt.txt?raw";
+import generateContentSystemPrompt from "@/worker/prompts/generate-content-system-prompt.txt?raw";
+import generateContentUserPrompt from "@/worker/prompts/generate-content-user-prompt.txt?raw";
 
-import fetchJuejinTopTitles from "./juejin";
-import { pickFirstLine } from "./index";
+import fetchJuejinTopTitles from "@/worker/juejin";
+import { pickFirstLine } from "@/worker/utils/text";
 
 const CANDIDATE_KEY = "candidate_titles";
 const PLATFORMS: PlatformType[] = ["juejin", "zhihu", "xiaohongshu", "wechat"];

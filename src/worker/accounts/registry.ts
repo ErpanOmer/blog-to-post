@@ -1,5 +1,5 @@
-import type { PlatformType } from "../types";
-import type { AccountService, AccountServiceConstructor } from "./types";
+import type { PlatformType } from "@/worker/types";
+import type { AccountService, AccountServiceConstructor } from "@/worker/accounts/types";
 
 export const accountServiceRegistry: Map<PlatformType, AccountServiceConstructor> = new Map();
 

@@ -1,17 +1,17 @@
 import { Hono } from "hono";
-import type { Env } from "../types";
-import type { AccountConfig } from "../types/publications";
+import type { Env } from "@/worker/types";
+import type { AccountConfig } from "@/worker/types/publications";
 import {
     createPublishTaskService,
     getPublishTaskStatus,
     cancelPublishTask,
     quickPublish
-} from "../services/publish";
+} from "@/worker/services/publish";
 import {
     listPublishTasks,
     listPublishTaskSteps,
     listArticlePublications
-} from "../db/publications";
+} from "@/worker/db/publications";
 
 const app = new Hono<{ Bindings: Env }>();
 

@@ -1,10 +1,10 @@
 import { useState } from "react";
-import type { Article } from "../types";
+import type { Article } from "@/react-app/types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { generateCover, generateSummary } from "../api";
-import type { ArticleSummary } from "../api";
+import { generateCover, generateSummary } from "@/react-app/api";
+import type { ArticleSummary } from "@/react-app/api";
 import { 
   Image, 
   Tags, 

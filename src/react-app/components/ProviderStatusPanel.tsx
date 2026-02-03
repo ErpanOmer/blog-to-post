@@ -1,4 +1,4 @@
-import type { ProviderStatus } from "../types";
+import type { ProviderStatus } from "@/react-app/types";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 

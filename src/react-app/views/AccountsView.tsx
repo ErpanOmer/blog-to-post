@@ -1,6 +1,6 @@
 import { User } from "lucide-react";
-import { SectionCard } from "../components/SectionCard";
-import { PlatformAccountsPanel } from "../components/PlatformAccountsPanel";
+import { SectionCard } from "@/react-app/components/SectionCard";
+import { PlatformAccountsPanel } from "@/react-app/components/PlatformAccountsPanel";
 
 export function AccountsView() {
     return (

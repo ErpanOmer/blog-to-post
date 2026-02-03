@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { Env, PlatformType } from "../types";
+import type { Env, PlatformType } from "@/worker/types";
 import {
     listPlatformAccounts,
     getPlatformAccount,
@@ -7,8 +7,8 @@ import {
     updatePlatformAccount,
     deletePlatformAccount,
     verifyPlatformAccount
-} from "../db/platform-accounts";
-import { getAccountStatistics, listAccountStatistics } from "../db/publications";
+} from "@/worker/db/platform-accounts";
+import { getAccountStatistics, listAccountStatistics } from "@/worker/db/publications";
 
 const app = new Hono<{ Bindings: Env }>();
 

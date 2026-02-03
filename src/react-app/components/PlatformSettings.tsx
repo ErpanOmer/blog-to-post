@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import type { PromptTemplate } from "../types";
-import { getPromptTemplates, updatePromptTemplate, getProviderStatus } from "../api";
+import type { PromptTemplate } from "@/react-app/types";
+import { getPromptTemplates, updatePromptTemplate, getProviderStatus } from "@/react-app/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

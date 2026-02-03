@@ -1,10 +1,10 @@
-import type { Env, PromptKey } from "../types";
-import titlePrompt from "../prompts/title.prompt.txt?raw";
-import generateContentSystemPrompt from "../prompts/generate-content-system-prompt.txt?raw";
-import generateContentUserPrompt from "../prompts/generate-content-user-prompt.txt?raw";
-import summaryPrompt from "../prompts/summary.prompt.txt?raw";
-import tagsPrompt from "../prompts/tags.prompt.txt?raw";
-import coverPrompt from "../prompts/cover.prompt.txt?raw";
+import type { Env, PromptKey } from "@/worker/types";
+import titlePrompt from "@/worker/prompts/title.prompt.txt?raw";
+import generateContentSystemPrompt from "@/worker/prompts/generate-content-system-prompt.txt?raw";
+import generateContentUserPrompt from "@/worker/prompts/generate-content-user-prompt.txt?raw";
+import summaryPrompt from "@/worker/prompts/summary.prompt.txt?raw";
+import tagsPrompt from "@/worker/prompts/tags.prompt.txt?raw";
+import coverPrompt from "@/worker/prompts/cover.prompt.txt?raw";
 
 const DEFAULT_PROMPTS: Record<PromptKey, string> = {
 	title: titlePrompt,

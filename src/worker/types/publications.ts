@@ -1,4 +1,4 @@
-import type { PlatformType } from "../types";
+import type { PlatformType } from "@/worker/types";
 
 // 发布状态
 export type PublicationStatus = 

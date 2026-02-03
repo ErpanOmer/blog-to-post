@@ -1,30 +1,30 @@
 import { Hono } from "hono";
-import type { Env, PlatformType, GenerateCoverInput } from "../types";
-import { canTransition } from "../services/distribution";
+import type { Env, PlatformType, GenerateCoverInput } from "@/worker/types";
+import { canTransition } from "@/worker/services/distribution";
 import {
     listArticles,
     getArticle,
     createArticle,
     updateArticle,
     deleteArticle
-} from "../db/articles";
-import { saveDraft } from "../services/storage";
-import { createTask } from "../db/tasks";
-import { createAIProvider } from "../ai/providers";
-import { getCachedJuejinTitles } from "../services/juejin-cache";
-import { transitionArticle } from "../services/distribution";
-import { getArticlePublicationsByArticleId } from "../db/publications";
-import { extractStringArray, safeParseJson } from "../utils/json-parser";
-import { pickFirstLine } from "../utils/text";
+} from "@/worker/db/articles";
+import { saveDraft } from "@/worker/services/storage";
+import { createTask } from "@/worker/db/tasks";
+import { createAIProvider } from "@/worker/ai/providers";
+import { getCachedJuejinTitles } from "@/worker/services/juejin-cache";
+import { transitionArticle } from "@/worker/services/distribution";
+import { getArticlePublicationsByArticleId } from "@/worker/db/publications";
+import { extractStringArray, safeParseJson } from "@/worker/utils/json-parser";
+import { pickFirstLine } from "@/worker/utils/text";
 
-import titleSystemPromptRaw from "../prompts/generate-title-system-prompt.txt?raw";
-import titleUserPromptTplRaw from "../prompts/generate-title-user-prompt.txt?raw";
-import generateContentSystemPrompt from "../prompts/generate-content-system-prompt.txt?raw";
-import generateContentUserPrompt from "../prompts/generate-content-user-prompt.txt?raw";
-import summarySystemPrompt from "../prompts/generate-summary-system-prompt.txt?raw";
-import summaryUserPromptTpl from "../prompts/generate-summary-user-prompt.txt?raw";
-import coverPrompt from "../prompts/cover.prompt.txt?raw";
-import localContent from '../prompts/conetent.md?raw';
+import titleSystemPromptRaw from "@/worker/prompts/generate-title-system-prompt.txt?raw";
+import titleUserPromptTplRaw from "@/worker/prompts/generate-title-user-prompt.txt?raw";
+import generateContentSystemPrompt from "@/worker/prompts/generate-content-system-prompt.txt?raw";
+import generateContentUserPrompt from "@/worker/prompts/generate-content-user-prompt.txt?raw";
+import summarySystemPrompt from "@/worker/prompts/generate-summary-system-prompt.txt?raw";
+import summaryUserPromptTpl from "@/worker/prompts/generate-summary-user-prompt.txt?raw";
+import coverPrompt from "@/worker/prompts/cover.prompt.txt?raw";
+import localContent from '@/worker/prompts/conetent.md?raw';
 
 const app = new Hono<{ Bindings: Env }>();
 const fallbackCover = "/vite.svg";

@@ -1,4 +1,4 @@
-import type { Task } from "../types";
+import type { Task } from "@/worker/types";
 
 export async function createTask(db: D1Database, payload: Task) {
 	await db.prepare("INSERT INTO tasks (id, type, status, payload) VALUES (?, ?, ?, ?)")

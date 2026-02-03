@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import type { PlatformAccount, PlatformType } from "../api";
+import type { PlatformAccount, PlatformType } from "@/react-app/api";
 import {
 	getPlatformAccounts,
 	createPlatformAccount,
 	updatePlatformAccount,
 	deletePlatformAccount,
 	verifyPlatformAccount,
-} from "../api";
+} from "@/react-app/api";
 import { PlatformAccountList } from "./PlatformAccountList";
 import { PlatformAccountForm } from "./PlatformAccountForm";
 import { Button } from "@/components/ui/button";

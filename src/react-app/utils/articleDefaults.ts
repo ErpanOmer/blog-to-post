@@ -1,4 +1,4 @@
-import type { Article } from "../types";
+import type { Article } from "@/react-app/types";
 
 export function createEmptyArticle(): Article {
     const now = Date.now();

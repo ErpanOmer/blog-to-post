@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useArticles } from "./useArticles";
-import { createEmptyArticle } from "../utils/articleDefaults";
-import { notify, requestNotificationPermission } from "../components/NotificationSystem";
-import { getProviderStatus, createPublishTask } from "../api";
-import type { Article } from "../types";
-import type { AccountConfig } from "../types/publications";
+import { createEmptyArticle } from "@/react-app/utils/articleDefaults";
+import { notify, requestNotificationPermission } from "@/react-app/components/NotificationSystem";
+import { getProviderStatus, createPublishTask } from "@/react-app/api";
+import type { Article } from "@/react-app/types";
+import type { AccountConfig } from "@/react-app/types/publications";
 
 export function useAppController() {
     const {

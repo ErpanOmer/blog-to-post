@@ -1,4 +1,4 @@
-import type { PlatformType } from "../types";
+import type { PlatformType } from "@/worker/types";
 import type {
 	AccountService,
 	AccountInfo,
@@ -8,7 +8,7 @@ import type {
 	VerifyResult,
 	ArticlePublishResult,
 	ImageUploadResult,
-} from "./types";
+} from "@/worker/accounts/types";
 
 export abstract class AbstractAccountService implements AccountService {
 	platform: PlatformType;

@@ -1,4 +1,4 @@
-import type { AIProvider, Env } from "../types";
+import type { AIProvider, Env } from "@/worker/types";
 
 const models = {
 	kimi: "kimi-k2.5:cloud",

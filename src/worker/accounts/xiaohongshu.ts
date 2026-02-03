@@ -1,6 +1,6 @@
-import { AbstractAccountService } from "./abstract";
-import { registerAccountService } from "./index";
-import type { VerifyResult, AccountStatus, AccountInfo, ArticleDraft, Article, ArticlePublishResult, ImageUploadResult, XiaohongshuUserInfo } from "./index";
+import { AbstractAccountService } from "@/worker/accounts/abstract";
+import { registerAccountService } from "@/worker/accounts/index";
+import type { VerifyResult, AccountStatus, AccountInfo, ArticleDraft, Article, ArticlePublishResult, ImageUploadResult, XiaohongshuUserInfo } from "@/worker/accounts/index";
 
 export default class XiaohongshuAccountService extends AbstractAccountService {
 	constructor(authToken: string) {

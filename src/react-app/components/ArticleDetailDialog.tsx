@@ -1,4 +1,4 @@
-import type { Article } from "../types";
+import type { Article } from "@/react-app/types";
 import {
 	Dialog,
 	DialogContent,

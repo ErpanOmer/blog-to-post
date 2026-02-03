@@ -1,5 +1,5 @@
-import type { Env } from "../types";
-import fetchJuejinTopTitles from "../juejin";
+import type { Env } from "@/worker/types";
+import fetchJuejinTopTitles from "@/worker/juejin";
 
 const CACHE_KEY = "juejin:titles";
 const CACHE_TIMESTAMP_KEY = "juejin:titles:timestamp";

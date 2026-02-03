@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import type { Article } from "../types";
-import type { AccountStatistics } from "../types/publications";
-import { getAccountStatistics } from "../api";
+import type { Article } from "@/react-app/types";
+import type { AccountStatistics } from "@/react-app/types/publications";
+import { getAccountStatistics } from "@/react-app/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";

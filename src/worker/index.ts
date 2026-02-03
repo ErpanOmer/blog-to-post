@@ -1,13 +1,13 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import type { Env } from "./types";
-import { runDailyCron } from "./cron";
-import { processScheduledTasks } from "./services/publish";
+import type { Env } from "@/worker/types";
+import { runDailyCron } from "@/worker/cron";
+import { processScheduledTasks } from "@/worker/services/publish";
 
 // Import modular routes
-import articlesApp from "./routes/articles";
-import accountsApp from "./routes/accounts";
-import publishApp from "./routes/publish";
+import articlesApp from "@/worker/routes/articles";
+import accountsApp from "@/worker/routes/accounts";
+import publishApp from "@/worker/routes/publish";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -70,7 +70,7 @@ app.get("/api/health", (c) =>
 // 唯一的例外是 /api/articles/generate-title 等，它们虽然在 articles.ts，但逻辑上属于 article 相关的操作
 // 以及 /api/juejin/top 被移到了 articlesApp，我们需要确保路径正确
 // 为了简单起见，articlesApp 处理 /api/articles 前缀下的所有请求
-import aiApp from "./routes/ai";
+import aiApp from "@/worker/routes/ai";
 
 app.route("/api/articles", articlesApp);
 app.route("/api/accounts", accountsApp);
@@ -95,7 +95,7 @@ app.route("/api/ai", aiApp);
 // 修正：将 /api/juejin/top 重定向到新路径，或者在 articlesApp 中移除它，单独放回这里。
 // 为了代码整洁，我还是把它放回 index.ts 吧，或者创建一个 routes/misc.ts。
 // 鉴于它只是一行代码，也可以用代理：
-import { getCachedJuejinTitles } from "./services/juejin-cache";
+import { getCachedJuejinTitles } from "@/worker/services/juejin-cache";
 app.get("/api/juejin/top", async (c) => {
 	const titlesData = await getCachedJuejinTitles(c.env);
 	return c.json(titlesData);

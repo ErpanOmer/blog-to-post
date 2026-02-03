@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import type { PublishTask, PublishTaskStep } from "../types/publications";
-import { getPublishTasks, getPublishTask, cancelPublishTask } from "../api";
+import type { PublishTask, PublishTaskStep } from "@/react-app/types/publications";
+import { getPublishTasks, getPublishTask, cancelPublishTask } from "@/react-app/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

@@ -1,4 +1,4 @@
-import type { Env } from "../types";
+import type { Env } from "@/worker/types";
 
 export async function saveDraft(env: Env, id: string, content: string) {
 	const key = `drafts/${id}.md`;

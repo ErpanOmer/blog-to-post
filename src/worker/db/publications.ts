@@ -10,8 +10,8 @@ import type {
   PublishTaskType,
   AccountConfig,
   PublishStepType
-} from "../types/publications";
-import type { PlatformType } from "../types";
+} from "@/worker/types/publications";
+import type { PlatformType } from "@/worker/types";
 
 // ==================== Article Publication Operations ====================
 

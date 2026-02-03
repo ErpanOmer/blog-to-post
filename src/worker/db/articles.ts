@@ -1,4 +1,4 @@
-import type { Article, ArticleStatus, PlatformType } from "../types";
+import type { Article, ArticleStatus, PlatformType } from "@/worker/types";
 
 type ArticleRow = Article & {
 	summary?: string | null;

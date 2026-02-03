@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import type { Article } from "../types";
-import type { PlatformAccount } from "../api";
-import type { AccountConfig } from "../types/publications";
+import type { Article } from "@/react-app/types";
+import type { PlatformAccount } from "@/react-app/api";
+import type { AccountConfig } from "@/react-app/types/publications";
 import { 
   getPlatformAccounts,
-} from "../api";
+} from "@/react-app/api";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";

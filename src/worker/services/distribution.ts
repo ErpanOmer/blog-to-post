@@ -1,5 +1,5 @@
-import type { ArticleStatus } from "../types";
-import { updateArticleStatus } from "../db/articles";
+import type { ArticleStatus } from "@/worker/types";
+import { updateArticleStatus } from "@/worker/db/articles";
 
 const transitions: Record<ArticleStatus, ArticleStatus[]> = {
 	draft: ["reviewed", "scheduled", "failed"],

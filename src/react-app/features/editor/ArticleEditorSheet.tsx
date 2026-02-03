@@ -1,10 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, Save, Rocket, X, Sparkles } from "lucide-react";
-import { ArticleEditor } from "../../components/ArticleEditor";
-import { TitleGenerator } from "../../components/TitleGenerator";
-import { GenerationPanel } from "../../components/GenerationPanel";
-import type { Article } from "../../types";
+import { ArticleEditor } from "@/react-app/components/ArticleEditor";
+import { TitleGenerator } from "@/react-app/components/TitleGenerator";
+import { GenerationPanel } from "@/react-app/components/GenerationPanel";
+import type { Article } from "@/react-app/types";
 
 interface ArticleEditorSheetProps {
     isOpen: boolean;
@@ -127,7 +127,7 @@ export function ArticleEditorSheet({
                         <div className="flex-1 overflow-hidden p-4">
                             <ArticleEditor
                                 article={draft}
-                                onChange={(article) => onArticleUpdate(article)} // ArticleEditor expects (article) => void, but I can pass full object
+                                onChange={(article: Article) => onArticleUpdate(article)} // ArticleEditor expects (article) => void, but I can pass full object
                                 disabled={isGenerating}
                             />
                         </div>

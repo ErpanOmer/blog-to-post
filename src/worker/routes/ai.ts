@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import type { Env, PromptKey } from "../types";
-import { listPromptTemplates, setPromptTemplate } from "../services/prompts";
+import type { Env, PromptKey } from "@/worker/types";
+import { listPromptTemplates, setPromptTemplate } from "@/worker/services/prompts";
 
 const app = new Hono<{ Bindings: Env }>();
 

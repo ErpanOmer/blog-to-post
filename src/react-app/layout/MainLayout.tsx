@@ -1,8 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sparkles, FileText, Share2, Zap, Loader2, User, Home, Settings } from "lucide-react";
-import { NotificationContainer } from "../components/NotificationSystem";
-import { GlobalLoadingOverlay } from "../components/GlobalLoadingOverlay";
+import { NotificationContainer } from "@/react-app/components/NotificationSystem";
+import { GlobalLoadingOverlay } from "@/react-app/components/GlobalLoadingOverlay";
 
 interface MainLayoutProps {
     activeTab: string;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import type { ArticlePublication } from "../types/publications";
-import { getArticlePublications, getPlatformAccounts } from "../api";
+import type { ArticlePublication } from "@/react-app/types/publications";
+import { getArticlePublications, getPlatformAccounts } from "@/react-app/api";
 import { Badge } from "@/components/ui/badge";
 import { 
   Tooltip, 

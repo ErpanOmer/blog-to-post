@@ -1,4 +1,4 @@
-import type { PlatformType } from "../types";
+import type { PlatformType } from "@/react-app/types";
 
 // 发布状态
 export type PublicationStatus = 

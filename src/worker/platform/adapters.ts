@@ -1,4 +1,4 @@
-import type { PlatformType } from "../types";
+import type { PlatformType } from "@/worker/types";
 
 export interface PlatformAdapter {
 	adapt(content: string): string;

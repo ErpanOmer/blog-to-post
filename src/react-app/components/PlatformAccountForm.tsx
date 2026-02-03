@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { PlatformAccount, PlatformType } from "../api";
+import type { PlatformAccount, PlatformType } from "@/react-app/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
