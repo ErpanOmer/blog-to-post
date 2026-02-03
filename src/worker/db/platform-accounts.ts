@@ -99,7 +99,7 @@ export async function createPlatformAccount(
 	}
 
 	const verifyResult = await service.verify();
-	
+
 	if (!verifyResult.valid) {
 		return {
 			account: null as unknown as PlatformAccount,
@@ -132,13 +132,14 @@ export async function createPlatformAccount(
 
 	await db
 		.prepare(
-			"INSERT INTO platform_accounts (id, platform, userId, userName, avatar, authToken, description, isActive, isVerified, lastVerifiedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)",
+			"INSERT INTO platform_accounts (id, platform, userId, userName, name, avatar, authToken, description, isActive, isVerified, lastVerifiedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)",
 		)
 		.bind(
 			payload.id,
 			payload.platform,
 			userInfo.id,
 			userInfo.name,
+			userInfo.name, // 同时填充 name 字段（兼容旧 schema）
 			userInfo.avatar ?? null,
 			payload.authToken,
 			payload.description ?? null,
@@ -236,7 +237,7 @@ export async function verifyPlatformAccount(
 
 	try {
 		const result = await service.verify();
-		
+
 		await updatePlatformAccount(db, id, {
 			isVerified: result.valid,
 			lastVerifiedAt: Date.now(),

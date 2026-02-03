@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { PlatformAccount, PlatformType } from "@/react-app/api";
 import {
 	getPlatformAccounts,
+	getPlatformAccount,
 	createPlatformAccount,
 	updatePlatformAccount,
 	deletePlatformAccount,
@@ -52,8 +53,10 @@ export function PlatformAccountsPanel() {
 		authToken?: string;
 		description?: string;
 	}) => {
+		console.log('🔍 [前端 handleCreate] 接收到的数据:', data);
 		try {
-			await createPlatformAccount(data);
+			const result = await createPlatformAccount(data);
+			console.log('🔍 [前端 handleCreate] API 返回结果:', result);
 			toast.success("添加成功");
 			await fetchAccounts();
 		} catch (error) {
@@ -84,12 +87,19 @@ export function PlatformAccountsPanel() {
 	const handleVerify = async (accountId: string) => {
 		try {
 			const result = await verifyPlatformAccount(accountId);
+
 			if (result.valid) {
 				toast.success(result.message);
 			} else {
 				toast.error(result.message);
 			}
+
 			await fetchAccounts();
+
+			if (editingAccount && editingAccount.id === accountId) {
+				const updatedAccount = await getPlatformAccount(accountId);
+				setEditingAccount(updatedAccount);
+			}
 		} catch (error) {
 			console.error("验证失败", error);
 			toast.error("验证失败，请稍后重试");
@@ -138,11 +148,10 @@ export function PlatformAccountsPanel() {
 							<button
 								key={f.value}
 								onClick={() => setFilter(f.value)}
-								className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-									filter === f.value
-										? "bg-slate-900 text-white"
-										: "bg-slate-100 text-slate-600 hover:bg-slate-200"
-								}`}
+								className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${filter === f.value
+									? "bg-slate-900 text-white"
+									: "bg-slate-100 text-slate-600 hover:bg-slate-200"
+									}`}
 							>
 								<span>{f.icon}</span>
 								<span>{f.label}</span>

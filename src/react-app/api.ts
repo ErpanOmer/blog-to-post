@@ -203,13 +203,15 @@ export async function createPlatformAccount(payload: {
 	authToken?: string;
 	description?: string;
 }): Promise<PlatformAccount> {
-	return parseJson<PlatformAccount>(
-		await fetch("/api/accounts", {
-			method: "POST",
-			headers: jsonHeaders,
-			body: JSON.stringify(payload),
-		}),
-	);
+	console.log('🔍 [前端 API createPlatformAccount] 发送的 payload:', payload);
+	console.log('🔍 [前端 API] payload.authToken 类型:', typeof payload.authToken, '值:', payload.authToken);
+	const response = await fetch("/api/accounts", {
+		method: "POST",
+		headers: jsonHeaders,
+		body: JSON.stringify(payload),
+	});
+	console.log('🔍 [前端 API] 请求 body:', JSON.stringify(payload));
+	return parseJson<PlatformAccount>(response);
 }
 
 export async function updatePlatformAccount(

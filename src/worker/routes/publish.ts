@@ -37,7 +37,7 @@ app.post("/tasks", async (c) => {
             articleIds,
             accountConfigs,
             scheduleTime,
-        });
+        }, c.executionCtx);
 
         return c.json(result);
     } catch (error) {
@@ -123,7 +123,7 @@ app.post("/quick", async (c) => {
             return c.json({ message: "文章ID和账号ID不能为空", success: false }, 400);
         }
 
-        const result = await quickPublish(c.env.DB, articleId, accountId, draftOnly);
+        const result = await quickPublish(c.env.DB, articleId, accountId, draftOnly, c.executionCtx);
         return c.json(result);
     } catch (error) {
         const message = error instanceof Error ? error.message : "快速发布失败";

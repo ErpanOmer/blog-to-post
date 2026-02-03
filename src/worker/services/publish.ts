@@ -71,9 +71,15 @@ const publishSteps: PublishStep[] = [
         return { success: false, error: `不支持的平台类型: ${account.platform}` };
       }
 
+      const article = await getArticle(db, _article.id);
+      if (!article) {
+        return { success: false, error: "文章不存在" };
+      }
+
       try {
         // 调用平台的 articleDraft 方法创建草稿
-        const draft = await service.articleDraft();
+        const draft = await service.articleDraft(_article.title, _article.content);
+
         if (!draft) {
           return { success: false, error: "创建草稿失败：平台返回空数据" };
         }
@@ -141,7 +147,8 @@ export async function createPublishTaskService(
     articleIds: string[];
     accountConfigs: AccountConfig[];
     scheduleTime?: number | null;
-  }
+  },
+  ctx?: ExecutionContext
 ): Promise<{ task: PublishTask; message: string }> {
   const { articleIds, accountConfigs, scheduleTime } = params;
 
@@ -179,8 +186,14 @@ export async function createPublishTaskService(
 
   // 如果不是定时任务，立即执行
   if (!isScheduled) {
-    // 异步执行任务
-    executePublishTask(db, task.id).catch(console.error);
+    // 使用 waitUntil 确保异步任务在 Worker 响应后继续执行
+    const taskPromise = executePublishTask(db, task.id).catch(console.error);
+    if (ctx) {
+      ctx.waitUntil(taskPromise);
+    } else {
+      // 开发环境下可能没有 ctx，回退到旧行为
+      taskPromise.catch(() => { });
+    }
   }
 
   return {
@@ -301,8 +314,23 @@ export async function executePublishTask(
             startTime: Date.now(),
           });
 
+
           const stepStartTime = Date.now();
-          const result = await step.execute(db, article, accountConfig, draftId);
+          let result;
+
+          try {
+            result = await step.execute(db, article, accountConfig, draftId);
+          } catch (error) {
+            // 捕获步骤执行中的异常
+            const errorMessage = error instanceof Error ? error.message : "步骤执行失败";
+            console.error(`步骤 ${step.name} 执行异常:`, error);
+
+            result = {
+              success: false,
+              error: errorMessage
+            };
+          }
+
           const stepDuration = Date.now() - stepStartTime;
 
           if (result.success) {
@@ -484,7 +512,8 @@ export async function quickPublish(
   db: D1Database,
   articleId: string,
   accountId: string,
-  draftOnly: boolean = false
+  draftOnly: boolean = false,
+  ctx?: ExecutionContext
 ): Promise<{ success: boolean; message: string; publicationId?: string }> {
   const account = await getPlatformAccount(db, accountId);
   if (!account) {
@@ -498,7 +527,7 @@ export async function quickPublish(
       platform: account.platform,
       draftOnly,
     }],
-  });
+  }, ctx);
 
   return {
     success: true,

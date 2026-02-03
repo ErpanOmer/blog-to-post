@@ -27,25 +27,74 @@ export abstract class AbstractAccountService implements AccountService {
 		url: string,
 		options: RequestInit = {},
 	): Promise<T> {
-		const response = await fetch(url, {
-			...options,
-			headers: {
-				...this.headers,
-				...options.headers,
-			},
-		});
+		try {
+			// Add timeout (Default 30s)
+			const timeoutMs = 30000;
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => {
+				controller.abort();
+			}, timeoutMs);
 
-		if (!response.ok) {
-			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			const response = await fetch(url, {
+				...options,
+				headers: {
+					...this.headers,
+					...options.headers
+				},
+				signal: controller.signal,
+			});
+
+			clearTimeout(timeoutId);
+
+			// Handle response body based on Content-Type
+			const contentType = response.headers.get("content-type");
+			let data: any;
+
+			if (contentType && contentType.includes("application/json")) {
+				try {
+					data = await response.json();
+				} catch {
+					data = null; // Failed to parse JSON, empty body?
+				}
+			} else if (contentType && (contentType.includes("text/") || contentType.includes("xml"))) {
+				data = await response.text();
+			} else {
+				// For other types (blob, etc), we might default to text or raw depending on T
+				// Here we default to text primarily for API usage
+				data = await response.text();
+				// Try to parse as JSON if it looks like JSON even if header is wrong?
+				// Optional: strict check. For robustness, let's keep it simple.
+				try {
+					if (typeof data === 'string' && (data.startsWith('{') || data.startsWith('['))) {
+						data = JSON.parse(data);
+					}
+				} catch {
+					// Ignore parse error, keep as string
+				}
+			}
+
+			if (!response.ok) {
+				const errorMessage = typeof data === 'object'
+					? JSON.stringify(data)
+					: (typeof data === 'string' ? data : response.statusText);
+
+				throw new Error(`Request failed (${response.status}): ${errorMessage}`);
+			}
+
+			return data as T;
+		} catch (error: any) {
+			// Re-throw with clear message if it's not already handled
+			if (error.name === 'AbortError') {
+				throw new Error(`Request timeout after 30s: ${url}`);
+			}
+			throw error;
 		}
-
-		return response.json() as Promise<T>;
 	}
 
 	abstract verify(): Promise<VerifyResult>;
 	abstract status(): Promise<AccountStatus>;
 	abstract info(): Promise<AccountInfo>;
-	abstract articleDraft(): Promise<ArticleDraft | null>;
+	abstract articleDraft(title?: string, content?: string): Promise<ArticleDraft | null>;
 	abstract articlePublish(title: string, content: string, coverImage?: string): Promise<ArticlePublishResult>;
 	abstract articleDelete(articleId: string): Promise<{ success: boolean; message: string }>;
 	abstract articleList(page?: number, pageSize?: number): Promise<Article[]>;

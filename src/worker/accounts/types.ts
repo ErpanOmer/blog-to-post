@@ -20,6 +20,7 @@ export interface ArticleDraft {
     title: string;
     content: string;
     createdAt: number;
+    url: string;
 }
 
 export interface Article {
@@ -58,7 +59,7 @@ export interface AccountService {
 
     info(): Promise<AccountInfo>;
 
-    articleDraft(): Promise<ArticleDraft | null>;
+    articleDraft(title?: string, content?: string): Promise<ArticleDraft | null>;
 
     articlePublish(title: string, content: string, coverImage?: string): Promise<ArticlePublishResult>;
 

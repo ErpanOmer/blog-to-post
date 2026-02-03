@@ -76,6 +76,7 @@ export default class JuejinAccountService extends AbstractAccountService {
 				title: data.data.title,
 				content: data.data.content,
 				createdAt: data.data.ctime,
+				url: `https://juejin.cn/editor/drafts/${data.data.article_id}`,
 			};
 		} catch {
 			return null;

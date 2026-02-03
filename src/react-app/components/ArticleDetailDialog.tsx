@@ -225,7 +225,7 @@ export function ArticleDetailDialog({
 											>
 												{tag}
 											</Badge>
-											))}
+										))}
 									</div>
 								</div>
 							</div>

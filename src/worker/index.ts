@@ -62,7 +62,7 @@ app.get("/api/health", (c) =>
 	c.json({ status: "ok", timestamp: Date.now() }),
 );
 
-// 挂载模块化路由
+
 // Articles: /api/articles, /api/juejin/top
 // 注意：articlesApp 内部处理了 /api/articles 下的路径，但挂载时如果用 /api/articles，
 // 内部的 app.get('/') 对应的就是 /api/articles
