@@ -1,4 +1,5 @@
 import { AbstractAccountService } from "@/worker/accounts/abstract";
+import type { Article as SharedArticle } from "@/shared/types";
 import { registerAccountService } from "@/worker/accounts/index";
 import type { VerifyResult, AccountStatus, AccountInfo, ArticleDraft, Article, ArticlePublishResult, ImageUploadResult, JuejinUserInfo } from "@/worker/accounts/index";
 
@@ -63,7 +64,7 @@ export default class JuejinAccountService extends AbstractAccountService {
 		};
 	}
 
-	async articleDraft(): Promise<ArticleDraft | null> {
+	async articleDraft(_article: SharedArticle): Promise<ArticleDraft | null> {
 		try {
 			const data = await this.request<{ data: { article_id: string; title: string; content: string; ctime: number } }>(
 				"https://api.juejin.cn/user_api/v1/draft/list?size=1",
@@ -83,16 +84,16 @@ export default class JuejinAccountService extends AbstractAccountService {
 		}
 	}
 
-	async articlePublish(title: string, content: string, coverImage?: string): Promise<ArticlePublishResult> {
+	async articlePublish(article: SharedArticle): Promise<ArticlePublishResult> {
 		try {
 			const data = await this.request<{ data: { article_id: string } }>(
 				"https://api.juejin.cn/user_api/v1/article/publish",
 				{
 					method: "POST",
 					body: JSON.stringify({
-						title,
-						content,
-						cover_image: coverImage,
+						title: article.title,
+						content: article.content,
+						cover_image: article.coverImage,
 						status: 2,
 					}),
 				},

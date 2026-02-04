@@ -1,7 +1,7 @@
-import type { 
-  ArticlePublication, 
-  PublishTask, 
-  PublishTaskStep, 
+import type {
+  ArticlePublication,
+  PublishTask,
+  PublishTaskStep,
   AccountStatistics,
   PublicationStatus,
   PublishTaskStatus,
@@ -33,6 +33,7 @@ export async function createArticlePublication(
     status: payload.status ?? "pending",
     startedAt: payload.startedAt ?? now,
     draftId: null,
+    publishId: null,
     publishedUrl: null,
     errorMessage: null,
     completedAt: null,
@@ -42,8 +43,8 @@ export async function createArticlePublication(
 
   await db.prepare(
     `INSERT INTO article_publications 
-     (id, articleId, accountId, platform, status, publishType, draftId, publishedUrl, errorMessage, startedAt, completedAt, createdAt, updatedAt) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     (id, articleId, accountId, platform, status, publishType, draftId, publishId, publishedUrl, errorMessage, startedAt, completedAt, createdAt, updatedAt) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     publication.id,
     publication.articleId,
@@ -51,7 +52,9 @@ export async function createArticlePublication(
     publication.platform,
     publication.status,
     publication.publishType,
+    publication.publishType,
     publication.draftId,
+    publication.publishId,
     publication.publishedUrl,
     publication.errorMessage,
     publication.startedAt,
@@ -66,7 +69,7 @@ export async function createArticlePublication(
 export async function updateArticlePublication(
   db: D1Database,
   id: string,
-  updates: Partial<Pick<ArticlePublication, "status" | "draftId" | "publishedUrl" | "errorMessage" | "completedAt">>
+  updates: Partial<Pick<ArticlePublication, "status" | "draftId" | "publishId" | "publishedUrl" | "errorMessage" | "completedAt">>
 ): Promise<ArticlePublication | null> {
   const current = await getArticlePublication(db, id);
   if (!current) return null;
@@ -80,11 +83,12 @@ export async function updateArticlePublication(
 
   await db.prepare(
     `UPDATE article_publications 
-     SET status = ?, draftId = ?, publishedUrl = ?, errorMessage = ?, completedAt = ?, updatedAt = ? 
+     SET status = ?, draftId = ?, publishId = ?, publishedUrl = ?, errorMessage = ?, completedAt = ?, updatedAt = ? 
      WHERE id = ?`
   ).bind(
     next.status,
     next.draftId,
+    next.publishId,
     next.publishedUrl,
     next.errorMessage,
     next.completedAt,
@@ -99,7 +103,7 @@ export async function getArticlePublication(db: D1Database, id: string): Promise
   const result = await db.prepare(
     "SELECT * FROM article_publications WHERE id = ?"
   ).bind(id).first<ArticlePublication>();
-  
+
   return result ?? null;
 }
 
@@ -134,7 +138,7 @@ export async function listArticlePublications(
 }
 
 export async function getArticlePublicationsByArticleId(
-  db: D1Database, 
+  db: D1Database,
   articleId: string
 ): Promise<ArticlePublication[]> {
   return listArticlePublications(db, { articleId });
@@ -159,7 +163,7 @@ export async function createPublishTask(
 ): Promise<PublishTask> {
   const now = Date.now();
   const totalSteps = payload.articleIds.length * payload.accountConfigs.length * 3; // 3 steps per article-account pair
-  
+
   const task: PublishTask = {
     ...payload,
     status: payload.scheduleTime && payload.scheduleTime > now ? "pending" : "pending",
@@ -543,7 +547,7 @@ export async function createOrUpdateAccountStatistics(
   const existing = await getAccountStatistics(db, accountId);
 
   let publishHistory = existing?.publishHistory ?? [];
-  
+
   if (updates.newHistoryItem) {
     publishHistory = [updates.newHistoryItem, ...publishHistory].slice(0, 50); // Keep last 50
   }

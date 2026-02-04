@@ -149,7 +149,7 @@ app.get("/:id", async (c) => {
 
 // Create article
 app.post("/", async (c) => {
-    const payload = (await c.req.json()) as { id?: string; title: string; content: string; summary: string; tags: string[]; coverImage: string; platform?: PlatformType };
+    const payload = (await c.req.json()) as { id?: string; title: string; content: string; htmlContent?: string; summary: string; tags: string[]; coverImage: string; platform?: PlatformType };
     if (!payload.title || !payload.content || !payload.summary || !payload.tags?.length || !payload.coverImage) {
         return c.json({ message: "missing required fields" }, 400);
     }
@@ -159,6 +159,7 @@ app.post("/", async (c) => {
         title: payload.title,
         content: payload.content,
         summary: payload.summary,
+        htmlContent: payload.htmlContent,
         tags: payload.tags,
         coverImage: payload.coverImage,
         platform: payload.platform ?? "",
@@ -178,7 +179,7 @@ app.post("/", async (c) => {
 
 // Update article
 app.put("/:id", async (c) => {
-    const payload = (await c.req.json()) as { title?: string; content?: string; platform?: PlatformType; summary?: string | null; tags?: string[] | null; coverImage?: string | null };
+    const payload = (await c.req.json()) as { title?: string; content?: string; htmlContent?: string; platform?: PlatformType; summary?: string | null; tags?: string[] | null; coverImage?: string | null };
     const article = await updateArticle(c.env.DB, c.req.param("id"), payload);
     if (!article) {
         return c.json({ message: "not found" }, 404);

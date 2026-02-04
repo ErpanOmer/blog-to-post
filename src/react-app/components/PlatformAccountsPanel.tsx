@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Plus, Filter } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"; // Import ConfirmDialog
 
 const platformFilters: { value: PlatformType | "all"; label: string; icon: string }[] = [
 	{ value: "all", label: "全部", icon: "🌐" },
@@ -30,6 +31,20 @@ export function PlatformAccountsPanel() {
 	const [filter, setFilter] = useState<PlatformType | "all">("all");
 	const [formOpen, setFormOpen] = useState(false);
 	const [editingAccount, setEditingAccount] = useState<PlatformAccount | null>(null);
+
+	// Confirmation State
+	const [confirmDialog, setConfirmDialog] = useState<{
+		open: boolean;
+		title: string;
+		description: string;
+		onConfirm: () => void;
+		isLoading?: boolean;
+	}>({
+		open: false,
+		title: "",
+		description: "",
+		onConfirm: () => { },
+	});
 
 	const fetchAccounts = async () => {
 		setLoading(true);
@@ -107,17 +122,24 @@ export function PlatformAccountsPanel() {
 	};
 
 	const handleDelete = async (account: PlatformAccount) => {
-		if (!confirm(`确定要删除该平台认证吗？删除后无法恢复。`)) {
-			return;
-		}
-		try {
-			await deletePlatformAccount(account.id);
-			toast.success("删除成功");
-			await fetchAccounts();
-		} catch (error) {
-			console.error("删除认证失败", error);
-			toast.error("删除失败，请稍后重试");
-		}
+		setConfirmDialog({
+			open: true,
+			title: "删除账号",
+			description: "确定要删除该平台认证吗？删除后无法恢复。",
+			onConfirm: async () => {
+				setConfirmDialog(prev => ({ ...prev, isLoading: true }));
+				try {
+					await deletePlatformAccount(account.id);
+					toast.success("删除成功");
+					setConfirmDialog(prev => ({ ...prev, open: false, isLoading: false }));
+					await fetchAccounts();
+				} catch (error) {
+					console.error("删除认证失败", error);
+					toast.error("删除失败，请稍后重试");
+					setConfirmDialog(prev => ({ ...prev, isLoading: false }));
+				}
+			}
+		});
 	};
 
 	const handleEdit = (account: PlatformAccount) => {
@@ -204,6 +226,18 @@ export function PlatformAccountsPanel() {
 				account={editingAccount}
 				onSave={editingAccount ? handleUpdate : handleCreate}
 				onVerify={handleVerify}
+			/>
+
+			{/* Account Deletion Confirm Dialog */}
+			<ConfirmDialog
+				open={confirmDialog.open}
+				onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}
+				title={confirmDialog.title}
+				description={confirmDialog.description}
+				confirmLabel="确认删除"
+				variant="destructive"
+				isLoading={confirmDialog.isLoading}
+				onConfirm={confirmDialog.onConfirm}
 			/>
 		</div>
 	);

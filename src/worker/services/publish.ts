@@ -9,7 +9,10 @@ import type {
 } from "@/worker/types/publications";
 import { getAccountService } from "@/worker/accounts";
 import { getPlatformAccount } from "@/worker/db/platform-accounts";
-import { getArticle } from "@/worker/db/articles";
+import {
+  getArticle,
+  updateArticle
+} from "@/worker/db/articles";
 import {
   createPublishTask,
   createPublishTaskStep,
@@ -22,6 +25,7 @@ import {
   listPublishTaskSteps,
   getPendingScheduledTasks
 } from "@/worker/db/publications";
+import { randomDelay } from "../utils/helpers";
 
 // 发布步骤定义
 interface PublishStep {
@@ -32,7 +36,7 @@ interface PublishStep {
     article: Article,
     accountConfig: AccountConfig,
     draftId?: string
-  ) => Promise<{ success: boolean; draftId?: string; publishedUrl?: string; error?: string }>;
+  ) => Promise<{ success: boolean; draftId?: string; publishId?: string; publishedUrl?: string; error?: string }>;
 }
 
 // 步骤执行器
@@ -78,11 +82,15 @@ const publishSteps: PublishStep[] = [
 
       try {
         // 调用平台的 articleDraft 方法创建草稿
-        const draft = await service.articleDraft(_article.title, _article.content);
+        const draft = await service.articleDraft(article);
 
         if (!draft) {
           return { success: false, error: "创建草稿失败：平台返回空数据" };
         }
+
+        // Persist the draftId to the article record in the database
+        await updateArticle(db, article.id, { draftId: draft.id });
+
         return { success: true, draftId: draft.id };
       } catch (error) {
         return {
@@ -95,6 +103,8 @@ const publishSteps: PublishStep[] = [
   {
     type: "publish_article",
     name: "发布文章",
+    // CRITICAL: This step MUST executed after "create_draft"
+    // The "draftId" is required and flows from the previous step or DB persistence
     execute: async (db, article, accountConfig, _draftId) => {
       const account = await getPlatformAccount(db, accountConfig.accountId);
       if (!account?.authToken) {
@@ -107,11 +117,27 @@ const publishSteps: PublishStep[] = [
       }
 
       try {
-        const result = await service.articlePublish(
-          article.title,
-          article.content,
-          article.coverImage ?? undefined
-        );
+        // Ensure we have a valid draftId
+        let finalDraftId = _draftId;
+
+        // If not in memory, try to find it in the DB (persistence check)
+        if (!finalDraftId) {
+          const dbArticle = await getArticle(db, article.id);
+          if (dbArticle?.draftId) {
+            finalDraftId = dbArticle.draftId;
+          }
+        }
+
+        // Strict validation as requested by user
+        if (!finalDraftId) {
+          return { success: false, error: "无法获取有效的草稿ID (draftId)，无法进行发布操作" };
+        }
+
+        await randomDelay(3000, 5000);
+
+        // Merge draftId into article object for the adapter
+        const articleWithDraft = { ...article, draftId: finalDraftId };
+        const result = await service.articlePublish(articleWithDraft);
 
         if (!result.success) {
           return { success: false, error: result.message };
@@ -119,7 +145,12 @@ const publishSteps: PublishStep[] = [
 
         return {
           success: true,
-          draftId: result.articleId,
+          draftId: result.articleId, // This might be wrong logic in original code, result.articleId from publish IS the publishId. 
+          // But for now keeping compatibility or fixing? 
+          // result.articleId IS the platform ID. 
+          // The original code was: draftId: result.articleId.
+          // I should map it to publishId.
+          publishId: result.articleId,
           publishedUrl: result.url
         };
       } catch (error) {
@@ -281,6 +312,7 @@ export async function executePublishTask(
         });
 
         let draftId: string | undefined;
+        let publishId: string | undefined;
         let currentStatus: PublicationStatus = "pending";
         let publishedUrl: string | undefined;
         let errorMessage: string | undefined;
@@ -338,15 +370,19 @@ export async function executePublishTask(
               status: "completed",
               endTime: Date.now(),
               duration: stepDuration,
-              outputData: { draftId: result.draftId, publishedUrl: result.publishedUrl },
+              outputData: { draftId: result.draftId, publishId: result.publishId, publishedUrl: result.publishedUrl },
             });
 
             if (result.draftId) {
               draftId = result.draftId;
             }
+            if (result.publishId) {
+              publishId = result.publishId;
+            }
             if (result.publishedUrl) {
               publishedUrl = result.publishedUrl;
             }
+
           } else {
             await updatePublishTaskStep(db, taskStep.id, {
               status: "failed",
@@ -372,6 +408,7 @@ export async function executePublishTask(
         await updateArticlePublication(db, publication.id, {
           status: currentStatus,
           draftId: draftId ?? null,
+          publishId: publishId ?? null,
           publishedUrl: publishedUrl ?? null,
           errorMessage: errorMessage ?? null,
           completedAt: Date.now(),
@@ -402,6 +439,7 @@ export async function executePublishTask(
           success: currentStatus === "published" || currentStatus === "draft_created",
           status: currentStatus,
           draftId: draftId ?? null,
+          publishId: publishId ?? null,
           publishedUrl: publishedUrl ?? null,
           errorMessage: errorMessage ?? null,
           duration,

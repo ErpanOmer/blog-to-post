@@ -21,7 +21,12 @@ import {
 	Clock4,
 	AlertCircle,
 	XCircle,
+	Rocket,
+	Pencil,
+	Trash2,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Need to ensure these exist or use basic title
 import { cn } from "@/lib/utils";
 
 // ByteMD 插件
@@ -39,6 +44,9 @@ interface ArticleDetailDialogProps {
 	article: Article | null;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
+	onEdit?: (article: Article) => void;
+	onDelete?: (article: Article) => void;
+	onPublish?: (articles: Article[]) => void;
 }
 
 const plugins = [
@@ -114,6 +122,9 @@ export function ArticleDetailDialog({
 	article,
 	open,
 	onOpenChange,
+	onEdit,
+	onDelete,
+	onPublish
 }: ArticleDetailDialogProps) {
 	if (!article) return null;
 
@@ -122,126 +133,192 @@ export function ArticleDetailDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
-				<DialogTitle className="sr-only">
-					{article.title || "文章详情"}
-				</DialogTitle>
-				{/* 头部区域 */}
-				<div className="relative">
-					{/* 封面图背景 */}
-					<div className="h-48 w-full overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
-						{article.coverImage ? (
-							<img
-								src={article.coverImage}
-								alt={article.title}
-								className="h-full w-full object-cover"
-							/>
-						) : (
-							<div className="flex h-full w-full items-center justify-center">
-								<ImageIcon className="h-16 w-16 text-slate-300" />
-							</div>
-						)}
-						{/* 渐变遮罩 */}
-						<div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-					</div>
+			<DialogContent className="max-w-4xl max-h-[90vh] overflow-visible bg-transparent border-none shadow-none p-0 sm:p-0">
+				<div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] w-full relative">
+					<DialogTitle className="sr-only">
+						{article.title || "文章详情"}
+					</DialogTitle>
+					{/* 头部区域 */}
+					<div className="relative">
+						{/* 封面图背景 */}
+						<div className="h-48 w-full overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
+							{article.coverImage ? (
+								<img
+									src={article.coverImage}
+									alt={article.title}
+									className="h-full w-full object-cover"
+								/>
+							) : (
+								<div className="flex h-full w-full items-center justify-center">
+									<ImageIcon className="h-16 w-16 text-slate-300" />
+								</div>
+							)}
+							{/* 渐变遮罩 */}
+							<div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+						</div>
 
-					{/* 标题区域 */}
-					<div className="absolute bottom-0 left-0 right-0 p-6">
-						<div className="flex items-start justify-between gap-4">
-							<div className="flex-1">
-								<div className="flex items-center gap-2 mb-2">
-									<Badge
-										className={cn(
-											"gap-1 px-2 py-0.5",
-											status.color
-										)}
-									>
-										<StatusIcon className="h-3 w-3" />
-										{status.label}
-									</Badge>
-									{article.status === "published" && article.platform && (
-										<Badge variant="outline" className="gap-1">
-											<span>{platformIcons[article.platform]}</span>
-											<span>{platformLabels[article.platform]}</span>
+						{/* 标题区域 */}
+						<div className="absolute bottom-0 left-0 right-0 p-6">
+							<div className="flex items-start justify-between gap-4">
+								<div className="flex-1">
+									<div className="flex items-center gap-2 mb-2">
+										<Badge
+											className={cn(
+												"gap-1 px-2 py-0.5",
+												status.color
+											)}
+										>
+											<StatusIcon className="h-3 w-3" />
+											{status.label}
 										</Badge>
-									)}
-								</div>
-								<h1 className="text-2xl font-bold text-white drop-shadow-lg">
-									{article.title || "未命名文章"}
-								</h1>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				{/* 元信息区域 */}
-				<div className="bg-slate-50/50 px-6 py-3 border-b border-slate-100">
-					<div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
-						<div className="flex items-center gap-1">
-							<Calendar className="h-3.5 w-3.5" />
-							<span>创建: {formatDateTime(article.createdAt)}</span>
-						</div>
-						<div className="flex items-center gap-1">
-							<Clock className="h-3.5 w-3.5" />
-							<span>更新: {formatDateTime(article.updatedAt)}</span>
-						</div>
-						{article.publishedAt && (
-							<div className="flex items-center gap-1 text-emerald-600">
-								<CheckCircle2 className="h-3.5 w-3.5" />
-								<span>发布: {formatDateTime(article.publishedAt)}</span>
-							</div>
-						)}
-					</div>
-				</div>
-
-				<ScrollArea className="max-h-[calc(90vh-300px)] overflow-y-auto">
-					<div className="p-6">
-						{/* 摘要区域 */}
-						{article.summary && (
-							<div className="mb-6">
-								<div className="rounded-lg bg-gradient-to-br from-brand-50 to-violet-50 border border-brand-100 p-4">
-									<h3 className="text-sm font-semibold text-brand-900 mb-2 flex items-center gap-2">
-										<FileText className="h-4 w-4" />
-										文章摘要
-									</h3>
-									<p className="text-sm text-slate-600 leading-relaxed">
-										{article.summary}
-									</p>
-								</div>
-							</div>
-						)}
-
-						{/* 标签区域 */}
-						{article.tags && article.tags.length > 0 && (
-							<div className="mb-6">
-								<div className="flex items-center gap-2">
-									<Hash className="h-4 w-4 text-slate-400" />
-									<div className="flex flex-wrap gap-1.5">
-										{article.tags.map((tag, i) => (
-											<Badge
-												key={i}
-												variant="secondary"
-												className="text-xs"
-											>
-												{tag}
+										{article.status === "published" && article.platform && (
+											<Badge variant="outline" className="gap-1">
+												<span>{platformIcons[article.platform]}</span>
+												<span>{platformLabels[article.platform]}</span>
 											</Badge>
-										))}
+										)}
+									</div>
+									<h1 className="text-2xl font-bold text-white drop-shadow-lg">
+										{article.title || "未命名文章"}
+									</h1>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* 元信息区域 */}
+					<div className="bg-slate-50/50 px-6 py-3 border-b border-slate-100">
+						<div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+							<div className="flex items-center gap-1">
+								<Calendar className="h-3.5 w-3.5" />
+								<span>创建: {formatDateTime(article.createdAt)}</span>
+							</div>
+							<div className="flex items-center gap-1">
+								<Clock className="h-3.5 w-3.5" />
+								<span>更新: {formatDateTime(article.updatedAt)}</span>
+							</div>
+							{article.publishedAt && (
+								<div className="flex items-center gap-1 text-emerald-600">
+									<CheckCircle2 className="h-3.5 w-3.5" />
+									<span>发布: {formatDateTime(article.publishedAt)}</span>
+								</div>
+							)}
+						</div>
+					</div>
+
+					<ScrollArea className="max-h-[calc(90vh-300px)] overflow-y-auto">
+						<div className="p-6">
+							{/* 摘要区域 */}
+							{article.summary && (
+								<div className="mb-6">
+									<div className="rounded-lg bg-gradient-to-br from-brand-50 to-violet-50 border border-brand-100 p-4">
+										<h3 className="text-sm font-semibold text-brand-900 mb-2 flex items-center gap-2">
+											<FileText className="h-4 w-4" />
+											文章摘要
+										</h3>
+										<p className="text-sm text-slate-600 leading-relaxed">
+											{article.summary}
+										</p>
 									</div>
 								</div>
-							</div>
-						)}
+							)}
 
-						<Separator className="my-6" />
+							{/* 标签区域 */}
+							{article.tags && article.tags.length > 0 && (
+								<div className="mb-6">
+									<div className="flex items-center gap-2">
+										<Hash className="h-4 w-4 text-slate-400" />
+										<div className="flex flex-wrap gap-1.5">
+											{article.tags.map((tag, i) => (
+												<Badge
+													key={i}
+													variant="secondary"
+													className="text-xs"
+												>
+													{tag}
+												</Badge>
+											))}
+										</div>
+									</div>
+								</div>
+							)}
 
-						{/* 文章内容区域 */}
-						<div className="prose prose-slate max-w-none">
-							<div className="bytemd-viewer">
-								<Viewer value={article.content} plugins={plugins} />
+							<Separator className="my-6" />
+
+							{/* 文章内容区域 */}
+							<div className="prose prose-slate max-w-none">
+								<div className="bytemd-viewer">
+									<Viewer value={article.content} plugins={plugins} />
+								</div>
 							</div>
 						</div>
-					</div>
-				</ScrollArea>
+					</ScrollArea>
+				</div>
+
+				{/* Floating Settings Bar (Right Side) */}
+				<div className="absolute -right-20 top-1/2 -translate-y-1/2 flex flex-col gap-4">
+					<TooltipProvider delayDuration={0}>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Button
+									variant="outline"
+									size="icon"
+									className="h-12 w-12 rounded-full border-slate-200 bg-white shadow-lg hover:bg-brand-50 hover:text-brand-600 hover:scale-110 transition-all duration-200"
+									onClick={() => {
+										onOpenChange(false);
+										onPublish?.([article]);
+									}}
+								>
+									<Rocket className="h-5 w-5" />
+								</Button>
+							</TooltipTrigger>
+							<TooltipContent side="right">
+								<p>发布文章</p>
+							</TooltipContent>
+						</Tooltip>
+
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Button
+									variant="outline"
+									size="icon"
+									className="h-12 w-12 rounded-full border-slate-200 bg-white shadow-lg hover:bg-blue-50 hover:text-blue-600 hover:scale-110 transition-all duration-200"
+									onClick={() => {
+										onOpenChange(false);
+										onEdit?.(article);
+									}}
+								>
+									<Pencil className="h-5 w-5" />
+								</Button>
+							</TooltipTrigger>
+							<TooltipContent side="right">
+								<p>编辑内容</p>
+							</TooltipContent>
+						</Tooltip>
+
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Button
+									variant="outline"
+									size="icon"
+									className="h-12 w-12 rounded-full border-slate-200 bg-white shadow-lg hover:bg-red-50 hover:text-red-600 hover:border-red-100 hover:scale-110 transition-all duration-200"
+									onClick={() => {
+										// onDelete usually requires confirmation, handle in parent or here? 
+										// Parent handler usually has confirm logic.
+										// But keeping dialog open might be weird if deleted.
+										onDelete?.(article);
+									}}
+								>
+									<Trash2 className="h-5 w-5" />
+								</Button>
+							</TooltipTrigger>
+							<TooltipContent side="right">
+								<p className="text-red-600">删除文章</p>
+							</TooltipContent>
+						</Tooltip>
+					</TooltipProvider>
+				</div>
 			</DialogContent>
-		</Dialog>
+		</Dialog >
 	);
 }

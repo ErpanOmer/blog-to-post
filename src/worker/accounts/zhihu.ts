@@ -1,6 +1,7 @@
 import { AbstractAccountService } from "@/worker/accounts/abstract";
 import { registerAccountService } from "@/worker/accounts/index";
 import type { VerifyResult, AccountStatus, AccountInfo, ArticleDraft, Article, ArticlePublishResult, ImageUploadResult } from "@/worker/accounts/types";
+import type { Article as SharedArticle } from "@/shared/types";
 import type { ZhihuUserInfo } from "@/worker/accounts/abstract";
 import { marked } from "marked";
 import { randomDelay } from "@/worker/utils/helpers";
@@ -148,6 +149,9 @@ export default class ZhihuAccountService extends AbstractAccountService {
 				redirect: "follow"
 			});
 
+			// 延迟 3 秒，防止频繁调用 API 被限流
+			await randomDelay(2000, 5000);
+
 			if (!response.ok) {
 				const errorText = await response.text();
 				console.error(`知乎 Markdown 转换 API 失败: HTTP ${response.status}`, errorText);
@@ -177,15 +181,16 @@ export default class ZhihuAccountService extends AbstractAccountService {
 		}
 	}
 
-	async articleDraft(title: string, content: string): Promise<ArticleDraft | null> {
+	async articleDraft(article: SharedArticle): Promise<ArticleDraft | null> {
 		try {
 			// 将 Markdown 转换为 HTML（支持本地转换和 API 转换）
-			const htmlContent = this.useApiConversion
-				? await this.convertMarkdownToHtmlViaAPI(content)
-				: this.convertMarkdownToHtml(content);
-
-			// 延迟 3 秒，防止频繁调用 API 被限流
-			await randomDelay(2000, 5000);
+			// 优先使用已转换的 HTML 内容，否则进行转换
+			let htmlContent = article.htmlContent;
+			if (!htmlContent) {
+				htmlContent = this.useApiConversion
+					? await this.convertMarkdownToHtmlViaAPI(article.content)
+					: this.convertMarkdownToHtml(article.content);
+			}
 
 			const data = await this.request<{ id: string; title: string; content: string; url: string; created: number }>(
 				"https://zhuanlan.zhihu.com/api/articles/drafts",
@@ -197,7 +202,7 @@ export default class ZhihuAccountService extends AbstractAccountService {
 					},
 					body: JSON.stringify({
 						content: htmlContent,
-						title: title,
+						title: article.title,
 						table_of_contents: false,
 						delta_time: 0,
 						can_reward: true
@@ -218,25 +223,101 @@ export default class ZhihuAccountService extends AbstractAccountService {
 		}
 	}
 
-	async articlePublish(title: string, content: string, coverImage?: string): Promise<ArticlePublishResult> {
+	async articlePublish(article: SharedArticle): Promise<ArticlePublishResult> {
 		try {
+			const pcBusinessParams = {
+				commentPermission: "anyone",
+				disclaimer_type: "none",
+				disclaimer_status: "close",
+				table_of_contents_enabled: false,
+				content: article.htmlContent,
+				title: article.title,
+				commercial_report_info: {
+					commercial_types: [],
+				},
+				commercial_zhitask_bind_info: null,
+				canReward: true,
+			}
+
+
 			const data = await this.request<{ id: string }>(
-				"https://www.zhihu.com/api/v4/articles",
+				"https://www.zhihu.com/api/v4/content/publish",
 				{
 					method: "POST",
+					headers: {
+						"cookie": this.authToken,
+						"Content-Type": "application/json"
+					},
 					body: JSON.stringify({
-						title,
-						content,
-						cover_image: coverImage,
+						action: "article",
+						data: {
+							publish: {
+								traceId: `${Date.now()},${crypto.randomUUID()}`,
+							},
+							extra_info: {
+								publisher: "pc",
+								pc_business_params: JSON.stringify(pcBusinessParams),
+							},
+							draft: {
+								disabled: 1,
+								id: article.draftId,
+								isPublished: false,
+							},
+							commentsPermission: {
+								comment_permission: "anyone",
+							},
+							creationStatement: {
+								disclaimer_type: "none",
+								disclaimer_status: "close",
+							},
+							contentsTables: {
+								table_of_contents_enabled: false,
+							},
+							commercialReportInfo: {
+								isReport: 0,
+							},
+							appreciate: {
+								can_reward: true,
+								tagline: "真诚赞赏，手留余香",
+							},
+							hybridInfo: {},
+							hybrid: {
+								html: article.htmlContent || "",
+								textLength: article.htmlContent?.length || 0,
+							},
+							title: {
+								title: article.title,
+							},
+						},
 					}),
 				},
 			);
 
+			console.log("知乎发布成功:", data);
+
+			// 健壮性检查：确保返回的数据包含必要的 ID
+			// Zhihu publish API response structure:
+			// {
+			// 	"publish": {
+			// 		"id": "2002529657535345354",
+			// 		"content": ""
+			// 	},
+			//  ...
+			// }
+			const responseData = data as any;
+			if (!responseData?.publish?.id) {
+				console.error("知乎发布响应格式异常, 缺失 publish.id:", data);
+				return {
+					success: false,
+					message: "发布请求已发送，但知乎返回了非预期的响应格式 (无法获取文章ID)。请检查知乎后台确认是否发布成功。",
+				};
+			}
+
 			return {
 				success: true,
-				articleId: data.id,
+				articleId: responseData.publish.id,
 				message: "发布成功",
-				url: `https://zhuanlan.zhihu.com/p/${data.id}`,
+				url: `https://zhuanlan.zhihu.com/p/${responseData.publish.id}`,
 			};
 		} catch (error) {
 			return {

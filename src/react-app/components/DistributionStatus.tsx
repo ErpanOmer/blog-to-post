@@ -8,15 +8,15 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  AlertCircle, 
-  Loader2, 
-  ChevronRight, 
-  FileText, 
-  User, 
+import {
+  CheckCircle2,
+  XCircle,
+  Clock,
+  AlertCircle,
+  Loader2,
+  ChevronRight,
+  FileText,
+  User,
   Layers,
   RefreshCw,
   Eye,
@@ -72,7 +72,12 @@ const taskStatusConfig: Record<string, { label: string; color: string; bgColor: 
   cancelled: { label: "已取消", color: "text-slate-500", bgColor: "bg-slate-100" },
 };
 
-export function DistributionStatus() {
+interface DistributionStatusProps {
+  initialTaskId?: string | null;
+  onDeepLinkHandled?: () => void;
+}
+
+export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: DistributionStatusProps) {
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [articles, setArticles] = useState<Map<string, Article>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
@@ -85,13 +90,13 @@ export function DistributionStatus() {
     try {
       // 加载任务列表
       const taskList = await getPublishTasks();
-      
+
       // 加载所有相关文章
       const articleIds = new Set<string>();
       taskList.forEach(task => {
         task.articleIds.forEach(id => articleIds.add(id));
       });
-      
+
       const allArticles = await getArticles();
       const articleMap = new Map<string, Article>();
       allArticles.forEach(article => {
@@ -130,6 +135,21 @@ export function DistributionStatus() {
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  // Handle Deep Link
+  useEffect(() => {
+    if (initialTaskId && tasks.length > 0) {
+      const task = tasks.find(t => t.id === initialTaskId);
+      if (task) {
+        setSelectedTask(task);
+        setIsDetailOpen(true);
+        // Notify parent that deep link has been handled
+        if (onDeepLinkHandled) {
+          onDeepLinkHandled();
+        }
+      }
+    }
+  }, [initialTaskId, tasks, onDeepLinkHandled]);
 
   const filteredTasks = tasks.filter(task => {
     if (activeFilter === "all") return true;
@@ -488,7 +508,7 @@ export function DistributionStatus() {
                                       {stepTypeLabels[step.stepType] || step.stepType}
                                     </span>
                                   </div>
-                                  
+
                                   <div className="flex items-center gap-4 text-xs text-slate-500 mb-2">
                                     <span className="flex items-center gap-1">
                                       {platformIcons[step.platform]}

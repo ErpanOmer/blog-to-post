@@ -178,5 +178,65 @@ Response Body:
         "html_content": "转换内容"
     },
     "message": "success"
+
+
+### 文章发布
+POST https://www.zhihu.com/api/v4/content/publish
+
+Request Body:
+```js
+{
+    "action": "article",
+    "data": {
+        "publish": {
+            "traceId": "1769868138503,6a25f914-4cdb-4938-a716-778718c81818"
+        },
+        "extra_info": {
+            "publisher": "pc",
+            "pc_business_params": "{\"commentPermission\":\"anyone\",\"disclaimer_type\":\"none\",\"disclaimer_status\":\"close\",\"table_of_contents_enabled\":false,\"content\":\"<p>x上周我把一个核心模块交给。💩</p>\",\"title\":\"周我把一个核心模块交给AI重构1\",\"commercial_report_info\":{\"commercial_types\":[]},\"commercial_zhitask_bind_info\":null,\"canReward\":true}"
+        },
+        "draft": {
+            "disabled": 1,
+            "id": "2001052724515591629",
+            "isPublished": false
+        },
+        "commentsPermission": {
+            "comment_permission": "anyone"
+        },
+        "creationStatement": {
+            "disclaimer_type": "none",
+            "disclaimer_status": "close"
+        },
+        "contentsTables": {
+            "table_of_contents_enabled": false
+        },
+        "commercialReportInfo": {
+            "isReport": 0
+        },
+        "appreciate": {
+            "can_reward": true,
+            "tagline": "真诚赞赏，手留余香"
+        },
+        "hybridInfo": {},
+        "hybrid": {
+            "html": "<p>x上周我把一个核心模块交给。💩</p>",
+            "textLength": 2224
+        },
+        "title": {
+            "title": "周我把一个核心模块交给AI重构1"
+        }
+    }
 }
 ```
+
+Response Body:
+```js
+{
+    "publish": {
+        "id": "2002529657535345354",
+        "content": ""
+    },
+    "pinDraft": null,
+    "pinResp": "",
+    "questionResp": ""
+}

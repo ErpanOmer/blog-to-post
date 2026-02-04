@@ -5,6 +5,7 @@ type ArticleRow = Article & {
 	tags?: string | null;
 	coverImage?: string | null;
 	publishedAt?: number | null;
+	draftId?: string | null;
 };
 
 function mapArticle(row: ArticleRow): Article {
@@ -21,6 +22,7 @@ function mapArticle(row: ArticleRow): Article {
 		summary: row.summary ?? null,
 		tags,
 		coverImage: row.coverImage ?? null,
+		draftId: row.draftId ?? undefined,
 		publishedAt: row.publishedAt ?? null,
 		createdAt: Number(row.createdAt),
 		updatedAt: Number(row.updatedAt),
@@ -43,6 +45,7 @@ export async function createArticle(
 		id: string;
 		title: string;
 		content: string;
+		htmlContent?: string | null;
 		summary?: string | null;
 		tags?: string[] | null;
 		coverImage?: string | null;
@@ -54,12 +57,13 @@ export async function createArticle(
 	},
 ): Promise<Article> {
 	await db.prepare(
-		"INSERT INTO articles (id, title, content, summary, tags, coverImage, platform, status, publishedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO articles (id, title, content, htmlContent, summary, tags, coverImage, platform, status, publishedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 	)
 		.bind(
 			payload.id,
 			payload.title,
 			payload.content,
+			payload.htmlContent ?? null,
 			payload.summary ?? null,
 			payload.tags ? JSON.stringify(payload.tags) : null,
 			payload.coverImage ?? null,
@@ -76,7 +80,7 @@ export async function createArticle(
 export async function updateArticle(
 	db: D1Database,
 	id: string,
-	payload: { title?: string; content?: string; platform?: PlatformType; summary?: string | null; tags?: string[] | null; coverImage?: string | null },
+	payload: { title?: string; content?: string; htmlContent?: string; platform?: PlatformType; summary?: string | null; tags?: string[] | null; coverImage?: string | null; draftId?: string | null },
 ) {
 	const current = await getArticle(db, id);
 	if (!current) {
@@ -85,14 +89,16 @@ export async function updateArticle(
 	const next = {
 		title: payload.title ?? current.title,
 		content: payload.content ?? current.content,
+		htmlContent: payload.htmlContent ?? current.htmlContent ?? null,
 		platform: payload.platform ?? current.platform,
 		summary: payload.summary ?? current.summary ?? null,
 		tags: payload.tags ?? current.tags ?? null,
 		coverImage: payload.coverImage ?? current.coverImage ?? null,
+		draftId: payload.draftId ?? current.draftId ?? null,
 		updatedAt: Date.now(),
 	};
-	await db.prepare("UPDATE articles SET title = ?, content = ?, summary = ?, tags = ?, coverImage = ?, platform = ?, updatedAt = ? WHERE id = ?")
-		.bind(next.title, next.content, next.summary, next.tags ? JSON.stringify(next.tags) : null, next.coverImage, next.platform, next.updatedAt, id)
+	await db.prepare("UPDATE articles SET title = ?, content = ?, htmlContent = ?, summary = ?, tags = ?, coverImage = ?, platform = ?, draftId = ?, updatedAt = ? WHERE id = ?")
+		.bind(next.title, next.content, next.htmlContent, next.summary, next.tags ? JSON.stringify(next.tags) : null, next.coverImage, next.platform, next.draftId, next.updatedAt, id)
 		.run();
 	return { ...current, ...next } as Article;
 }

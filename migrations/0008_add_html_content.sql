@@ -1,0 +1,2 @@
+-- Add htmlContent column to articles table
+-- ALTER TABLE articles ADD COLUMN htmlContent TEXT;

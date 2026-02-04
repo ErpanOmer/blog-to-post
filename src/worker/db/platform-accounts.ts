@@ -297,41 +297,5 @@ export async function getAccountStatus(
 	}
 }
 
-export async function publishArticle(
-	db: D1Database,
-	id: string,
-	title: string,
-	content: string,
-	coverImage?: string,
-): Promise<{ success: boolean; message: string; url?: string }> {
-	const account = await getPlatformAccount(db, id);
-	if (!account) {
-		return { success: false, message: "帐号不存在" };
-	}
-
-	if (!account.authToken) {
-		return { success: false, message: "请先配置认证信息" };
-	}
-
-	if (!account.isVerified) {
-		return { success: false, message: "请先验证帐号的可用性" };
-	}
-
-	const service = getAccountService(account.platform, account.authToken);
-	if (!service) {
-		return { success: false, message: `不支持的平台类型: ${account.platform}` };
-	}
-
-	try {
-		const result = await service.articlePublish(title, content, coverImage);
-		return {
-			success: result.success,
-			message: result.message,
-			url: result.url,
-		};
-	} catch (error) {
-		return { success: false, message: error instanceof Error ? error.message : "发布失败" };
-	}
-}
 
 import type { AccountStatus } from "@/worker/accounts";

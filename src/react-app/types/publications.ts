@@ -1,7 +1,7 @@
 import type { PlatformType } from "@/react-app/types";
 
 // 发布状态
-export type PublicationStatus = 
+export type PublicationStatus =
   | "pending"      // 等待处理
   | "draft_created" // 草稿已创建
   | "publishing"   // 发布中
@@ -16,7 +16,7 @@ export type PublishType = "draft_only" | "full_publish";
 export type PublishTaskType = "single" | "batch" | "scheduled";
 
 // 任务状态
-export type PublishTaskStatus = 
+export type PublishTaskStatus =
   | "pending"     // 等待执行
   | "processing"  // 执行中
   | "completed"   // 已完成
@@ -24,14 +24,14 @@ export type PublishTaskStatus =
   | "cancelled";  // 已取消
 
 // 步骤类型
-export type PublishStepType = 
+export type PublishStepType =
   | "validate_account"  // 验证账号
   | "create_draft"      // 创建草稿
   | "publish_article"   // 发布文章
   | "verify_result";    // 验证结果
 
 // 步骤状态
-export type PublishStepStatus = 
+export type PublishStepStatus =
   | "pending"   // 等待执行
   | "running"   // 执行中
   | "completed" // 已完成
@@ -47,6 +47,7 @@ export interface ArticlePublication {
   status: PublicationStatus;
   publishType: PublishType;
   draftId?: string | null;
+  publishId?: string | null;
   publishedUrl?: string | null;
   errorMessage?: string | null;
   startedAt: number;

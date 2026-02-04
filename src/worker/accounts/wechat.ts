@@ -1,4 +1,5 @@
 import { AbstractAccountService } from "@/worker/accounts/abstract";
+import type { Article as SharedArticle } from "@/shared/types";
 import { registerAccountService } from "@/worker/accounts/index";
 import type { VerifyResult, AccountStatus, AccountInfo, ArticleDraft, Article, ArticlePublishResult, ImageUploadResult } from "@/worker/accounts/index";
 
@@ -67,20 +68,20 @@ export default class WechatAccountService extends AbstractAccountService {
 		};
 	}
 
-	async articleDraft(): Promise<ArticleDraft | null> {
+	async articleDraft(_article: SharedArticle): Promise<ArticleDraft | null> {
 		return null;
 	}
 
-	async articlePublish(title: string, content: string, coverImage?: string): Promise<ArticlePublishResult> {
+	async articlePublish(article: SharedArticle): Promise<ArticlePublishResult> {
 		try {
 			const data = await this.request<{ errcode: number; errmsg: string; media_id: string }>(
 				`https://api.weixin.qq.com/cgi-bin/draft/add?access_token=${this.accessToken}`,
 				{
 					method: "POST",
 					body: JSON.stringify({
-						title,
-						content,
-						thumb_media_id: coverImage,
+						title: article.title,
+						content: article.content,
+						thumb_media_id: article.coverImage,
 					}),
 				},
 			);

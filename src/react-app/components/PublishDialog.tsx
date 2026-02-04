@@ -2,9 +2,12 @@ import { useState, useEffect } from "react";
 import type { Article } from "@/react-app/types";
 import type { PlatformAccount } from "@/react-app/api";
 import type { AccountConfig } from "@/react-app/types/publications";
-import { 
+import {
   getPlatformAccounts,
+  getPublishTask,
+  getPublishTaskSteps,
 } from "@/react-app/api";
+import type { PublishTask, PublishTaskStep } from "@/react-app/types/publications";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
@@ -12,18 +15,18 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-import { 
-  Clock, 
-  Calendar, 
-  CheckCircle2, 
+import {
+  Clock,
+  Calendar,
+  CheckCircle2,
   AlertCircle,
   Loader2,
   FileText,
@@ -33,17 +36,20 @@ import {
   ChevronUp,
   ImageIcon,
   Hash,
-  Rocket
+  Rocket,
+  XCircle
 } from "lucide-react";
+import { PublishProgress } from "./PublishProgress";
 import { cn } from "@/lib/utils";
 
 interface PublishDialogProps {
   articles: Article[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onPublishConfirm?: (accountConfigs: AccountConfig[], scheduleTime: number | null) => void;
-  onQuickPublishConfirm?: (accountConfigs: AccountConfig[], scheduleTime: number | null) => void;
+  onPublishConfirm?: (accountConfigs: AccountConfig[], scheduleTime: number | null) => Promise<string | null>;
+  onQuickPublishConfirm?: (accountConfigs: AccountConfig[], scheduleTime: number | null) => Promise<string | null>;
   isQuickPublish?: boolean;
+  onTaskCompleted?: (taskId: string) => void;
 }
 
 const platformLabels: Record<string, string> = {
@@ -62,13 +68,14 @@ const platformIcons: Record<string, string> = {
   csdn: "💻",
 };
 
-export function PublishDialog({ 
-  articles, 
-  open, 
+export function PublishDialog({
+  articles,
+  open,
   onOpenChange,
   onPublishConfirm,
   onQuickPublishConfirm,
   isQuickPublish = false,
+  onTaskCompleted,
 }: PublishDialogProps) {
   const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set());
@@ -82,6 +89,12 @@ export function PublishDialog({
   const [scheduleTime, setScheduleTime] = useState<string>("");
   const [showArticles, setShowArticles] = useState(false);
 
+  // Progress State
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [taskProgress, setTaskProgress] = useState<PublishTask | null>(null);
+  const [taskSteps, setTaskSteps] = useState<PublishTaskStep[]>([]);
+  const [isPolling, setIsPolling] = useState(false);
+
   // 加载平台账号
   useEffect(() => {
     if (open) {
@@ -91,8 +104,50 @@ export function PublishDialog({
       setError(null);
       setSuccess(null);
       setIsSubmitting(false);
+      setIsSubmitting(false);
+      setCurrentTaskId(null);
+      setTaskProgress(null);
+      setTaskSteps([]);
+      setIsPolling(false);
     }
   }, [open]);
+
+  // Polling Effect
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
+    if (isPolling && currentTaskId) {
+      const fetchProgress = async () => {
+        try {
+          const [taskData, stepsData] = await Promise.all([
+            getPublishTask(currentTaskId).then(res => res.task),
+            getPublishTaskSteps(currentTaskId)
+          ]);
+
+          setTaskProgress(taskData);
+          setTaskSteps(stepsData);
+
+          if (["completed", "failed", "cancelled"].includes(taskData.status)) {
+            setIsPolling(false);
+            setSuccess(taskData.status === "completed" ? "发布任务已完成！" : null);
+            if (taskData.status === "failed") {
+              setError("发布任务部分或全部失败，请查看详情");
+            }
+          }
+        } catch (err) {
+          console.error("Poll error", err);
+        }
+      };
+
+      // Initial fetch
+      fetchProgress();
+
+      // Poll every 3 seconds
+      intervalId = setInterval(fetchProgress, 3000);
+    }
+
+    return () => clearInterval(intervalId);
+  }, [isPolling, currentTaskId]);
 
   const loadAccounts = async () => {
     setIsLoading(true);
@@ -102,11 +157,11 @@ export function PublishDialog({
       // 只显示已验证且激活的账号
       const activeAccounts = data.filter(a => a.isActive && a.isVerified);
       setAccounts(activeAccounts);
-      
+
       // 默认全选
       const allAccountIds = new Set(activeAccounts.map(a => a.id));
       setSelectedAccounts(allAccountIds);
-      
+
       // 默认开启只发草稿
       const configs = new Map<string, AccountConfig>();
       activeAccounts.forEach(account => {
@@ -209,7 +264,7 @@ export function PublishDialog({
       if (publishMode === "scheduled" && scheduleDate && scheduleTime) {
         const dateTime = new Date(`${scheduleDate}T${scheduleTime}`);
         scheduleTimeMs = dateTime.getTime();
-        
+
         if (scheduleTimeMs <= Date.now()) {
           setError("定时时间必须晚于当前时间");
           setIsSubmitting(false);
@@ -218,18 +273,32 @@ export function PublishDialog({
       }
 
       // BUG FIX: 调用父组件的确认回调，而不是直接创建任务
+      let taskId: string | null = null;
       if (isQuickPublish && onQuickPublishConfirm) {
-        await onQuickPublishConfirm(configs, scheduleTimeMs);
+        taskId = await onQuickPublishConfirm(configs, scheduleTimeMs);
       } else if (onPublishConfirm) {
-        await onPublishConfirm(configs, scheduleTimeMs);
+        taskId = await onPublishConfirm(configs, scheduleTimeMs);
       }
 
-      setSuccess("发布任务创建成功！");
+      if (taskId) {
+        setCurrentTaskId(taskId);
+        setIsPolling(true);
+      } else {
+        // Fallback if no taskId returned (shouldn't happen with new logic)
+        setSuccess("发布任务创建成功！");
+        setTimeout(() => onOpenChange(false), 1500);
+      }
 
     } catch (err) {
       setError(err instanceof Error ? err.message : "发布失败");
-    } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false); // Only stop submitting on error in catch block, otherwise keep loading for progress view
+    }
+  };
+
+  const handleViewDetails = () => {
+    if (currentTaskId && onTaskCompleted) {
+      onTaskCompleted(currentTaskId);
+      onOpenChange(false);
     }
   };
 
@@ -250,8 +319,8 @@ export function PublishDialog({
                 {isSingleArticle ? "发布文章" : `批量发布 (${articles.length} 篇)`}
               </DialogTitle>
               <DialogDescription className="mt-1.5">
-                {isSingleArticle 
-                  ? "选择要发布的平台和账号" 
+                {isSingleArticle
+                  ? "选择要发布的平台和账号"
                   : `将 ${articles.length} 篇文章发布到选定的平台和账号`}
               </DialogDescription>
             </div>
@@ -281,7 +350,7 @@ export function PublishDialog({
                 <ChevronDown className="h-4 w-4 text-slate-400" />
               )}
             </button>
-            
+
             {showArticles && (
               <CardContent className="p-0">
                 <ScrollArea className="max-h-[200px]">
@@ -290,9 +359,9 @@ export function PublishDialog({
                       <div key={article.id} className="px-4 py-3.5 flex items-center gap-3 hover:bg-slate-50">
                         <span className="text-xs text-slate-400 w-6">{index + 1}</span>
                         {article.coverImage ? (
-                          <img 
-                            src={article.coverImage} 
-                            alt="" 
+                          <img
+                            src={article.coverImage}
+                            alt=""
                             className="w-10 h-10 rounded object-cover"
                           />
                         ) : (
@@ -332,8 +401,8 @@ export function PublishDialog({
               onClick={() => setPublishMode("immediate")}
               className={cn(
                 "flex items-center justify-center gap-3 p-4 rounded-xl border-2 transition-all",
-                publishMode === "immediate" 
-                  ? "border-brand-500 bg-brand-50 text-brand-700" 
+                publishMode === "immediate"
+                  ? "border-brand-500 bg-brand-50 text-brand-700"
                   : "border-slate-200 hover:border-slate-300 bg-white"
               )}
             >
@@ -347,8 +416,8 @@ export function PublishDialog({
               onClick={() => setPublishMode("scheduled")}
               className={cn(
                 "flex items-center justify-center gap-3 p-4 rounded-xl border-2 transition-all",
-                publishMode === "scheduled" 
-                  ? "border-brand-500 bg-brand-50 text-brand-700" 
+                publishMode === "scheduled"
+                  ? "border-brand-500 bg-brand-50 text-brand-700"
                   : "border-slate-200 hover:border-slate-300 bg-white"
               )}
             >
@@ -422,7 +491,7 @@ export function PublishDialog({
                   {Object.entries(accountsByPlatform).map(([platform, platformAccounts]) => {
                     const platformSelected = platformAccounts.every(a => selectedAccounts.has(a.id));
                     const platformPartial = platformAccounts.some(a => selectedAccounts.has(a.id)) && !platformSelected;
-                    
+
                     return (
                       <div key={platform} className="border border-slate-200 rounded-xl overflow-hidden">
                         {/* 平台标题 */}
@@ -438,16 +507,16 @@ export function PublishDialog({
                             {platformAccounts.length} 个账号
                           </Badge>
                         </div>
-                        
+
                         {/* 账号列表 */}
                         <div className="divide-y divide-slate-100">
                           {platformAccounts.map(account => {
                             const config = accountConfigs.get(account.id);
                             const isSelected = selectedAccounts.has(account.id);
-                            
+
                             return (
-                              <div 
-                                key={account.id} 
+                              <div
+                                key={account.id}
                                 className={cn(
                                   "px-4 py-3.5 flex items-center gap-3 transition-colors",
                                   isSelected ? "bg-white" : "bg-slate-50/50"
@@ -457,13 +526,13 @@ export function PublishDialog({
                                   checked={isSelected}
                                   onCheckedChange={() => toggleAccount(account.id)}
                                 />
-                                
+
                                 {/* 账号信息 */}
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
                                     {account.avatar ? (
-                                      <img 
-                                        src={account.avatar} 
+                                      <img
+                                        src={account.avatar}
                                         alt={account.userName || ""}
                                         className="w-7 h-7 rounded-full"
                                       />
@@ -482,7 +551,7 @@ export function PublishDialog({
                                     )}
                                   </div>
                                 </div>
-                                
+
                                 {/* 只发草稿开关 */}
                                 <div className="flex items-center gap-2.5">
                                   <Switch
@@ -517,7 +586,7 @@ export function PublishDialog({
               <span>{error}</span>
             </div>
           )}
-          
+
           {success && (
             <div className="flex items-center gap-2.5 p-4 bg-emerald-50 text-emerald-700 rounded-xl text-sm">
               <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
@@ -527,12 +596,27 @@ export function PublishDialog({
         </div>
 
         {/* 底部按钮 */}
+        {/* Progress UI Overlay or Replacement */}
+        {/* Progress UI Overlay (New Premium Design) */}
+        {currentTaskId && taskProgress && (
+          <div className="absolute inset-0 z-50 bg-white">
+            <PublishProgress
+              task={taskProgress}
+              steps={taskSteps}
+              article={articles[0]} // Using first article for preview for now
+              onClose={() => onOpenChange(false)}
+              onViewDetails={handleViewDetails}
+            />
+          </div>
+        )}
+
+        {/* 底部按钮 (Original Footer) */}
         <DialogFooter className="gap-3 px-6 py-5 border-t border-slate-100 bg-slate-50/50">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting} className="px-6">
             取消
           </Button>
-          <Button 
-            onClick={handlePublish} 
+          <Button
+            onClick={handlePublish}
             disabled={isSubmitting || selectedAccounts.size === 0 || isLoading}
             className="bg-brand-600 hover:bg-brand-700 px-6"
           >
@@ -555,6 +639,6 @@ export function PublishDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   );
 }

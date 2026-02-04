@@ -9,6 +9,7 @@ import type {
 	ArticlePublishResult,
 	ImageUploadResult,
 } from "@/worker/accounts/types";
+import type { Article as SharedArticle } from "@/shared/types";
 
 export abstract class AbstractAccountService implements AccountService {
 	platform: PlatformType;
@@ -94,8 +95,8 @@ export abstract class AbstractAccountService implements AccountService {
 	abstract verify(): Promise<VerifyResult>;
 	abstract status(): Promise<AccountStatus>;
 	abstract info(): Promise<AccountInfo>;
-	abstract articleDraft(title?: string, content?: string): Promise<ArticleDraft | null>;
-	abstract articlePublish(title: string, content: string, coverImage?: string): Promise<ArticlePublishResult>;
+	abstract articleDraft(article: SharedArticle): Promise<ArticleDraft | null>;
+	abstract articlePublish(article: SharedArticle): Promise<ArticlePublishResult>;
 	abstract articleDelete(articleId: string): Promise<{ success: boolean; message: string }>;
 	abstract articleList(page?: number, pageSize?: number): Promise<Article[]>;
 	abstract articleDetail(articleId: string): Promise<Article | null>;

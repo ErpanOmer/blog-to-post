@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS articles (
 	id TEXT PRIMARY KEY,
 	title TEXT NOT NULL,
 	content TEXT NOT NULL,
+	htmlContent TEXT,
 	summary TEXT,
 	tags TEXT,
 	coverImage TEXT,

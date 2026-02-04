@@ -1,4 +1,5 @@
 import type { PlatformType } from "@/worker/types";
+import type { Article as SharedArticle } from "@/shared/types";
 
 export interface AccountInfo {
     id: string;
@@ -59,9 +60,9 @@ export interface AccountService {
 
     info(): Promise<AccountInfo>;
 
-    articleDraft(title?: string, content?: string): Promise<ArticleDraft | null>;
+    articleDraft(article: SharedArticle): Promise<ArticleDraft | null>;
 
-    articlePublish(title: string, content: string, coverImage?: string): Promise<ArticlePublishResult>;
+    articlePublish(article: SharedArticle): Promise<ArticlePublishResult>;
 
     articleDelete(articleId: string): Promise<{ success: boolean; message: string }>;
 

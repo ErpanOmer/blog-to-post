@@ -1,4 +1,5 @@
 import { AbstractAccountService } from "@/worker/accounts/abstract";
+import type { Article as SharedArticle } from "@/shared/types";
 import { registerAccountService } from "@/worker/accounts/index";
 import type { VerifyResult, AccountStatus, AccountInfo, ArticleDraft, Article, ArticlePublishResult, ImageUploadResult, CSDNUserInfo } from "@/worker/accounts/index";
 
@@ -61,20 +62,20 @@ export default class CSDNAccountService extends AbstractAccountService {
 		};
 	}
 
-	async articleDraft(): Promise<ArticleDraft | null> {
+	async articleDraft(_article: SharedArticle): Promise<ArticleDraft | null> {
 		return null;
 	}
 
-	async articlePublish(title: string, content: string, coverImage?: string): Promise<ArticlePublishResult> {
+	async articlePublish(article: SharedArticle): Promise<ArticlePublishResult> {
 		try {
 			const data = await this.request<{ code: number; data: { id: string }; msg: string }>(
 				"https://api.csdn.net/user/api/article/publish",
 				{
 					method: "POST",
 					body: JSON.stringify({
-						title,
-						content,
-						cover: coverImage,
+						title: article.title,
+						content: article.content,
+						cover: article.coverImage,
 						status: "published",
 					}),
 				},

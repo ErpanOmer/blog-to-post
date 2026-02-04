@@ -15,6 +15,7 @@ import { Dashboard } from "./components/Dashboard";
 import { ArticleDetailDialog } from "./components/ArticleDetailDialog";
 import { PublishDialog } from "./components/PublishDialog";
 import { DistributionStatus } from "./components/DistributionStatus";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"; // Import ConfirmDialog
 
 import "./App.css";
 
@@ -48,7 +49,10 @@ function App() {
         </TabsContent>
 
         <TabsContent value="distribution" className="animate-in">
-          <DistributionStatus />
+          <DistributionStatus
+            initialTaskId={state.distributionDetailTaskId}
+            onDeepLinkHandled={() => actions.setDistributionDetailTaskId(null)}
+          />
         </TabsContent>
 
         <TabsContent value="accounts" className="animate-in">
@@ -79,6 +83,9 @@ function App() {
         article={state.detailArticle}
         open={state.isDetailOpen}
         onOpenChange={actions.setIsDetailOpen}
+        onEdit={actions.handleEdit}
+        onDelete={actions.handleDelete}
+        onPublish={actions.handlePublish}
       />
 
       {state.isPublishDialogOpen && (
@@ -93,8 +100,23 @@ function App() {
           onPublishConfirm={actions.handlePublishConfirm}
           onQuickPublishConfirm={state.draft ? actions.handleQuickPublishConfirm : undefined}
           isQuickPublish={!!state.draft}
+          onTaskCompleted={actions.handleOpenDistributionDetail}
         />
       )}
+
+      {/* Global Confirmation Dialog */}
+      <ConfirmDialog
+        open={state.confirmDialog.open}
+        onOpenChange={(open) => {
+          if (!open) actions.closeConfirmDialog();
+        }}
+        title={state.confirmDialog.title}
+        description={state.confirmDialog.description}
+        confirmLabel={state.confirmDialog.confirmLabel}
+        variant={state.confirmDialog.variant}
+        isLoading={state.confirmDialog.isLoading}
+        onConfirm={state.confirmDialog.onConfirm}
+      />
     </MainLayout>
   );
 }

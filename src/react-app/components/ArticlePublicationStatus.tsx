@@ -2,19 +2,20 @@ import { useState, useEffect } from "react";
 import type { ArticlePublication } from "@/react-app/types/publications";
 import { getArticlePublications, getPlatformAccounts } from "@/react-app/api";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Tooltip, 
-  TooltipContent, 
-  TooltipProvider, 
-  TooltipTrigger 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
 } from "@/components/ui/tooltip";
-import { 
-  CheckCircle2, 
-  Clock, 
-  XCircle, 
+import {
+  CheckCircle2,
+  Clock,
+  XCircle,
   FileEdit,
   ExternalLink,
-  Loader2
+  Loader2,
+  Info
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -39,35 +40,35 @@ const platformIcons: Record<string, string> = {
 };
 
 const statusConfig = {
-  pending: { 
-    label: "等待中", 
+  pending: {
+    label: "等待中",
     color: "bg-slate-100 text-slate-600 border-slate-200",
-    icon: Clock 
+    icon: Clock
   },
-  draft_created: { 
-    label: "草稿", 
+  draft_created: {
+    label: "草稿",
     color: "bg-amber-100 text-amber-600 border-amber-200",
-    icon: FileEdit 
+    icon: FileEdit
   },
-  publishing: { 
-    label: "发布中", 
+  publishing: {
+    label: "发布中",
     color: "bg-blue-100 text-blue-600 border-blue-200",
-    icon: Loader2 
+    icon: Loader2
   },
-  published: { 
-    label: "已发布", 
+  published: {
+    label: "已发布",
     color: "bg-emerald-100 text-emerald-600 border-emerald-200",
-    icon: CheckCircle2 
+    icon: CheckCircle2
   },
-  failed: { 
-    label: "失败", 
+  failed: {
+    label: "失败",
     color: "bg-red-100 text-red-600 border-red-200",
-    icon: XCircle 
+    icon: XCircle
   },
-  cancelled: { 
-    label: "已取消", 
+  cancelled: {
+    label: "已取消",
     color: "bg-gray-100 text-gray-600 border-gray-200",
-    icon: XCircle 
+    icon: XCircle
   },
 };
 
@@ -88,9 +89,9 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
         getArticlePublications(articleId),
         getPlatformAccounts(),
       ]);
-      
+
       setPublications(pubs);
-      
+
       // 构建账号ID到名称的映射
       const nameMap = new Map<string, string>();
       accounts.forEach(account => {
@@ -138,12 +139,12 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
           const latestPub = platformPubs[0]; // 最新的发布记录
           const status = statusConfig[latestPub.status];
           const StatusIcon = status.icon;
-          
+
           return (
             <Tooltip key={platform}>
               <TooltipTrigger asChild>
-                <Badge 
-                  variant="outline" 
+                <Badge
+                  variant="outline"
                   className={cn(
                     "text-xs px-1.5 py-0.5 cursor-pointer hover:opacity-80 transition-opacity",
                     status.color
@@ -174,9 +175,9 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
                             {statusConfig[pub.status].label}
                           </Badge>
                           {pub.publishedUrl && (
-                            <a 
-                              href={pub.publishedUrl} 
-                              target="_blank" 
+                            <a
+                              href={pub.publishedUrl}
+                              target="_blank"
                               rel="noopener noreferrer"
                               className="text-brand-500 hover:text-brand-600"
                               onClick={(e) => e.stopPropagation()}
@@ -196,6 +197,28 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
                   <div className="text-xs text-slate-400 pt-1 border-t">
                     最新: {new Date(latestPub.updatedAt).toLocaleString('zh-CN')}
                   </div>
+                  {latestPub.publishId && (
+                    <div className="text-xs text-slate-500 pt-1 flex items-center gap-1 border-t border-slate-100">
+                      <Info className="h-3 w-3" />
+                      <span className="truncate max-w-[150px]" title={latestPub.publishId}>
+                        ID: {latestPub.publishId}
+                      </span>
+                    </div>
+                  )}
+                  {latestPub.publishedUrl && (
+                    <div className="text-xs pt-1 border-t border-slate-100">
+                      <a
+                        href={latestPub.publishedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-blue-500 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        查看文章
+                      </a>
+                    </div>
+                  )}
                 </div>
               </TooltipContent>
             </Tooltip>

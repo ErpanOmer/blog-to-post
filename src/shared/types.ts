@@ -6,6 +6,7 @@ export interface Article {
     id: string;
     title: string;
     content: string;
+    htmlContent?: string | null;
     summary?: string | null;
     tags?: string[] | null;
     coverImage?: string | null;
@@ -14,6 +15,7 @@ export interface Article {
     publishedAt?: number | null;
     createdAt: number;
     updatedAt: number;
+    draftId?: string;
 }
 
 export interface PlatformAccount {
