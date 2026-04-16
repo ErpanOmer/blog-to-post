@@ -1,259 +1,248 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PublishTask, PublishTaskStep } from "@/react-app/types/publications";
-import { getPublishTasks, getPublishTask, cancelPublishTask } from "@/react-app/api";
-import { Button } from "@/components/ui/button";
+import { cancelPublishTask, getPublishTask, getPublishTasks } from "@/react-app/api";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle,
-  DialogDescription
-} from "@/components/ui/dialog";
-import { 
-  Loader2, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  AlertCircle,
-  RefreshCw,
-  Send,
-  Calendar,
-  Layers,
-  ChevronRight,
-  RotateCcw,
-  X
-} from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Layers,
+  Loader2,
+  RefreshCw,
+  RotateCcw,
+  Send,
+  X,
+  XCircle,
+} from "lucide-react";
 
 interface PublishStatusPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-const statusConfig = {
-  pending: { label: "等待中", color: "bg-slate-100 text-slate-600", icon: Clock },
-  processing: { label: "执行中", color: "bg-blue-100 text-blue-600", icon: Loader2 },
-  completed: { label: "已完成", color: "bg-emerald-100 text-emerald-600", icon: CheckCircle2 },
-  failed: { label: "失败", color: "bg-red-100 text-red-600", icon: XCircle },
-  cancelled: { label: "已取消", color: "bg-amber-100 text-amber-600", icon: X },
+const taskStatusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  pending: { label: "Pending", color: "bg-slate-100 text-slate-600", icon: <Clock className="h-3 w-3" /> },
+  processing: { label: "Processing", color: "bg-blue-100 text-blue-600", icon: <Loader2 className="h-3 w-3 animate-spin" /> },
+  completed: { label: "Completed", color: "bg-emerald-100 text-emerald-600", icon: <CheckCircle2 className="h-3 w-3" /> },
+  failed: { label: "Failed", color: "bg-red-100 text-red-600", icon: <XCircle className="h-3 w-3" /> },
+  cancelled: { label: "Cancelled", color: "bg-amber-100 text-amber-600", icon: <X className="h-3 w-3" /> },
 };
 
-const stepStatusConfig = {
-  pending: { label: "等待", color: "text-slate-400", bgColor: "bg-slate-100" },
-  running: { label: "执行中", color: "text-blue-600", bgColor: "bg-blue-100" },
-  completed: { label: "完成", color: "text-emerald-600", bgColor: "bg-emerald-100" },
-  failed: { label: "失败", color: "text-red-600", bgColor: "bg-red-100" },
-  skipped: { label: "跳过", color: "text-amber-600", bgColor: "bg-amber-100" },
+const stepStatusConfig: Record<string, { label: string; color: string }> = {
+  pending: { label: "Pending", color: "text-slate-500" },
+  running: { label: "Running", color: "text-blue-600" },
+  completed: { label: "Completed", color: "text-emerald-600" },
+  failed: { label: "Failed", color: "text-red-600" },
+  skipped: { label: "Skipped", color: "text-amber-600" },
 };
 
-const stepTypeConfig = {
-  validate_account: "验证账号",
-  create_draft: "创建草稿",
-  publish_article: "发布文章",
-  verify_result: "验证结果",
+const stepTypeConfig: Record<string, string> = {
+  prepare_task: "Prepare context",
+  load_article: "Load article",
+  load_account: "Load account",
+  resolve_service: "Resolve service",
+  validate_account: "Validate account",
+  create_draft: "Create draft",
+  publish_article: "Publish article",
+  verify_result: "Verify result",
+  persist_publication: "Persist publication",
+  update_statistics: "Update statistics",
+  adapter_trace: "Adapter trace",
 };
+
+function formatTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleString(undefined, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+  return `${Math.round(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+}
+
+function formatProgressPair(current: number, total: number): string {
+  if (total <= 0) return "0 / 0";
+  const normalized = Math.max(0, Math.min(current, total));
+  return `${normalized} / ${total}`;
+}
+
+function getProgressRatio(current: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(current / total, 1));
+}
 
 export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelProps) {
   const [tasks, setTasks] = useState<PublishTask[]>([]);
-  const [selectedTask, setSelectedTask] = useState<PublishTask | null>(null);
-  const [taskSteps, setTaskSteps] = useState<PublishTaskStep[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [steps, setSteps] = useState<PublishTaskStep[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingSteps, setIsLoadingSteps] = useState(false);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 加载任务列表
+  const selectedTask = useMemo(
+    () => (selectedTaskId ? tasks.find((task) => task.id === selectedTaskId) || null : null),
+    [selectedTaskId, tasks],
+  );
+
   const loadTasks = useCallback(async () => {
     if (!open) return;
-    
     setIsLoading(true);
     setError(null);
     try {
-      const data = await getPublishTasks(undefined, 20);
-      setTasks(data);
+      const next = await getPublishTasks(undefined, 20);
+      setTasks(next);
     } catch (err) {
-      setError("加载任务列表失败");
-      console.error(err);
+      console.error("Failed to load tasks", err);
+      setError("Failed to load tasks");
     } finally {
       setIsLoading(false);
     }
   }, [open]);
 
-  // 初始加载
-  useEffect(() => {
-    if (open) {
-      loadTasks();
+  const loadTaskDetail = useCallback(async (taskId: string) => {
+    setIsLoadingDetail(true);
+    try {
+      const detail = await getPublishTask(taskId);
+      setSelectedTaskId(taskId);
+      setSteps(detail.steps);
+      setTasks((prev) => prev.map((task) => (task.id === detail.task.id ? detail.task : task)));
+    } catch (err) {
+      console.error("Failed to load task detail", err);
+    } finally {
+      setIsLoadingDetail(false);
     }
-  }, [open, loadTasks]);
+  }, []);
 
-  // 自动刷新（当有待处理或执行中的任务时）
   useEffect(() => {
     if (!open) return;
-    
-    const hasActiveTasks = tasks.some(t => t.status === "pending" || t.status === "processing");
+    void loadTasks();
+  }, [loadTasks, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const hasActiveTasks = tasks.some((task) => task.status === "pending" || task.status === "processing");
     if (!hasActiveTasks) return;
-
-    const interval = setInterval(() => {
-      loadTasks();
-      // 如果正在查看某个任务的详情，也刷新详情
-      if (selectedTask) {
-        loadTaskSteps(selectedTask.id);
-      }
+    const timer = setInterval(() => {
+      void loadTasks();
+      if (selectedTaskId) void loadTaskDetail(selectedTaskId);
     }, 3000);
+    return () => clearInterval(timer);
+  }, [loadTaskDetail, loadTasks, open, selectedTaskId, tasks]);
 
-    return () => clearInterval(interval);
-  }, [open, tasks, selectedTask, loadTasks]);
-
-  // 加载任务步骤详情
-  const loadTaskSteps = async (taskId: string) => {
-    setIsLoadingSteps(true);
-    try {
-      const data = await getPublishTask(taskId);
-      setSelectedTask(data.task);
-      setTaskSteps(data.steps);
-    } catch (err) {
-      console.error("加载任务详情失败", err);
-    } finally {
-      setIsLoadingSteps(false);
-    }
-  };
-
-  // 刷新任务列表
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await loadTasks();
+    if (selectedTaskId) await loadTaskDetail(selectedTaskId);
     setIsRefreshing(false);
   };
 
-  // 取消任务
   const handleCancel = async (taskId: string) => {
     try {
       await cancelPublishTask(taskId);
       await loadTasks();
+      if (selectedTaskId === taskId) await loadTaskDetail(taskId);
     } catch (err) {
-      console.error("取消任务失败", err);
+      console.error("Failed to cancel task", err);
     }
-  };
-
-  // 格式化时间
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString('zh-CN', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  // 格式化持续时间
-  const formatDuration = (ms: number) => {
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-    return `${Math.round(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col overflow-hidden">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle className="flex items-center gap-2">
                 <Send className="h-5 w-5 text-brand-500" />
-                发布任务状态
+                Publish Task Status
               </DialogTitle>
-              <DialogDescription>
-                查看所有发布任务的执行状态和进度
-              </DialogDescription>
+              <DialogDescription>Track execution progress and inspect step details</DialogDescription>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={cn("h-4 w-4 mr-1", isRefreshing && "animate-spin")} />
-              刷新
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+              <RefreshCw className={cn("mr-1 h-4 w-4", isRefreshing && "animate-spin")} />
+              Refresh
             </Button>
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden flex gap-4 min-h-0">
-          {/* 任务列表 */}
-          <div className="w-1/2 flex flex-col min-h-0">
-            <h3 className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+        <div className="flex min-h-0 flex-1 gap-4">
+          <div className="flex w-1/2 min-h-0 flex-col">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
               <Layers className="h-4 w-4" />
-              任务列表
-              <Badge variant="outline" className="text-xs">
-                {tasks.length}
-              </Badge>
+              Tasks
+              <Badge variant="outline" className="text-xs">{tasks.length}</Badge>
             </h3>
-            
+
             <ScrollArea className="flex-1 pr-2">
               {isLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                 </div>
               ) : tasks.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
-                  <Clock className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-                  <p className="text-sm">暂无发布任务</p>
+                <div className="py-8 text-center text-slate-500">
+                  <Clock className="mx-auto mb-3 h-12 w-12 text-slate-300" />
+                  <p className="text-sm">No tasks</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {tasks.map(task => {
-                    const status = statusConfig[task.status];
-                    const StatusIcon = status.icon;
-                    
+                  {tasks.map((task) => {
+                    const status = taskStatusConfig[task.status] || taskStatusConfig.pending;
                     return (
-                      <Card 
+                      <Card
                         key={task.id}
                         className={cn(
                           "cursor-pointer transition-all hover:shadow-md",
-                          selectedTask?.id === task.id && "ring-2 ring-brand-500"
+                          selectedTaskId === task.id && "ring-2 ring-brand-500",
                         )}
-                        onClick={() => loadTaskSteps(task.id)}
+                        onClick={() => void loadTaskDetail(task.id)}
                       >
                         <CardContent className="p-3">
                           <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 flex items-center gap-2">
                                 <Badge className={cn("text-xs", status.color)}>
-                                  <StatusIcon className={cn("h-3 w-3 mr-1", task.status === "processing" && "animate-spin")} />
+                                  <span className="mr-1">{status.icon}</span>
                                   {status.label}
                                 </Badge>
                                 <span className="text-xs text-slate-400">
-                                  {task.type === "batch" ? "批量发布" : 
-                                   task.type === "scheduled" ? "定时发布" : "单篇发布"}
+                                  {task.type === "batch" ? "Batch" : task.type === "scheduled" ? "Scheduled" : "Single"}
                                 </span>
                               </div>
                               <div className="text-sm text-slate-600">
-                                {task.articleIds.length} 篇文章 → {task.accountConfigs.length} 个账号
+                                {`${task.articleIds.length} articles -> ${task.accountConfigs.length} accounts`}
                               </div>
-                              <div className="text-xs text-slate-400 mt-1">
+                              <div className="mt-1 text-xs text-slate-400">
                                 {formatTime(task.createdAt)}
                                 {task.scheduleTime && (
                                   <span className="ml-2 text-amber-600">
-                                    <Calendar className="h-3 w-3 inline mr-1" />
+                                    <Calendar className="mr-1 inline h-3 w-3" />
                                     {formatTime(task.scheduleTime)}
                                   </span>
                                 )}
                               </div>
                             </div>
-                            
+
                             <div className="flex items-center gap-1">
                               {task.status === "pending" && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   className="h-7 w-7 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleCancel(task.id);
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleCancel(task.id);
                                   }}
                                 >
                                   <X className="h-4 w-4 text-slate-400" />
@@ -262,18 +251,17 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
                               <ChevronRight className="h-4 w-4 text-slate-300" />
                             </div>
                           </div>
-                          
-                          {/* 进度条 */}
+
                           {task.status === "processing" && (
                             <div className="mt-2">
-                              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div 
+                              <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                <div
                                   className="h-full bg-brand-500 transition-all duration-500"
-                                  style={{ width: `${(task.currentStep / task.totalSteps) * 100}%` }}
+                                  style={{ width: `${getProgressRatio(task.currentStep, task.totalSteps) * 100}%` }}
                                 />
                               </div>
-                              <div className="text-xs text-slate-400 mt-1">
-                                {task.currentStep} / {task.totalSteps} 步骤
+                              <div className="mt-1 text-xs text-slate-400">
+                                {formatProgressPair(task.currentStep, task.totalSteps)} steps
                               </div>
                             </div>
                           )}
@@ -286,85 +274,85 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
             </ScrollArea>
           </div>
 
-          {/* 任务详情 */}
-          <div className="w-1/2 flex flex-col min-h-0 border-l pl-4">
+          <div className="flex w-1/2 min-h-0 flex-col border-l pl-4">
             {selectedTask ? (
               <>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="flex items-center gap-2 text-sm font-medium text-slate-700">
                     <RotateCcw className="h-4 w-4" />
-                    执行详情
+                    Details
                   </h3>
-                  <Badge className={statusConfig[selectedTask.status].color}>
-                    {statusConfig[selectedTask.status].label}
+                  <Badge className={taskStatusConfig[selectedTask.status]?.color || taskStatusConfig.pending.color}>
+                    {taskStatusConfig[selectedTask.status]?.label || selectedTask.status}
                   </Badge>
                 </div>
 
-                {isLoadingSteps ? (
+                {isLoadingDetail ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                   </div>
                 ) : (
                   <ScrollArea className="flex-1 pr-2">
                     <div className="space-y-3">
-                      {taskSteps.length === 0 ? (
-                        <div className="text-center py-8 text-slate-400 text-sm">
-                          暂无步骤信息
-                        </div>
+                      {steps.length === 0 ? (
+                        <div className="py-8 text-center text-sm text-slate-400">No step records</div>
                       ) : (
-                        taskSteps.map((step, index) => {
-                          const status = stepStatusConfig[step.status];
-                          
+                        steps.map((step, index) => {
+                          const status = stepStatusConfig[step.status] || stepStatusConfig.pending;
+                          const inputData = step.inputData ?? null;
+                          const outputData = step.outputData ?? null;
+                          const traceStage =
+                            step.stepType === "adapter_trace" && inputData && typeof inputData["stage"] === "string"
+                              ? String(inputData["stage"])
+                              : null;
+                          const traceMessage =
+                            step.stepType === "adapter_trace"
+                              ? (
+                                (outputData && typeof outputData["message"] === "string" ? String(outputData["message"]) : null) ??
+                                (inputData && typeof inputData["message"] === "string" ? String(inputData["message"]) : null)
+                              )
+                              : null;
+                          const stepLabel =
+                            step.stepType === "adapter_trace"
+                              ? (traceStage ? `Adapter Trace - ${traceStage}` : "Adapter Trace")
+                              : (stepTypeConfig[step.stepType] || step.stepType);
+
                           return (
-                            <div 
-                              key={step.id}
-                              className="relative pl-6 pb-4 last:pb-0"
-                            >
-                              {/* 连接线 */}
-                              {index < taskSteps.length - 1 && (
-                                <div className="absolute left-2 top-6 bottom-0 w-0.5 bg-slate-200" />
+                            <div key={step.id} className="relative pb-4 pl-6 last:pb-0">
+                              {index < steps.length - 1 && (
+                                <div className="absolute bottom-0 left-2 top-6 w-0.5 bg-slate-200" />
                               )}
-                              
-                              {/* 状态点 */}
-                              <div className={cn(
-                                "absolute left-0 top-1 w-4 h-4 rounded-full border-2 flex items-center justify-center",
-                                step.status === "completed" && "bg-emerald-500 border-emerald-500",
-                                step.status === "running" && "bg-blue-500 border-blue-500 animate-pulse",
-                                step.status === "failed" && "bg-red-500 border-red-500",
-                                step.status === "pending" && "bg-white border-slate-300",
-                                step.status === "skipped" && "bg-amber-500 border-amber-500"
-                              )}>
-                                {step.status === "completed" && (
-                                  <CheckCircle2 className="h-2.5 w-2.5 text-white" />
+                              <div
+                                className={cn(
+                                  "absolute left-0 top-1 h-4 w-4 rounded-full border-2",
+                                  step.status === "completed" && "border-emerald-500 bg-emerald-500",
+                                  step.status === "running" && "animate-pulse border-blue-500 bg-blue-500",
+                                  step.status === "failed" && "border-red-500 bg-red-500",
+                                  step.status === "pending" && "border-slate-300 bg-white",
+                                  step.status === "skipped" && "border-amber-500 bg-amber-500",
                                 )}
-                              </div>
-                              
-                              {/* 步骤内容 */}
-                              <div className="bg-slate-50 rounded-lg p-3">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-sm font-medium text-slate-700">
-                                    {stepTypeConfig[step.stepType] || step.stepType}
-                                  </span>
+                              />
+                              <div className="rounded-lg bg-slate-50 p-3">
+                                <div className="mb-1 flex items-center justify-between">
+                                  <span className="text-sm font-medium text-slate-700">{stepLabel}</span>
                                   <Badge variant="outline" className={cn("text-xs", status.color)}>
                                     {status.label}
                                   </Badge>
                                 </div>
-                                
                                 <div className="text-xs text-slate-500">
                                   {step.platform}
-                                  {step.articleId && ` → ${step.articleId.slice(0, 8)}...`}
+                                  {step.articleId && ` -> ${step.articleId.slice(0, 8)}...`}
                                 </div>
-                                
-                                {step.duration && (
-                                  <div className="text-xs text-slate-400 mt-1">
-                                    耗时: {formatDuration(step.duration)}
+                                {step.duration != null && (
+                                  <div className="mt-1 text-xs text-slate-400">Duration: {formatDuration(step.duration)}</div>
+                                )}
+                                {traceMessage && (
+                                  <div className="mt-2 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700">
+                                    {traceMessage}
                                   </div>
                                 )}
-                                
                                 {step.errorMessage && (
-                                  <div className="mt-2 p-2 bg-red-50 text-red-600 text-xs rounded">
-                                    {step.errorMessage}
-                                  </div>
+                                  <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">{step.errorMessage}</div>
                                 )}
                               </div>
                             </div>
@@ -372,48 +360,19 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
                         })
                       )}
                     </div>
-
-                    {/* 结果汇总 */}
-                    {selectedTask.resultData && (
-                      <div className="mt-4 p-3 bg-slate-50 rounded-lg">
-                        <h4 className="text-sm font-medium text-slate-700 mb-2">执行结果</h4>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">总文章数:</span>
-                            <span className="font-medium">{selectedTask.resultData.totalArticles}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">成功:</span>
-                            <span className="font-medium text-emerald-600">
-                              {selectedTask.resultData.successfulPublications}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">失败:</span>
-                            <span className="font-medium text-red-600">
-                              {selectedTask.resultData.failedPublications}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">仅草稿:</span>
-                            <span className="font-medium text-amber-600">
-                              {selectedTask.resultData.draftOnlyPublications}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </ScrollArea>
                 )}
               </>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
-                <Layers className="h-12 w-12 mb-3 text-slate-300" />
-                <p className="text-sm">选择左侧任务查看详情</p>
+              <div className="flex flex-1 flex-col items-center justify-center text-slate-400">
+                <Layers className="mb-3 h-12 w-12 text-slate-300" />
+                <p className="text-sm">Select a task to inspect</p>
               </div>
             )}
           </div>
         </div>
+
+        {error && <div className="text-xs text-red-600">{error}</div>}
       </DialogContent>
     </Dialog>
   );

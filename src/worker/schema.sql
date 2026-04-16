@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS articles (
 	platform TEXT NOT NULL,
 	status TEXT NOT NULL, -- draft, reviewed, scheduled, published, failed
 	publishedAt INTEGER,
+	draftId TEXT, -- 平台草稿ID（例如知乎 draftId）
 	createdAt INTEGER NOT NULL,
 	updatedAt INTEGER NOT NULL
 );
@@ -52,6 +53,7 @@ CREATE TABLE IF NOT EXISTS article_publications (
 	status TEXT NOT NULL, -- pending, draft_created, publishing, published, failed, cancelled
 	publishType TEXT NOT NULL, -- draft_only, full_publish
 	draftId TEXT, -- 平台返回的草稿ID
+	publishId TEXT, -- 平台发布后的文章ID
 	publishedUrl TEXT, -- 发布后的文章URL
 	errorMessage TEXT, -- 错误信息
 	startedAt INTEGER NOT NULL,

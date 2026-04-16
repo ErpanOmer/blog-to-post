@@ -33,6 +33,19 @@ app.onError((err, c) => {
 	const errorCode = err.name || "INTERNAL_ERROR";
 	const message = err.message || "服务器内部错误";
 
+	if (typeof message === "string" && message.includes("no such table")) {
+		return c.json(
+			{
+				success: false,
+				error_code: "DB_NOT_INITIALIZED",
+				message:
+					"数据库表不存在。请先初始化 D1：本地运行 `npm run db:init -- --local`，线上运行 `npm run db:init -- --remote`。",
+				timestamp: Date.now(),
+			},
+			503,
+		);
+	}
+
 	console.error(`[${new Date().toISOString()}] ${errorCode}: ${message}`);
 	if (err.stack) {
 		console.error(err.stack);

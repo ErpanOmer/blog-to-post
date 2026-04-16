@@ -25,10 +25,17 @@ export type PublishTaskStatus =
 
 // 步骤类型
 export type PublishStepType =
+  | "prepare_task"      // 任务准备
+  | "load_article"      // 加载文章
+  | "load_account"      // 加载账号
+  | "resolve_service"   // 解析平台适配器
   | "validate_account"  // 验证账号
   | "create_draft"      // 创建草稿
   | "publish_article"   // 发布文章
-  | "verify_result";    // 验证结果
+  | "verify_result"     // 验证结果
+  | "persist_publication" // 持久化发布结果
+  | "update_statistics"   // 更新账号统计
+  | "adapter_trace";      // 适配器内部追踪日志
 
 // 步骤状态
 export type PublishStepStatus =

@@ -51,6 +51,17 @@ export interface ImageUploadResult {
     message: string;
 }
 
+export type PublishTraceLevel = "info" | "warn" | "error";
+
+export interface PublishTraceEvent {
+    stage: string;
+    message: string;
+    level?: PublishTraceLevel;
+    metadata?: Record<string, unknown>;
+}
+
+export type PublishTraceLogger = (event: PublishTraceEvent) => void | Promise<void>;
+
 export interface AccountService {
     platform: PlatformType;
 
@@ -73,6 +84,10 @@ export interface AccountService {
     articleTags(articleId: string): Promise<string[]>;
 
     imageUpload(imageData: string, filename?: string): Promise<ImageUploadResult>;
+
+    // Optional publish trace hooks for observability
+    setPublishTraceLogger?(logger?: PublishTraceLogger): void;
+    clearPublishTraceLogger?(): void;
 }
 
 export type AccountServiceConstructor = new (authToken: string) => AccountService;

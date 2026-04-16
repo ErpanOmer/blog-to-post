@@ -1,22 +1,9 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ArticlePublication } from "@/react-app/types/publications";
 import { getArticlePublications, getPlatformAccounts } from "@/react-app/api";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from "@/components/ui/tooltip";
-import {
-  CheckCircle2,
-  Clock,
-  XCircle,
-  FileEdit,
-  ExternalLink,
-  Loader2,
-  Info
-} from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { CheckCircle2, Clock, XCircle, FileEdit, ExternalLink, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ArticlePublicationStatusProps {
@@ -32,45 +19,45 @@ const platformLabels: Record<string, string> = {
 };
 
 const platformIcons: Record<string, string> = {
-  juejin: "🔥",
-  zhihu: "💡",
-  xiaohongshu: "📕",
-  wechat: "💬",
-  csdn: "💻",
+  juejin: "J",
+  zhihu: "Z",
+  xiaohongshu: "X",
+  wechat: "W",
+  csdn: "C",
 };
 
 const statusConfig = {
   pending: {
     label: "等待中",
     color: "bg-slate-100 text-slate-600 border-slate-200",
-    icon: Clock
+    icon: Clock,
   },
   draft_created: {
     label: "草稿",
-    color: "bg-amber-100 text-amber-600 border-amber-200",
-    icon: FileEdit
+    color: "bg-amber-100 text-amber-700 border-amber-200",
+    icon: FileEdit,
   },
   publishing: {
     label: "发布中",
-    color: "bg-blue-100 text-blue-600 border-blue-200",
-    icon: Loader2
+    color: "bg-blue-100 text-blue-700 border-blue-200",
+    icon: Loader2,
   },
   published: {
     label: "已发布",
-    color: "bg-emerald-100 text-emerald-600 border-emerald-200",
-    icon: CheckCircle2
+    color: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    icon: CheckCircle2,
   },
   failed: {
     label: "失败",
-    color: "bg-red-100 text-red-600 border-red-200",
-    icon: XCircle
+    color: "bg-red-100 text-red-700 border-red-200",
+    icon: XCircle,
   },
   cancelled: {
     label: "已取消",
     color: "bg-gray-100 text-gray-600 border-gray-200",
-    icon: XCircle
+    icon: XCircle,
   },
-};
+} as const;
 
 export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatusProps) {
   const [publications, setPublications] = useState<ArticlePublication[]>([]);
@@ -78,28 +65,23 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [articleId]);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      // 并行加载发布记录和账号信息
-      const [pubs, accounts] = await Promise.all([
-        getArticlePublications(articleId),
-        getPlatformAccounts(),
-      ]);
+      const [pubs, accounts] = await Promise.all([getArticlePublications(articleId), getPlatformAccounts()]);
+      const sorted = [...pubs].sort((a, b) => b.createdAt - a.createdAt);
+      setPublications(sorted);
 
-      setPublications(pubs);
-
-      // 构建账号ID到名称的映射
       const nameMap = new Map<string, string>();
-      accounts.forEach(account => {
-        nameMap.set(account.id, account.userName || "未命名");
+      accounts.forEach((account) => {
+        nameMap.set(account.id, account.userName || "未命名账号");
       });
       setAccountNames(nameMap);
-    } catch (err) {
-      console.error("加载发布状态失败", err);
+    } catch (error) {
+      console.error("加载发布状态失败", error);
     } finally {
       setIsLoading(false);
     }
@@ -115,115 +97,72 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
   }
 
   if (publications.length === 0) {
-    return (
-      <div className="text-xs text-slate-400">
-        未发布到任何平台
-      </div>
-    );
+    return <div className="text-xs text-slate-400">尚未分发到任何平台</div>;
   }
 
-  // 按平台分组
-  const publicationsByPlatform = publications.reduce((acc, pub) => {
-    if (!acc[pub.platform]) {
-      acc[pub.platform] = [];
-    }
-    acc[pub.platform].push(pub);
-    return acc;
-  }, {} as Record<string, ArticlePublication[]>);
+  const visiblePublications = publications.slice(0, 8);
+  const hiddenCount = Math.max(0, publications.length - visiblePublications.length);
 
   return (
     <TooltipProvider>
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-xs text-slate-500 mr-1">已发布到:</span>
-        {Object.entries(publicationsByPlatform).map(([platform, platformPubs]) => {
-          const latestPub = platformPubs[0]; // 最新的发布记录
-          const status = statusConfig[latestPub.status];
+        <span className="mr-1 text-xs text-slate-500">分发记录:</span>
+        {visiblePublications.map((publication) => {
+          const status = statusConfig[publication.status];
           const StatusIcon = status.icon;
+          const accountName = accountNames.get(publication.accountId) || "未知账号";
 
           return (
-            <Tooltip key={platform}>
+            <Tooltip key={publication.id}>
               <TooltipTrigger asChild>
                 <Badge
                   variant="outline"
-                  className={cn(
-                    "text-xs px-1.5 py-0.5 cursor-pointer hover:opacity-80 transition-opacity",
-                    status.color
-                  )}
+                  className={cn("cursor-pointer px-1.5 py-0.5 text-xs transition-opacity hover:opacity-80", status.color)}
                 >
-                  <span className="mr-1">{platformIcons[platform]}</span>
-                  <StatusIcon className={cn("h-3 w-3 mr-1", latestPub.status === "publishing" && "animate-spin")} />
-                  <span>{platformLabels[platform] || platform}</span>
-                  {platformPubs.length > 1 && (
-                    <span className="ml-1 opacity-60">×{platformPubs.length}</span>
-                  )}
+                  <span className="mr-1">{platformIcons[publication.platform]}</span>
+                  <span>{platformLabels[publication.platform] || publication.platform}</span>
+                  <StatusIcon className={cn("ml-1 h-3 w-3", publication.status === "publishing" && "animate-spin")} />
                 </Badge>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-xs">
-                <div className="space-y-2">
-                  <div className="font-medium flex items-center gap-2">
-                    <span>{platformIcons[platform]}</span>
-                    <span>{platformLabels[platform] || platform}</span>
+                <div className="space-y-2 text-xs">
+                  <div className="font-medium">
+                    {platformLabels[publication.platform] || publication.platform}
                   </div>
-                  <div className="space-y-1 text-xs">
-                    {platformPubs.slice(0, 3).map((pub, idx) => (
-                      <div key={pub.id} className="flex items-center justify-between gap-3">
-                        <span className="text-slate-600">
-                          {accountNames.get(pub.accountId) || "未知账号"}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <Badge className={cn("text-xs", statusConfig[pub.status].color)}>
-                            {statusConfig[pub.status].label}
-                          </Badge>
-                          {pub.publishedUrl && (
-                            <a
-                              href={pub.publishedUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-brand-500 hover:text-brand-600"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {platformPubs.length > 3 && (
-                      <div className="text-slate-400 text-xs">
-                        还有 {platformPubs.length - 3} 个账号...
-                      </div>
-                    )}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-600">{accountName}</span>
+                    <Badge className={cn("text-xs", status.color)}>{status.label}</Badge>
                   </div>
-                  <div className="text-xs text-slate-400 pt-1 border-t">
-                    最新: {new Date(latestPub.updatedAt).toLocaleString('zh-CN')}
-                  </div>
-                  {latestPub.publishId && (
-                    <div className="text-xs text-slate-500 pt-1 flex items-center gap-1 border-t border-slate-100">
-                      <Info className="h-3 w-3" />
-                      <span className="truncate max-w-[150px]" title={latestPub.publishId}>
-                        ID: {latestPub.publishId}
-                      </span>
+                  <div className="text-slate-500">时间: {new Date(publication.updatedAt).toLocaleString("zh-CN")}</div>
+                  {publication.publishId && (
+                    <div className="truncate text-slate-500" title={publication.publishId}>
+                      ID: {publication.publishId}
                     </div>
                   )}
-                  {latestPub.publishedUrl && (
-                    <div className="text-xs pt-1 border-t border-slate-100">
-                      <a
-                        href={latestPub.publishedUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-blue-500 hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        查看文章
-                      </a>
-                    </div>
+                  {publication.errorMessage && <div className="text-red-600">{publication.errorMessage}</div>}
+                  {publication.publishedUrl && (
+                    <a
+                      href={publication.publishedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-500 hover:underline"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      打开链接
+                    </a>
                   )}
                 </div>
               </TooltipContent>
             </Tooltip>
           );
         })}
+
+        {hiddenCount > 0 && (
+          <Badge variant="outline" className="text-xs text-slate-500">
+            +{hiddenCount}
+          </Badge>
+        )}
       </div>
     </TooltipProvider>
   );

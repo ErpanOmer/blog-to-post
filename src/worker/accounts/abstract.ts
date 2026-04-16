@@ -8,6 +8,8 @@ import type {
 	VerifyResult,
 	ArticlePublishResult,
 	ImageUploadResult,
+	PublishTraceEvent,
+	PublishTraceLogger,
 } from "@/worker/accounts/types";
 import type { Article as SharedArticle } from "@/shared/types";
 
@@ -15,11 +17,44 @@ export abstract class AbstractAccountService implements AccountService {
 	platform: PlatformType;
 	protected authToken: string;
 	protected headers: Record<string, string>;
+	protected publishTraceLogger?: PublishTraceLogger;
 
 	constructor(platform: PlatformType, authToken: string) {
 		this.platform = platform;
 		this.authToken = authToken;
 		this.headers = this.buildHeaders();
+	}
+
+	setPublishTraceLogger(logger?: PublishTraceLogger): void {
+		this.publishTraceLogger = logger;
+	}
+
+	clearPublishTraceLogger(): void {
+		this.publishTraceLogger = undefined;
+	}
+
+	protected async tracePublish(event: PublishTraceEvent): Promise<void> {
+		if (!this.publishTraceLogger) return;
+		try {
+			await this.publishTraceLogger(event);
+		} catch {
+			// Never break core publish logic because trace sink failed.
+		}
+	}
+
+	private sanitizeUrlForLog(rawUrl: string): string {
+		try {
+			const parsed = new URL(rawUrl);
+			const sensitiveKeys = new Set(["access_token", "token", "auth", "authorization", "cookie", "key", "secret"]);
+			for (const [key] of parsed.searchParams.entries()) {
+				if (sensitiveKeys.has(key.toLowerCase())) {
+					parsed.searchParams.set(key, "***");
+				}
+			}
+			return parsed.toString();
+		} catch {
+			return rawUrl;
+		}
 	}
 
 	protected abstract buildHeaders(): Record<string, string>;
@@ -28,6 +63,15 @@ export abstract class AbstractAccountService implements AccountService {
 		url: string,
 		options: RequestInit = {},
 	): Promise<T> {
+		const method = (options.method || "GET").toUpperCase();
+		const safeUrl = this.sanitizeUrlForLog(url);
+
+		await this.tracePublish({
+			stage: "http_request_start",
+			message: `${method} ${safeUrl}`,
+			metadata: { method, url: safeUrl },
+		});
+
 		try {
 			// Add timeout (Default 30s)
 			const timeoutMs = 30000;
@@ -49,7 +93,7 @@ export abstract class AbstractAccountService implements AccountService {
 
 			// Handle response body based on Content-Type
 			const contentType = response.headers.get("content-type");
-			let data: any;
+			let data: unknown;
 
 			if (contentType && contentType.includes("application/json")) {
 				try {
@@ -60,13 +104,9 @@ export abstract class AbstractAccountService implements AccountService {
 			} else if (contentType && (contentType.includes("text/") || contentType.includes("xml"))) {
 				data = await response.text();
 			} else {
-				// For other types (blob, etc), we might default to text or raw depending on T
-				// Here we default to text primarily for API usage
 				data = await response.text();
-				// Try to parse as JSON if it looks like JSON even if header is wrong?
-				// Optional: strict check. For robustness, let's keep it simple.
 				try {
-					if (typeof data === 'string' && (data.startsWith('{') || data.startsWith('['))) {
+					if (typeof data === "string" && (data.startsWith("{") || data.startsWith("["))) {
 						data = JSON.parse(data);
 					}
 				} catch {
@@ -74,20 +114,44 @@ export abstract class AbstractAccountService implements AccountService {
 				}
 			}
 
+			await this.tracePublish({
+				stage: "http_request_end",
+				message: `${method} ${safeUrl} -> ${response.status}`,
+				metadata: {
+					method,
+					url: safeUrl,
+					status: response.status,
+					ok: response.ok,
+				},
+			});
+
 			if (!response.ok) {
-				const errorMessage = typeof data === 'object'
+				const errorMessage = typeof data === "object" && data !== null
 					? JSON.stringify(data)
-					: (typeof data === 'string' ? data : response.statusText);
+					: (typeof data === "string" ? data : response.statusText);
 
 				throw new Error(`Request failed (${response.status}): ${errorMessage}`);
 			}
 
 			return data as T;
-		} catch (error: any) {
-			// Re-throw with clear message if it's not already handled
-			if (error.name === 'AbortError') {
+		} catch (error: unknown) {
+			if (error instanceof Error && error.name === "AbortError") {
+				await this.tracePublish({
+					stage: "http_request_error",
+					level: "error",
+					message: `Request timeout after 30s: ${safeUrl}`,
+					metadata: { method, url: safeUrl, reason: "timeout" },
+				});
 				throw new Error(`Request timeout after 30s: ${url}`);
 			}
+
+			await this.tracePublish({
+				stage: "http_request_error",
+				level: "error",
+				message: error instanceof Error ? error.message : "Unknown request error",
+				metadata: { method, url: safeUrl },
+			});
+
 			throw error;
 		}
 	}

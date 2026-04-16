@@ -52,7 +52,6 @@ export async function createArticlePublication(
     publication.platform,
     publication.status,
     publication.publishType,
-    publication.publishType,
     publication.draftId,
     publication.publishId,
     publication.publishedUrl,
@@ -162,7 +161,13 @@ export async function createPublishTask(
   }
 ): Promise<PublishTask> {
   const now = Date.now();
-  const totalSteps = payload.articleIds.length * payload.accountConfigs.length * 3; // 3 steps per article-account pair
+  // Estimated workflow steps per article-account pair:
+  // - draftOnly: 9 (skip publish verification)
+  // - full publish: 10
+  const stepsPerArticle = payload.accountConfigs.reduce((sum, config) => {
+    return sum + (config.draftOnly ? 9 : 10);
+  }, 0);
+  const totalSteps = payload.articleIds.length * stepsPerArticle;
 
   const task: PublishTask = {
     ...payload,
@@ -237,7 +242,7 @@ export async function getPublishTask(db: D1Database, id: string): Promise<Publis
 export async function updatePublishTask(
   db: D1Database,
   id: string,
-  updates: Partial<Pick<PublishTask, "status" | "currentStep" | "progressData" | "resultData" | "errorData" | "startedAt" | "completedAt">>
+  updates: Partial<Pick<PublishTask, "status" | "currentStep" | "totalSteps" | "progressData" | "resultData" | "errorData" | "startedAt" | "completedAt">>
 ): Promise<PublishTask | null> {
   const current = await getPublishTask(db, id);
   if (!current) return null;
@@ -251,11 +256,12 @@ export async function updatePublishTask(
 
   await db.prepare(
     `UPDATE publish_tasks 
-     SET status = ?, currentStep = ?, progressData = ?, resultData = ?, errorData = ?, startedAt = ?, completedAt = ?, updatedAt = ? 
+     SET status = ?, currentStep = ?, totalSteps = ?, progressData = ?, resultData = ?, errorData = ?, startedAt = ?, completedAt = ?, updatedAt = ? 
      WHERE id = ?`
   ).bind(
     next.status,
     next.currentStep,
+    next.totalSteps,
     next.progressData ? JSON.stringify(next.progressData) : null,
     next.resultData ? JSON.stringify(next.resultData) : null,
     next.errorData ? JSON.stringify(next.errorData) : null,

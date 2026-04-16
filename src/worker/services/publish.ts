@@ -1,587 +1,920 @@
 import type { D1Database } from "@cloudflare/workers-types";
-import type { Article } from "@/worker/types";
 import type {
-  PublishTask,
-  AccountConfig,
-  PublicationStatus,
-  PublishResult,
-  PublicationDetail
+	PublishTask,
+	AccountConfig,
+	PublicationStatus,
+	PublishResult,
+	PublicationDetail,
+	PublishStepType,
 } from "@/worker/types/publications";
+import type { PlatformType } from "@/worker/types";
+import type { AccountService, PublishTraceEvent } from "@/worker/accounts/types";
 import { getAccountService } from "@/worker/accounts";
 import { getPlatformAccount } from "@/worker/db/platform-accounts";
+import { getArticle } from "@/worker/db/articles";
 import {
-  getArticle,
-  updateArticle
-} from "@/worker/db/articles";
-import {
-  createPublishTask,
-  createPublishTaskStep,
-  updatePublishTaskStep,
-  createArticlePublication,
-  updateArticlePublication,
-  createOrUpdateAccountStatistics,
-  getPublishTask,
-  updatePublishTask,
-  listPublishTaskSteps,
-  getPendingScheduledTasks
+	createPublishTask,
+	createPublishTaskStep,
+	updatePublishTaskStep,
+	createArticlePublication,
+	updateArticlePublication,
+	createOrUpdateAccountStatistics,
+	getPublishTask,
+	updatePublishTask,
+	listPublishTaskSteps,
+	getPendingScheduledTasks,
 } from "@/worker/db/publications";
 import { randomDelay } from "../utils/helpers";
 
-// 发布步骤定义
-interface PublishStep {
-  type: "validate_account" | "create_draft" | "publish_article" | "verify_result";
-  name: string;
-  execute: (
-    db: D1Database,
-    article: Article,
-    accountConfig: AccountConfig,
-    draftId?: string
-  ) => Promise<{ success: boolean; draftId?: string; publishId?: string; publishedUrl?: string; error?: string }>;
+interface StepExecutionOutput<T> {
+	value: T;
+	outputData?: Record<string, unknown>;
 }
 
-// 步骤执行器
-const publishSteps: PublishStep[] = [
-  {
-    type: "validate_account",
-    name: "验证账号",
-    execute: async (db, _article, accountConfig) => {
-      const account = await getPlatformAccount(db, accountConfig.accountId);
-      if (!account) {
-        return { success: false, error: "账号不存在" };
-      }
-      if (!account.isActive) {
-        return { success: false, error: "账号未激活" };
-      }
-      if (!account.isVerified) {
-        return { success: false, error: "账号未验证" };
-      }
-      if (!account.authToken) {
-        return { success: false, error: "账号未配置认证信息" };
-      }
-      return { success: true };
-    }
-  },
-  {
-    type: "create_draft",
-    name: "创建草稿",
-    execute: async (db, _article, accountConfig) => {
-      const account = await getPlatformAccount(db, accountConfig.accountId);
-      if (!account?.authToken) {
-        return { success: false, error: "账号认证信息缺失" };
-      }
+interface StepContext {
+	taskId: string;
+	articleId: string | null;
+	accountId: string | null;
+	platform: PlatformType;
+}
 
-      const service = getAccountService(account.platform, account.authToken);
-      if (!service) {
-        return { success: false, error: `不支持的平台类型: ${account.platform}` };
-      }
+interface ProgressState {
+	stepSequence: number;
+	progressStepNumber: number;
+	completedSteps: number;
+	failedSteps: number;
+	skippedSteps: number;
+	currentArticleIndex: number;
+	currentAccountIndex: number;
+	currentStep: string;
+}
 
-      const article = await getArticle(db, _article.id);
-      if (!article) {
-        return { success: false, error: "文章不存在" };
-      }
+function errorMessageOf(error: unknown): string {
+	if (error instanceof Error) return error.message;
+	return String(error);
+}
 
-      try {
-        // 调用平台的 articleDraft 方法创建草稿
-        const draft = await service.articleDraft(article);
+function compactRecord(input: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
+	if (!input) return null;
+	const output: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(input)) {
+		if (typeof value === "string" && value.length > 1000) {
+			output[key] = `${value.slice(0, 1000)}... (truncated)`;
+			continue;
+		}
+		output[key] = value;
+	}
+	return output;
+}
 
-        if (!draft) {
-          return { success: false, error: "创建草稿失败：平台返回空数据" };
-        }
+async function createTaskStepAndSetRunning(
+	db: D1Database,
+	params: {
+		taskId: string;
+		stepNumber: number;
+		articleId?: string | null;
+		accountId?: string | null;
+		platform: PlatformType;
+		stepType: PublishStepType;
+		inputData?: Record<string, unknown> | null;
+	},
+): Promise<{ id: string; startedAt: number }> {
+	const row = await createPublishTaskStep(db, {
+		id: crypto.randomUUID(),
+		taskId: params.taskId,
+		stepNumber: params.stepNumber,
+		articleId: params.articleId ?? null,
+		accountId: params.accountId ?? null,
+		platform: params.platform,
+		stepType: params.stepType,
+		inputData: compactRecord(params.inputData),
+	});
+	const startedAt = Date.now();
+	await updatePublishTaskStep(db, row.id, {
+		status: "running",
+		startTime: startedAt,
+	});
+	return { id: row.id, startedAt };
+}
 
-        // Persist the draftId to the article record in the database
-        await updateArticle(db, article.id, { draftId: draft.id });
+async function updateTaskProgress(
+	db: D1Database,
+	task: PublishTask,
+	state: ProgressState,
+): Promise<void> {
+	await updatePublishTask(db, task.id, {
+		currentStep: state.progressStepNumber,
+		progressData: {
+			currentArticleIndex: state.currentArticleIndex,
+			totalArticles: task.articleIds.length,
+			currentAccountIndex: state.currentAccountIndex,
+			totalAccounts: task.accountConfigs.length,
+			currentStep: state.currentStep,
+			completedSteps: state.completedSteps,
+			failedSteps: state.failedSteps,
+			skippedSteps: state.skippedSteps,
+		},
+	});
+}
 
-        return { success: true, draftId: draft.id };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "创建草稿失败"
-        };
-      }
-    }
-  },
-  {
-    type: "publish_article",
-    name: "发布文章",
-    // CRITICAL: This step MUST executed after "create_draft"
-    // The "draftId" is required and flows from the previous step or DB persistence
-    execute: async (db, article, accountConfig, _draftId) => {
-      const account = await getPlatformAccount(db, accountConfig.accountId);
-      if (!account?.authToken) {
-        return { success: false, error: "账号认证信息缺失" };
-      }
+async function runTrackedStep<T>(
+	db: D1Database,
+	task: PublishTask,
+	state: ProgressState,
+	params: {
+		ctx: StepContext;
+		stepType: PublishStepType;
+		stepName: string;
+		inputData?: Record<string, unknown>;
+		execute: () => Promise<StepExecutionOutput<T>>;
+	},
+): Promise<T> {
+	state.stepSequence += 1;
+	state.progressStepNumber += 1;
+	state.currentStep = params.stepName;
+	await updateTaskProgress(db, task, state);
 
-      const service = getAccountService(account.platform, account.authToken);
-      if (!service) {
-        return { success: false, error: `不支持的平台类型: ${account.platform}` };
-      }
+	const step = await createTaskStepAndSetRunning(db, {
+		taskId: params.ctx.taskId,
+		stepNumber: state.stepSequence,
+		articleId: params.ctx.articleId,
+		accountId: params.ctx.accountId,
+		platform: params.ctx.platform,
+		stepType: params.stepType,
+		inputData: {
+			stepName: params.stepName,
+			...compactRecord(params.inputData),
+		},
+	});
 
-      try {
-        // Ensure we have a valid draftId
-        let finalDraftId = _draftId;
+	try {
+		const result = await params.execute();
+		const duration = Date.now() - step.startedAt;
+		await updatePublishTaskStep(db, step.id, {
+			status: "completed",
+			endTime: Date.now(),
+			duration,
+			outputData: compactRecord(result.outputData),
+		});
+		state.completedSteps += 1;
+		state.currentStep = `${params.stepName} completed`;
+		await updateTaskProgress(db, task, state);
+		return result.value;
+	} catch (error) {
+		const duration = Date.now() - step.startedAt;
+		const message = errorMessageOf(error);
+		await updatePublishTaskStep(db, step.id, {
+			status: "failed",
+			endTime: Date.now(),
+			duration,
+			errorMessage: message,
+			outputData: {
+				error: message,
+			},
+		});
+		state.failedSteps += 1;
+		state.currentStep = `${params.stepName} failed`;
+		await updateTaskProgress(db, task, state);
+		throw error;
+	}
+}
 
-        // If not in memory, try to find it in the DB (persistence check)
-        if (!finalDraftId) {
-          const dbArticle = await getArticle(db, article.id);
-          if (dbArticle?.draftId) {
-            finalDraftId = dbArticle.draftId;
-          }
-        }
+async function markStepSkipped(
+	db: D1Database,
+	task: PublishTask,
+	state: ProgressState,
+	params: {
+		ctx: StepContext;
+		stepType: PublishStepType;
+		stepName: string;
+		reason: string;
+	},
+): Promise<void> {
+	state.stepSequence += 1;
+	state.progressStepNumber += 1;
+	state.currentStep = `${params.stepName} skipped`;
+	await updateTaskProgress(db, task, state);
 
-        // Strict validation as requested by user
-        if (!finalDraftId) {
-          return { success: false, error: "无法获取有效的草稿ID (draftId)，无法进行发布操作" };
-        }
+	const step = await createTaskStepAndSetRunning(db, {
+		taskId: params.ctx.taskId,
+		stepNumber: state.stepSequence,
+		articleId: params.ctx.articleId,
+		accountId: params.ctx.accountId,
+		platform: params.ctx.platform,
+		stepType: params.stepType,
+		inputData: {
+			stepName: params.stepName,
+			reason: params.reason,
+		},
+	});
 
-        await randomDelay(3000, 5000);
+	await updatePublishTaskStep(db, step.id, {
+		status: "skipped",
+		endTime: Date.now(),
+		duration: 0,
+		outputData: {
+			reason: params.reason,
+		},
+	});
 
-        // Merge draftId into article object for the adapter
-        const articleWithDraft = { ...article, draftId: finalDraftId };
-        const result = await service.articlePublish(articleWithDraft);
+	state.skippedSteps += 1;
+	await updateTaskProgress(db, task, state);
+}
 
-        if (!result.success) {
-          return { success: false, error: result.message };
-        }
+async function appendAdapterTrace(
+	db: D1Database,
+	_task: PublishTask,
+	state: ProgressState,
+	ctx: StepContext,
+	event: PublishTraceEvent,
+): Promise<void> {
+	state.stepSequence += 1;
 
-        return {
-          success: true,
-          draftId: result.articleId, // This might be wrong logic in original code, result.articleId from publish IS the publishId. 
-          // But for now keeping compatibility or fixing? 
-          // result.articleId IS the platform ID. 
-          // The original code was: draftId: result.articleId.
-          // I should map it to publishId.
-          publishId: result.articleId,
-          publishedUrl: result.url
-        };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "发布文章失败"
-        };
-      }
-    }
-  },
-  {
-    type: "verify_result",
-    name: "验证结果",
-    execute: async (_db, _article, _accountConfig, _draftId) => {
-      // 验证发布结果，可以查询平台确认文章状态
-      return { success: true };
-    }
-  }
-];
+	const step = await createTaskStepAndSetRunning(db, {
+		taskId: ctx.taskId,
+		stepNumber: state.stepSequence,
+		articleId: ctx.articleId,
+		accountId: ctx.accountId,
+		platform: ctx.platform,
+		stepType: "adapter_trace",
+		inputData: {
+			stage: event.stage,
+			message: event.message,
+			level: event.level ?? "info",
+		},
+	});
 
-// 创建发布任务
+	await updatePublishTaskStep(db, step.id, {
+		status: "completed",
+		endTime: Date.now(),
+		duration: Date.now() - step.startedAt,
+		outputData: compactRecord({
+			stage: event.stage,
+			message: event.message,
+			level: event.level ?? "info",
+			...(event.metadata ?? {}),
+		}),
+	});
+}
+
+// Create publish task
 export async function createPublishTaskService(
-  db: D1Database,
-  params: {
-    articleIds: string[];
-    accountConfigs: AccountConfig[];
-    scheduleTime?: number | null;
-  },
-  ctx?: ExecutionContext
+	db: D1Database,
+	params: {
+		articleIds: string[];
+		accountConfigs: AccountConfig[];
+		scheduleTime?: number | null;
+	},
+	ctx?: ExecutionContext,
 ): Promise<{ task: PublishTask; message: string }> {
-  const { articleIds, accountConfigs, scheduleTime } = params;
+	const { articleIds, accountConfigs, scheduleTime } = params;
 
-  // 验证文章存在
-  for (const articleId of articleIds) {
-    const article = await getArticle(db, articleId);
-    if (!article) {
-      throw new Error(`文章不存在: ${articleId}`);
-    }
-  }
+	for (const articleId of articleIds) {
+		const article = await getArticle(db, articleId);
+		if (!article) {
+			throw new Error(`Article not found: ${articleId}`);
+		}
+	}
 
-  // 验证账号存在且可用
-  for (const config of accountConfigs) {
-    const account = await getPlatformAccount(db, config.accountId);
-    if (!account) {
-      throw new Error(`账号不存在: ${config.accountId}`);
-    }
-    if (!account.isActive) {
-      throw new Error(`账号未激活: ${account.userName || config.accountId}`);
-    }
-  }
+	for (const config of accountConfigs) {
+		const account = await getPlatformAccount(db, config.accountId);
+		if (!account) {
+			throw new Error(`Account not found: ${config.accountId}`);
+		}
+		if (!account.isActive) {
+			throw new Error(`Account is inactive: ${account.userName || config.accountId}`);
+		}
+	}
 
-  const now = Date.now();
-  const isScheduled = scheduleTime && scheduleTime > now;
+	const now = Date.now();
+	const isScheduled = Boolean(scheduleTime && scheduleTime > now);
+	const taskType = articleIds.length > 1 ? "batch" : isScheduled ? "scheduled" : "single";
 
-  const taskType = articleIds.length > 1 ? "batch" : isScheduled ? "scheduled" : "single";
+	const task = await createPublishTask(db, {
+		id: crypto.randomUUID(),
+		type: taskType,
+		articleIds,
+		accountConfigs,
+		scheduleTime: isScheduled ? scheduleTime : null,
+	});
 
-  const task = await createPublishTask(db, {
-    id: crypto.randomUUID(),
-    type: taskType,
-    articleIds,
-    accountConfigs,
-    scheduleTime: isScheduled ? scheduleTime : null,
-  });
+	if (!isScheduled) {
+		const execution = executePublishTask(db, task.id).catch((error) => {
+			console.error("[publish] execute task failed", { taskId: task.id, error: errorMessageOf(error) });
+		});
 
-  // 如果不是定时任务，立即执行
-  if (!isScheduled) {
-    // 使用 waitUntil 确保异步任务在 Worker 响应后继续执行
-    const taskPromise = executePublishTask(db, task.id).catch(console.error);
-    if (ctx) {
-      ctx.waitUntil(taskPromise);
-    } else {
-      // 开发环境下可能没有 ctx，回退到旧行为
-      taskPromise.catch(() => { });
-    }
-  }
+		if (ctx) {
+			ctx.waitUntil(execution);
+		} else {
+			execution.catch(() => {
+				// keep process alive in local dev without throwing to caller
+			});
+		}
+	}
 
-  return {
-    task,
-    message: isScheduled
-      ? `定时发布任务已创建，将在 ${new Date(scheduleTime!).toLocaleString()} 执行`
-      : "发布任务已创建并开始执行"
-  };
+	return {
+		task,
+		message: isScheduled
+			? `Scheduled publish task created, will run at ${new Date(scheduleTime!).toLocaleString()}`
+			: "Publish task created and started",
+	};
 }
 
-// 执行发布任务
-export async function executePublishTask(
-  db: D1Database,
-  taskId: string
-): Promise<PublishResult> {
-  const task = await getPublishTask(db, taskId);
-  if (!task) {
-    throw new Error("任务不存在");
-  }
-
-  if (task.status === "processing") {
-    throw new Error("任务正在执行中");
-  }
-
-  if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
-    throw new Error("任务已结束");
-  }
-
-  // 更新任务状态为执行中
-  await updatePublishTask(db, taskId, {
-    status: "processing",
-    startedAt: Date.now(),
-    progressData: {
-      currentArticleIndex: 0,
-      totalArticles: task.articleIds.length,
-      currentAccountIndex: 0,
-      totalAccounts: task.accountConfigs.length,
-      currentStep: "开始执行",
-      completedSteps: 0,
-      failedSteps: 0,
-      skippedSteps: 0,
-    }
-  });
-
-  const details: PublicationDetail[] = [];
-  let stepNumber = 0;
-
-  try {
-    // 遍历每篇文章
-    for (let articleIndex = 0; articleIndex < task.articleIds.length; articleIndex++) {
-      const articleId = task.articleIds[articleIndex];
-      const article = await getArticle(db, articleId);
-
-      if (!article) {
-        console.error(`文章不存在: ${articleId}`);
-        continue;
-      }
-
-      // 遍历每个账号
-      for (let accountIndex = 0; accountIndex < task.accountConfigs.length; accountIndex++) {
-        const accountConfig = task.accountConfigs[accountIndex];
-
-        // 更新进度
-        await updatePublishTask(db, taskId, {
-          progressData: {
-            currentArticleIndex: articleIndex,
-            totalArticles: task.articleIds.length,
-            currentAccountIndex: accountIndex,
-            totalAccounts: task.accountConfigs.length,
-            currentStep: `处理文章: ${article.title} -> 平台: ${accountConfig.platform}`,
-            completedSteps: stepNumber,
-            failedSteps: details.filter(d => !d.success).length,
-            skippedSteps: 0,
-          }
-        });
-
-        // 创建发布记录
-        const publication = await createArticlePublication(db, {
-          id: crypto.randomUUID(),
-          articleId,
-          accountId: accountConfig.accountId,
-          platform: accountConfig.platform,
-          publishType: accountConfig.draftOnly ? "draft_only" : "full_publish",
-          status: "pending",
-        });
-
-        let draftId: string | undefined;
-        let publishId: string | undefined;
-        let currentStatus: PublicationStatus = "pending";
-        let publishedUrl: string | undefined;
-        let errorMessage: string | undefined;
-        const startTime = Date.now();
-
-        // 执行发布步骤
-        for (const step of publishSteps) {
-          stepNumber++;
-
-          // 如果只需要草稿，跳过发布步骤
-          if (accountConfig.draftOnly && step.type === "publish_article") {
-            currentStatus = "draft_created";
-            break;
-          }
-
-          // 创建步骤记录
-          const taskStep = await createPublishTaskStep(db, {
-            id: crypto.randomUUID(),
-            taskId,
-            stepNumber,
-            articleId,
-            accountId: accountConfig.accountId,
-            platform: accountConfig.platform,
-            stepType: step.type,
-            inputData: { articleId, accountId: accountConfig.accountId, draftId },
-          });
-
-          // 更新步骤状态为执行中
-          await updatePublishTaskStep(db, taskStep.id, {
-            status: "running",
-            startTime: Date.now(),
-          });
-
-
-          const stepStartTime = Date.now();
-          let result;
-
-          try {
-            result = await step.execute(db, article, accountConfig, draftId);
-          } catch (error) {
-            // 捕获步骤执行中的异常
-            const errorMessage = error instanceof Error ? error.message : "步骤执行失败";
-            console.error(`步骤 ${step.name} 执行异常:`, error);
-
-            result = {
-              success: false,
-              error: errorMessage
-            };
-          }
-
-          const stepDuration = Date.now() - stepStartTime;
-
-          if (result.success) {
-            await updatePublishTaskStep(db, taskStep.id, {
-              status: "completed",
-              endTime: Date.now(),
-              duration: stepDuration,
-              outputData: { draftId: result.draftId, publishId: result.publishId, publishedUrl: result.publishedUrl },
-            });
-
-            if (result.draftId) {
-              draftId = result.draftId;
-            }
-            if (result.publishId) {
-              publishId = result.publishId;
-            }
-            if (result.publishedUrl) {
-              publishedUrl = result.publishedUrl;
-            }
-
-          } else {
-            await updatePublishTaskStep(db, taskStep.id, {
-              status: "failed",
-              endTime: Date.now(),
-              duration: stepDuration,
-              errorMessage: result.error,
-            });
-
-            errorMessage = result.error;
-            currentStatus = "failed";
-            break;
-          }
-        }
-
-        // 确定最终状态
-        if (!errorMessage) {
-          currentStatus = accountConfig.draftOnly ? "draft_created" : "published";
-        }
-
-        const duration = Date.now() - startTime;
-
-        // 更新发布记录
-        await updateArticlePublication(db, publication.id, {
-          status: currentStatus,
-          draftId: draftId ?? null,
-          publishId: publishId ?? null,
-          publishedUrl: publishedUrl ?? null,
-          errorMessage: errorMessage ?? null,
-          completedAt: Date.now(),
-        });
-
-        // 更新账号统计
-        await createOrUpdateAccountStatistics(db, accountConfig.accountId, accountConfig.platform, {
-          incrementPublished: currentStatus === "published",
-          incrementDrafts: currentStatus === "draft_created",
-          incrementFailed: currentStatus === "failed",
-          lastPublishedAt: Date.now(),
-          lastPublishedArticleId: articleId,
-          newHistoryItem: {
-            articleId,
-            articleTitle: article.title,
-            status: currentStatus,
-            publishType: accountConfig.draftOnly ? "draft_only" : "full_publish",
-            publishedAt: Date.now(),
-            publishedUrl: publishedUrl ?? null,
-          },
-        });
-
-        // 记录详情
-        details.push({
-          articleId,
-          accountId: accountConfig.accountId,
-          platform: accountConfig.platform,
-          success: currentStatus === "published" || currentStatus === "draft_created",
-          status: currentStatus,
-          draftId: draftId ?? null,
-          publishId: publishId ?? null,
-          publishedUrl: publishedUrl ?? null,
-          errorMessage: errorMessage ?? null,
-          duration,
-        });
-      }
-    }
-
-    // 计算结果
-    const successfulPublications = details.filter(d => d.success).length;
-    const failedPublications = details.filter(d => !d.success).length;
-    const draftOnlyPublications = details.filter(d => d.status === "draft_created").length;
-
-    const result: PublishResult = {
-      success: failedPublications === 0,
-      totalArticles: task.articleIds.length,
-      successfulPublications,
-      failedPublications,
-      draftOnlyPublications,
-      details,
-    };
-
-    // 更新任务状态为完成
-    await updatePublishTask(db, taskId, {
-      status: failedPublications === 0 ? "completed" : "failed",
-      completedAt: Date.now(),
-      resultData: result,
-      progressData: {
-        currentArticleIndex: task.articleIds.length,
-        totalArticles: task.articleIds.length,
-        currentAccountIndex: task.accountConfigs.length,
-        totalAccounts: task.accountConfigs.length,
-        currentStep: "执行完成",
-        completedSteps: stepNumber,
-        failedSteps: failedPublications,
-        skippedSteps: 0,
-      }
-    });
-
-    return result;
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "未知错误";
-
-    // 更新任务状态为失败
-    await updatePublishTask(db, taskId, {
-      status: "failed",
-      completedAt: Date.now(),
-      errorData: {
-        code: "EXECUTION_ERROR",
-        message: errorMessage,
-      },
-    });
-
-    return {
-      success: false,
-      totalArticles: task.articleIds.length,
-      successfulPublications: details.filter(d => d.success).length,
-      failedPublications: details.filter(d => !d.success).length + 1,
-      draftOnlyPublications: details.filter(d => d.status === "draft_created").length,
-      details,
-    };
-  }
+function estimateCoreTotalSteps(articleCount: number, accountConfigs: AccountConfig[]): number {
+	const perArticle = accountConfigs.reduce((sum, config) => sum + (config.draftOnly ? 9 : 10), 0);
+	return articleCount * perArticle;
 }
 
-// 取消发布任务
+// Execute publish task
+export async function executePublishTask(db: D1Database, taskId: string): Promise<PublishResult> {
+	const task = await getPublishTask(db, taskId);
+	if (!task) {
+		throw new Error("Task not found");
+	}
+
+	if (task.status === "processing") {
+		throw new Error("Task is already processing");
+	}
+
+	if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
+		throw new Error("Task is already finished");
+	}
+
+	const normalizedTotalSteps = estimateCoreTotalSteps(task.articleIds.length, task.accountConfigs);
+	if (task.totalSteps !== normalizedTotalSteps) {
+		await updatePublishTask(db, taskId, {
+			totalSteps: normalizedTotalSteps,
+		});
+		task.totalSteps = normalizedTotalSteps;
+	}
+
+	const progressState: ProgressState = {
+		stepSequence: 0,
+		progressStepNumber: 0,
+		completedSteps: 0,
+		failedSteps: 0,
+		skippedSteps: 0,
+		currentArticleIndex: 0,
+		currentAccountIndex: 0,
+		currentStep: "Task started",
+	};
+
+	await updatePublishTask(db, taskId, {
+		status: "processing",
+		startedAt: Date.now(),
+		currentStep: 0,
+		progressData: {
+			currentArticleIndex: 0,
+			totalArticles: task.articleIds.length,
+			currentAccountIndex: 0,
+			totalAccounts: task.accountConfigs.length,
+			currentStep: progressState.currentStep,
+			completedSteps: 0,
+			failedSteps: 0,
+			skippedSteps: 0,
+		},
+	});
+
+	const details: PublicationDetail[] = [];
+
+	try {
+		for (let articleIndex = 0; articleIndex < task.articleIds.length; articleIndex++) {
+			const articleId = task.articleIds[articleIndex];
+			progressState.currentArticleIndex = articleIndex;
+
+			for (let accountIndex = 0; accountIndex < task.accountConfigs.length; accountIndex++) {
+				const accountConfig = task.accountConfigs[accountIndex];
+				progressState.currentAccountIndex = accountIndex;
+
+				const stepCtx: StepContext = {
+					taskId,
+					articleId,
+					accountId: accountConfig.accountId,
+					platform: accountConfig.platform,
+				};
+
+				const publication = await createArticlePublication(db, {
+					id: crypto.randomUUID(),
+					articleId,
+					accountId: accountConfig.accountId,
+					platform: accountConfig.platform,
+					publishType: accountConfig.draftOnly ? "draft_only" : "full_publish",
+					status: "pending",
+				});
+
+				let draftId: string | undefined;
+				let publishId: string | undefined;
+				let publishedUrl: string | undefined;
+				let currentStatus: PublicationStatus = "pending";
+				let errorMessage: string | undefined;
+				const publishStartAt = Date.now();
+
+				let traceChain = Promise.resolve();
+				let resolvedService: AccountService | null = null;
+
+				const pushAdapterTrace = async (event: PublishTraceEvent): Promise<void> => {
+					traceChain = traceChain
+						.then(async () => {
+							await appendAdapterTrace(db, task, progressState, stepCtx, event);
+							console.info("[publish][adapter-trace]", {
+								taskId,
+								articleId,
+								accountId: accountConfig.accountId,
+								platform: accountConfig.platform,
+								stage: event.stage,
+								message: event.message,
+								level: event.level ?? "info",
+							});
+						})
+						.catch((traceError) => {
+							console.warn("[publish] adapter trace append failed", {
+								taskId,
+								error: errorMessageOf(traceError),
+							});
+						});
+					await traceChain;
+				};
+
+				try {
+					await runTrackedStep(db, task, progressState, {
+						ctx: stepCtx,
+						stepType: "prepare_task",
+						stepName: "Prepare publish context",
+						inputData: {
+							articleIndex,
+							accountIndex,
+							draftOnly: accountConfig.draftOnly,
+						},
+						execute: async () => ({
+							value: true,
+							outputData: {
+								articleId,
+								accountId: accountConfig.accountId,
+								platform: accountConfig.platform,
+							},
+						}),
+					});
+
+					const article = await runTrackedStep(db, task, progressState, {
+						ctx: stepCtx,
+						stepType: "load_article",
+						stepName: "Load article",
+						inputData: { articleId },
+						execute: async () => {
+							const loaded = await getArticle(db, articleId);
+							if (!loaded) {
+								throw new Error(`Article not found: ${articleId}`);
+							}
+							return {
+								value: loaded,
+								outputData: {
+									title: loaded.title,
+									contentLength: loaded.content.length,
+									hasHtmlContent: Boolean(loaded.htmlContent?.trim()),
+								},
+							};
+						},
+					});
+
+					const account = await runTrackedStep(db, task, progressState, {
+						ctx: stepCtx,
+						stepType: "load_account",
+						stepName: "Load account",
+						inputData: { accountId: accountConfig.accountId, platform: accountConfig.platform },
+						execute: async () => {
+							const loaded = await getPlatformAccount(db, accountConfig.accountId);
+							if (!loaded) {
+								throw new Error(`Account not found: ${accountConfig.accountId}`);
+							}
+							return {
+								value: loaded,
+								outputData: {
+									userName: loaded.userName ?? null,
+									isActive: loaded.isActive,
+									isVerified: loaded.isVerified,
+									hasAuthToken: Boolean(loaded.authToken),
+								},
+							};
+						},
+					});
+
+					await runTrackedStep(db, task, progressState, {
+						ctx: stepCtx,
+						stepType: "validate_account",
+						stepName: "Validate account readiness",
+						inputData: {
+							accountId: account.id,
+							platform: account.platform,
+						},
+						execute: async () => {
+							if (!account.isActive) {
+								throw new Error("Account is inactive");
+							}
+							if (!account.isVerified) {
+								throw new Error("Account is not verified");
+							}
+							if (!account.authToken) {
+								throw new Error("Account auth token is missing");
+							}
+							return {
+								value: true,
+								outputData: {
+									isActive: account.isActive,
+									isVerified: account.isVerified,
+									hasAuthToken: Boolean(account.authToken),
+								},
+							};
+						},
+					});
+
+					resolvedService = await runTrackedStep(db, task, progressState, {
+						ctx: stepCtx,
+						stepType: "resolve_service",
+						stepName: "Resolve platform service",
+						inputData: { platform: account.platform },
+						execute: async () => {
+							if (!account.authToken) {
+								throw new Error("Account auth token is missing");
+							}
+							const service = getAccountService(account.platform, account.authToken);
+							if (!service) {
+								throw new Error(`Unsupported platform: ${account.platform}`);
+							}
+							if (service.setPublishTraceLogger) {
+								service.setPublishTraceLogger(pushAdapterTrace);
+							}
+							return {
+								value: service,
+								outputData: {
+									serviceClass: service.constructor.name,
+									hasTraceLogger: Boolean(service.setPublishTraceLogger),
+								},
+							};
+						},
+					});
+
+					draftId = await runTrackedStep(db, task, progressState, {
+						ctx: stepCtx,
+						stepType: "create_draft",
+						stepName: "Create platform draft",
+						inputData: {
+							functionName: "articleDraft",
+							draftOnly: accountConfig.draftOnly,
+							contentLength: article.content.length,
+							hasHtmlContent: Boolean(article.htmlContent?.trim()),
+						},
+						execute: async () => {
+							const draft = await resolvedService!.articleDraft(article);
+							if (!draft) {
+								throw new Error("Platform draft creation returned empty result");
+							}
+							return {
+								value: draft.id,
+								outputData: {
+									functionName: "articleDraft",
+									draftId: draft.id,
+									draftUrl: draft.url,
+									createdAt: draft.createdAt,
+								},
+							};
+						},
+					});
+
+					if (accountConfig.draftOnly) {
+						await markStepSkipped(db, task, progressState, {
+							ctx: stepCtx,
+							stepType: "publish_article",
+							stepName: "Publish article",
+							reason: "draftOnly mode enabled",
+						});
+						currentStatus = "draft_created";
+					} else {
+						const publishOutput = await runTrackedStep(db, task, progressState, {
+							ctx: stepCtx,
+							stepType: "publish_article",
+							stepName: "Publish article",
+							inputData: {
+								functionName: "articlePublish",
+								draftId,
+							},
+							execute: async () => {
+								if (!draftId) {
+									throw new Error("Missing draftId for publish");
+								}
+
+								await randomDelay(3000, 5000);
+								const publishResult = await resolvedService!.articlePublish({ ...article, draftId });
+								if (!publishResult.success) {
+									throw new Error(publishResult.message || "Platform publish failed");
+								}
+
+								return {
+									value: {
+										publishId: publishResult.articleId || null,
+										publishedUrl: publishResult.url || null,
+									},
+									outputData: {
+										functionName: "articlePublish",
+										draftId,
+										publishId: publishResult.articleId || null,
+										publishedUrl: publishResult.url || null,
+										message: publishResult.message,
+									},
+								};
+							},
+						});
+
+						publishId = publishOutput.publishId || undefined;
+						publishedUrl = publishOutput.publishedUrl || undefined;
+
+						await runTrackedStep(db, task, progressState, {
+							ctx: stepCtx,
+							stepType: "verify_result",
+							stepName: "Verify publish result",
+							inputData: {
+								publishId: publishId ?? null,
+								publishedUrl: publishedUrl ?? null,
+							},
+							execute: async () => ({
+								value: true,
+								outputData: {
+									verified: Boolean(publishId || publishedUrl),
+									publishId: publishId ?? null,
+									publishedUrl: publishedUrl ?? null,
+								},
+							}),
+						});
+
+						currentStatus = "published";
+					}
+				} catch (error) {
+					errorMessage = errorMessageOf(error);
+					currentStatus = "failed";
+					console.error("[publish] account/article execution failed", {
+						taskId,
+						articleId,
+						accountId: accountConfig.accountId,
+						platform: accountConfig.platform,
+						error: errorMessage,
+					});
+				} finally {
+					resolvedService?.clearPublishTraceLogger?.();
+					await traceChain;
+				}
+
+				const duration = Date.now() - publishStartAt;
+
+				try {
+					await runTrackedStep(db, task, progressState, {
+						ctx: stepCtx,
+						stepType: "persist_publication",
+						stepName: "Persist publication result",
+						inputData: {
+							publicationId: publication.id,
+							status: currentStatus,
+						},
+						execute: async () => {
+							await updateArticlePublication(db, publication.id, {
+								status: currentStatus,
+								draftId: draftId ?? null,
+								publishId: publishId ?? null,
+								publishedUrl: publishedUrl ?? null,
+								errorMessage: errorMessage ?? null,
+								completedAt: Date.now(),
+							});
+							return {
+								value: true,
+								outputData: {
+									status: currentStatus,
+									draftId: draftId ?? null,
+									publishId: publishId ?? null,
+									publishedUrl: publishedUrl ?? null,
+									errorMessage: errorMessage ?? null,
+									duration,
+								},
+							};
+						},
+					});
+				} catch (persistError) {
+					const persistMessage = errorMessageOf(persistError);
+					console.error("[publish] persist publication failed", {
+						taskId,
+						publicationId: publication.id,
+						error: persistMessage,
+					});
+					if (!errorMessage) {
+						errorMessage = persistMessage;
+						currentStatus = "failed";
+					}
+				}
+
+				try {
+					await runTrackedStep(db, task, progressState, {
+						ctx: stepCtx,
+						stepType: "update_statistics",
+						stepName: "Update account statistics",
+						inputData: {
+							accountId: accountConfig.accountId,
+							platform: accountConfig.platform,
+							status: currentStatus,
+						},
+						execute: async () => {
+							await createOrUpdateAccountStatistics(db, accountConfig.accountId, accountConfig.platform, {
+								incrementPublished: currentStatus === "published",
+								incrementDrafts: currentStatus === "draft_created",
+								incrementFailed: currentStatus === "failed",
+								lastPublishedAt: Date.now(),
+								lastPublishedArticleId: articleId,
+								newHistoryItem: {
+									articleId,
+									articleTitle: (await getArticle(db, articleId))?.title || articleId,
+									status: currentStatus,
+									publishType: accountConfig.draftOnly ? "draft_only" : "full_publish",
+									publishedAt: Date.now(),
+									publishedUrl: publishedUrl ?? null,
+								},
+							});
+							return {
+								value: true,
+								outputData: {
+									status: currentStatus,
+									publishType: accountConfig.draftOnly ? "draft_only" : "full_publish",
+								},
+							};
+						},
+					});
+				} catch (statisticsError) {
+					console.error("[publish] update statistics failed", {
+						taskId,
+						accountId: accountConfig.accountId,
+						error: errorMessageOf(statisticsError),
+					});
+				}
+
+				details.push({
+					articleId,
+					accountId: accountConfig.accountId,
+					platform: accountConfig.platform,
+					success: currentStatus === "published" || currentStatus === "draft_created",
+					status: currentStatus,
+					draftId: draftId ?? null,
+					publishId: publishId ?? null,
+					publishedUrl: publishedUrl ?? null,
+					errorMessage: errorMessage ?? null,
+					duration,
+				});
+			}
+		}
+
+		const successfulPublications = details.filter((detail) => detail.success).length;
+		const failedPublications = details.filter((detail) => !detail.success).length;
+		const draftOnlyPublications = details.filter((detail) => detail.status === "draft_created").length;
+
+		const result: PublishResult = {
+			success: failedPublications === 0,
+			totalArticles: task.articleIds.length,
+			successfulPublications,
+			failedPublications,
+			draftOnlyPublications,
+			details,
+		};
+
+		progressState.currentStep = "Task completed";
+		await updatePublishTask(db, taskId, {
+			status: failedPublications === 0 ? "completed" : "failed",
+			completedAt: Date.now(),
+			currentStep: progressState.progressStepNumber,
+			resultData: result,
+			progressData: {
+				currentArticleIndex: task.articleIds.length > 0 ? task.articleIds.length - 1 : 0,
+				totalArticles: task.articleIds.length,
+				currentAccountIndex: task.accountConfigs.length > 0 ? task.accountConfigs.length - 1 : 0,
+				totalAccounts: task.accountConfigs.length,
+				currentStep: progressState.currentStep,
+				completedSteps: progressState.completedSteps,
+				failedSteps: progressState.failedSteps,
+				skippedSteps: progressState.skippedSteps,
+			},
+		});
+
+		return result;
+	} catch (error) {
+		const message = errorMessageOf(error);
+		await updatePublishTask(db, taskId, {
+			status: "failed",
+			completedAt: Date.now(),
+			currentStep: progressState.progressStepNumber,
+			errorData: {
+				code: "EXECUTION_ERROR",
+				message,
+				details: {
+					stepNumber: progressState.progressStepNumber,
+					currentStep: progressState.currentStep,
+				},
+			},
+			progressData: {
+				currentArticleIndex: progressState.currentArticleIndex,
+				totalArticles: task.articleIds.length,
+				currentAccountIndex: progressState.currentAccountIndex,
+				totalAccounts: task.accountConfigs.length,
+				currentStep: `${progressState.currentStep} failed`,
+				completedSteps: progressState.completedSteps,
+				failedSteps: progressState.failedSteps + 1,
+				skippedSteps: progressState.skippedSteps,
+			},
+		});
+
+		return {
+			success: false,
+			totalArticles: task.articleIds.length,
+			successfulPublications: details.filter((detail) => detail.success).length,
+			failedPublications: details.filter((detail) => !detail.success).length + 1,
+			draftOnlyPublications: details.filter((detail) => detail.status === "draft_created").length,
+			details,
+		};
+	}
+}
+
+// Cancel publish task
 export async function cancelPublishTask(
-  db: D1Database,
-  taskId: string
+	db: D1Database,
+	taskId: string,
 ): Promise<{ success: boolean; message: string }> {
-  const task = await getPublishTask(db, taskId);
-  if (!task) {
-    return { success: false, message: "任务不存在" };
-  }
+	const task = await getPublishTask(db, taskId);
+	if (!task) {
+		return { success: false, message: "Task not found" };
+	}
 
-  if (task.status === "completed" || task.status === "failed") {
-    return { success: false, message: "任务已结束，无法取消" };
-  }
+	if (task.status === "completed" || task.status === "failed") {
+		return { success: false, message: "Task is already finished" };
+	}
 
-  if (task.status === "cancelled") {
-    return { success: false, message: "任务已取消" };
-  }
+	if (task.status === "cancelled") {
+		return { success: false, message: "Task is already cancelled" };
+	}
 
-  await updatePublishTask(db, taskId, {
-    status: "cancelled",
-    completedAt: Date.now(),
-  });
+	await updatePublishTask(db, taskId, {
+		status: "cancelled",
+		completedAt: Date.now(),
+	});
 
-  return { success: true, message: "任务已取消" };
+	return { success: true, message: "Task cancelled" };
 }
 
-// 获取发布任务状态
-export async function getPublishTaskStatus(
-  db: D1Database,
-  taskId: string
-) {
-  const task = await getPublishTask(db, taskId);
-  if (!task) {
-    throw new Error("任务不存在");
-  }
+// Get publish task status
+export async function getPublishTaskStatus(db: D1Database, taskId: string) {
+	const task = await getPublishTask(db, taskId);
+	if (!task) {
+		throw new Error("Task not found");
+	}
 
-  const steps = await listPublishTaskSteps(db, taskId);
-
-  return { task, steps };
+	const steps = await listPublishTaskSteps(db, taskId);
+	return { task, steps };
 }
 
-// 快速发布单篇文章到单个账号
+// Quick publish one article to one account
 export async function quickPublish(
-  db: D1Database,
-  articleId: string,
-  accountId: string,
-  draftOnly: boolean = false,
-  ctx?: ExecutionContext
+	db: D1Database,
+	articleId: string,
+	accountId: string,
+	draftOnly = false,
+	ctx?: ExecutionContext,
 ): Promise<{ success: boolean; message: string; publicationId?: string }> {
-  const account = await getPlatformAccount(db, accountId);
-  if (!account) {
-    return { success: false, message: "账号不存在" };
-  }
+	const account = await getPlatformAccount(db, accountId);
+	if (!account) {
+		return { success: false, message: "Account not found" };
+	}
 
-  const task = await createPublishTaskService(db, {
-    articleIds: [articleId],
-    accountConfigs: [{
-      accountId,
-      platform: account.platform,
-      draftOnly,
-    }],
-  }, ctx);
+	const task = await createPublishTaskService(
+		db,
+		{
+			articleIds: [articleId],
+			accountConfigs: [{
+				accountId,
+				platform: account.platform,
+				draftOnly,
+			}],
+		},
+		ctx,
+	);
 
-  return {
-    success: true,
-    message: "快速发布任务已创建",
-    publicationId: task.task.id,
-  };
+	return {
+		success: true,
+		message: "Quick publish task created",
+		publicationId: task.task.id,
+	};
 }
 
-// 处理定时任务（由 cron 调用）
+// Process scheduled tasks (triggered by cron)
 export async function processScheduledTasks(db: D1Database): Promise<void> {
-  const tasks = await getPendingScheduledTasks(db);
-
-  for (const task of tasks) {
-    console.log(`执行定时发布任务: ${task.id}`);
-    executePublishTask(db, task.id).catch(error => {
-      console.error(`定时任务执行失败: ${task.id}`, error);
-    });
-  }
+	const tasks = await getPendingScheduledTasks(db);
+	for (const task of tasks) {
+		console.info("[publish] execute scheduled task", { taskId: task.id });
+		executePublishTask(db, task.id).catch((error) => {
+			console.error("[publish] scheduled task failed", {
+				taskId: task.id,
+				error: errorMessageOf(error),
+			});
+		});
+	}
 }

@@ -1,62 +1,61 @@
-import { useState, useEffect } from "react";
-import type { PromptTemplate } from "@/react-app/types";
-import { getPromptTemplates, updatePromptTemplate, getProviderStatus } from "@/react-app/api";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { getPromptTemplates, updatePromptTemplate } from "@/react-app/api";
+import type { PromptKey, PromptTemplate } from "@/react-app/types";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  Settings2, 
-  Cpu, 
-  FileText, 
-  Save, 
-  CheckCircle2, 
-  AlertCircle,
-  RefreshCw,
-  Code2,
-  Sparkles,
-  Zap,
-  Globe,
+import { Textarea } from "@/components/ui/textarea";
+import {
+  CheckCircle2,
+  Cpu,
   Database,
+  FileText,
+  Globe,
   Key,
-  Server
+  RefreshCw,
+  Save,
+  Server,
+  Settings2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface PlatformSettingsProps {
-  providerStatus: { 
-    provider: string; 
-    ready: boolean; 
-    lastCheckedAt: number; 
-    message: string 
+  providerStatus: {
+    provider: string;
+    ready: boolean;
+    lastCheckedAt: number;
+    message: string;
   } | null;
 }
 
-const promptDescriptions: Record<string, { title: string; description: string; icon: React.ReactNode }> = {
+const promptDescriptions: Record<string, { title: string; description: string; icon: ReactNode }> = {
   title: {
-    title: "标题生成",
-    description: "用于生成文章标题的 Prompt 模板",
+    title: "标题提示词",
+    description: "用于生成文章标题的提示词模板。",
     icon: <FileText className="h-4 w-4" />,
   },
   content: {
-    title: "内容生成",
-    description: "用于生成文章正文的 Prompt 模板",
-    icon: <Code2 className="h-4 w-4" />,
+    title: "正文提示词",
+    description: "用于生成正文内容的提示词模板。",
+    icon: <FileText className="h-4 w-4" />,
   },
   summary: {
-    title: "摘要生成",
-    description: "用于生成文章摘要的 Prompt 模板",
-    icon: <Sparkles className="h-4 w-4" />,
+    title: "摘要提示词",
+    description: "用于生成文章摘要的提示词模板。",
+    icon: <FileText className="h-4 w-4" />,
   },
   cover: {
-    title: "封面生成",
-    description: "用于生成文章封面的 Prompt 模板",
-    icon: <Zap className="h-4 w-4" />,
+    title: "封面提示词",
+    description: "用于生成封面建议的提示词模板。",
+    icon: <FileText className="h-4 w-4" />,
+  },
+  tags: {
+    title: "标签提示词",
+    description: "用于生成标签建议的提示词模板。",
+    icon: <FileText className="h-4 w-4" />,
   },
 };
 
@@ -68,28 +67,35 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadPromptTemplates();
+    void loadPromptTemplates();
   }, []);
 
   const loadPromptTemplates = async () => {
+    setIsLoading(true);
     try {
       const templates = await getPromptTemplates();
       setPromptTemplates(templates);
-      const initialEdits: Record<string, string> = {};
-      templates.forEach(t => {
-        initialEdits[t.key] = t.template;
+
+      const initialEdited: Record<string, string> = {};
+      templates.forEach((template) => {
+        initialEdited[template.key] = template.template;
       });
-      setEditedTemplates(initialEdits);
+      setEditedTemplates(initialEdited);
     } catch (error) {
-      console.error("加载模板失败", error);
+      console.error("加载提示词模板失败", error);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const hasChanges = useMemo(
+    () => (key: string) => promptTemplates.find((template) => template.key === key)?.template !== editedTemplates[key],
+    [editedTemplates, promptTemplates],
+  );
+
   const handleTemplateChange = (key: string, value: string) => {
-    setEditedTemplates(prev => ({ ...prev, [key]: value }));
-    setSavedKeys(prev => {
+    setEditedTemplates((prev) => ({ ...prev, [key]: value }));
+    setSavedKeys((prev) => {
       const next = new Set(prev);
       next.delete(key);
       return next;
@@ -97,21 +103,22 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
   };
 
   const handleSaveTemplate = async (key: string) => {
-    setSavingKeys(prev => new Set(prev).add(key));
+    setSavingKeys((prev) => new Set(prev).add(key));
     try {
-      await updatePromptTemplate(key as import("../types").PromptKey, editedTemplates[key]);
-      setSavedKeys(prev => new Set(prev).add(key));
-      setTimeout(() => {
-        setSavedKeys(prev => {
+      await updatePromptTemplate(key as PromptKey, editedTemplates[key] ?? "");
+      setSavedKeys((prev) => new Set(prev).add(key));
+      setPromptTemplates((prev) => prev.map((item) => (item.key === key ? { ...item, template: editedTemplates[key] ?? "" } : item)));
+      window.setTimeout(() => {
+        setSavedKeys((prev) => {
           const next = new Set(prev);
           next.delete(key);
           return next;
         });
       }, 2000);
     } catch (error) {
-      console.error("保存模板失败", error);
+      console.error("保存提示词模板失败", error);
     } finally {
-      setSavingKeys(prev => {
+      setSavingKeys((prev) => {
         const next = new Set(prev);
         next.delete(key);
         return next;
@@ -119,102 +126,53 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
     }
   };
 
-  const hasChanges = (key: string) => {
-    const original = promptTemplates.find(t => t.key === key)?.template;
-    return original !== editedTemplates[key];
-  };
-
   return (
     <div className="space-y-6">
       <Tabs defaultValue="ai" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 bg-white/80 p-1 shadow-soft">
-          <TabsTrigger value="ai" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="ai" className="gap-2">
             <Cpu className="h-4 w-4" />
-            AI 配置
+            智能设置
           </TabsTrigger>
-          <TabsTrigger value="prompts" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
+          <TabsTrigger value="prompts" className="gap-2">
             <FileText className="h-4 w-4" />
-            Prompt 模板
+            提示词模板
           </TabsTrigger>
-          <TabsTrigger value="system" className="gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-brand-500 data-[state=active]:to-violet-600 data-[state=active]:text-white">
+          <TabsTrigger value="system" className="gap-2">
             <Server className="h-4 w-4" />
             系统设置
           </TabsTrigger>
         </TabsList>
 
-        {/* AI 配置 */}
         <TabsContent value="ai" className="space-y-6">
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Cpu className="h-5 w-5 text-brand-500" />
-                <CardTitle>AI Provider 配置</CardTitle>
+                <Cpu className="h-5 w-5 text-brand-600" />
+                <CardTitle>模型服务状态</CardTitle>
               </div>
-              <CardDescription>配置 AI 模型和连接参数</CardDescription>
+              <CardDescription>查看当前模型服务连接状态和基础参数。</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* 当前状态 */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-3 h-3 rounded-full",
-                      providerStatus?.ready ? "bg-emerald-500" : "bg-red-500"
-                    )} />
-                    <div>
-                      <p className="font-medium text-sm">当前 Provider</p>
-                      <p className="text-xs text-slate-500">{providerStatus?.provider || "未配置"}</p>
-                    </div>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">当前服务提供方</p>
+                    <p className="mt-1 text-xs text-slate-500">{providerStatus?.provider || "未配置"}</p>
                   </div>
-                  <Badge variant={providerStatus?.ready ? "default" : "destructive"}>
-                    {providerStatus?.ready ? "运行中" : "异常"}
-                  </Badge>
+                  <Badge variant={providerStatus?.ready ? "default" : "destructive"}>{providerStatus?.ready ? "可用" : "异常"}</Badge>
                 </div>
-                {providerStatus?.message && (
-                  <p className="mt-2 text-xs text-slate-500">{providerStatus.message}</p>
-                )}
+                {providerStatus?.message && <p className="mt-3 text-xs text-slate-500">{providerStatus.message}</p>}
               </div>
 
-              {/* 配置项 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>AI_PROVIDER</Label>
-                  <Input 
-                    value={providerStatus?.provider || "ollama"} 
-                    disabled 
-                    className="bg-slate-50"
-                  />
-                  <p className="text-xs text-slate-500">在 Worker 环境变量中配置</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Ollama URL</Label>
-                  <Input 
-                    value="http://localhost:11434" 
-                    disabled 
-                    className="bg-slate-50"
-                  />
-                  <p className="text-xs text-slate-500">本地 Ollama 服务地址</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>默认模型</Label>
-                  <Input 
-                    value="qwen2.5:14b" 
-                    disabled 
-                    className="bg-slate-50"
-                  />
-                  <p className="text-xs text-slate-500">当前使用的默认模型</p>
+                  <Input value="qwen2.5:14b" disabled className="bg-slate-50" />
                 </div>
                 <div className="space-y-2">
-                  <Label>超时时间</Label>
-                  <Input 
-                    value="300s" 
-                    disabled 
-                    className="bg-slate-50"
-                  />
-                  <p className="text-xs text-slate-500">请求超时时间</p>
+                  <Label>请求超时</Label>
+                  <Input value="300s" disabled className="bg-slate-50" />
                 </div>
               </div>
             </CardContent>
@@ -223,59 +181,35 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Settings2 className="h-5 w-5 text-violet-500" />
+                <Settings2 className="h-5 w-5 text-slate-600" />
                 <CardTitle>生成参数</CardTitle>
               </div>
-              <CardDescription>配置 AI 生成内容的参数</CardDescription>
+              <CardDescription>这些参数主要影响生成内容的稳定性和长度。</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Temperature</Label>
-                  <Input 
-                    type="number" 
-                    defaultValue={0.7} 
-                    min={0} 
-                    max={2} 
-                    step={0.1}
-                  />
-                  <p className="text-xs text-slate-500">控制生成内容的随机性</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Max Tokens</Label>
-                  <Input 
-                    type="number" 
-                    defaultValue={4096} 
-                    min={256} 
-                    max={8192} 
-                    step={256}
-                  />
-                  <p className="text-xs text-slate-500">最大生成 token 数</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Top P</Label>
-                  <Input 
-                    type="number" 
-                    defaultValue={0.9} 
-                    min={0} 
-                    max={1} 
-                    step={0.1}
-                  />
-                  <p className="text-xs text-slate-500">核采样参数</p>
-                </div>
+            <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label>随机性</Label>
+                <Input type="number" defaultValue={0.7} min={0} max={2} step={0.1} />
+              </div>
+              <div className="space-y-2">
+                <Label>最大字数</Label>
+                <Input type="number" defaultValue={4096} min={256} max={8192} step={256} />
+              </div>
+              <div className="space-y-2">
+                <Label>采样阈值</Label>
+                <Input type="number" defaultValue={0.9} min={0} max={1} step={0.1} />
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Prompt 模板 */}
         <TabsContent value="prompts" className="space-y-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <RefreshCw className="h-6 w-6 animate-spin text-slate-400" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid gap-5">
               {promptTemplates.map((template) => {
                 const desc = promptDescriptions[template.key] || {
                   title: template.key,
@@ -284,43 +218,30 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
                 };
                 const isSaving = savingKeys.has(template.key);
                 const isSaved = savedKeys.has(template.key);
-                const hasChange = hasChanges(template.key);
+                const changed = hasChanges(template.key);
 
                 return (
                   <Card key={template.key}>
                     <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 rounded-lg bg-brand-100 text-brand-600">
-                            {desc.icon}
-                          </div>
+                      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600">{desc.icon}</div>
                           <div>
                             <CardTitle className="text-base">{desc.title}</CardTitle>
                             <CardDescription>{desc.description}</CardDescription>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {hasChange && (
-                            <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">
-                              已修改
-                            </Badge>
-                          )}
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          {changed && <Badge variant="outline">已修改</Badge>}
                           {isSaved && (
-                            <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                            <Badge variant="outline" className="gap-1.5 border-emerald-200 bg-emerald-50 text-emerald-700">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
                               已保存
                             </Badge>
                           )}
-                          <Button
-                            size="sm"
-                            onClick={() => handleSaveTemplate(template.key)}
-                            disabled={isSaving || !hasChange}
-                          >
-                            {isSaving ? (
-                              <RefreshCw className="h-4 w-4 animate-spin mr-1" />
-                            ) : (
-                              <Save className="h-4 w-4 mr-1" />
-                            )}
+                          <Button size="sm" onClick={() => void handleSaveTemplate(template.key)} disabled={isSaving || !changed}>
+                            {isSaving ? <RefreshCw className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
                             保存
                           </Button>
                         </div>
@@ -329,9 +250,8 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
                     <CardContent>
                       <Textarea
                         value={editedTemplates[template.key] || ""}
-                        onChange={(e) => handleTemplateChange(template.key, e.target.value)}
-                        className="min-h-[200px] font-mono text-sm"
-                        placeholder={`请输入 ${desc.title} 的 Prompt 模板...`}
+                        onChange={(event) => handleTemplateChange(template.key, event.target.value)}
+                        className="min-h-[220px] font-mono text-sm"
                       />
                     </CardContent>
                   </Card>
@@ -341,73 +261,45 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
           )}
         </TabsContent>
 
-        {/* 系统设置 */}
         <TabsContent value="system" className="space-y-6">
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Globe className="h-5 w-5 text-emerald-500" />
-                <CardTitle>平台配置</CardTitle>
+                <Globe className="h-5 w-5 text-brand-600" />
+                <CardTitle>平台开关</CardTitle>
               </div>
-              <CardDescription>配置支持的平台和默认设置</CardDescription>
+              <CardDescription>统一控制哪些平台当前允许参与分发。</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                {["juejin", "zhihu", "xiaohongshu", "wechat", "csdn"].map((platform) => (
-                  <div key={platform} className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">
-                        {platform === "juejin" && "🔥"}
-                        {platform === "zhihu" && "💡"}
-                        {platform === "xiaohongshu" && "📕"}
-                        {platform === "wechat" && "💬"}
-                        {platform === "csdn" && "💻"}
-                      </span>
-                      <span className="font-medium">
-                        {platform === "juejin" && "掘金"}
-                        {platform === "zhihu" && "知乎"}
-                        {platform === "xiaohongshu" && "小红书"}
-                        {platform === "wechat" && "公众号"}
-                        {platform === "csdn" && "CSDN"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <Switch id={`${platform}-enabled`} defaultChecked />
-                        <Label htmlFor={`${platform}-enabled`} className="text-sm">启用</Label>
-                      </div>
-                    </div>
+            <CardContent className="space-y-3">
+              {["掘金", "知乎", "小红书", "公众号", "CSDN"].map((platform) => (
+                <div key={platform} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <span className="text-sm font-medium text-slate-700">{platform}</span>
+                  <div className="flex items-center gap-2">
+                    <Switch id={`${platform}-enabled`} defaultChecked />
+                    <Label htmlFor={`${platform}-enabled`} className="text-sm">
+                      已启用
+                    </Label>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Database className="h-5 w-5 text-amber-500" />
+                <Database className="h-5 w-5 text-slate-600" />
                 <CardTitle>存储配置</CardTitle>
               </div>
-              <CardDescription>配置数据存储和缓存策略</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>数据库</Label>
-                  <Input value="D1 (SQLite)" disabled className="bg-slate-50" />
-                  <p className="text-xs text-slate-500">Cloudflare D1 数据库</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>缓存</Label>
-                  <Input value="KV" disabled className="bg-slate-50" />
-                  <p className="text-xs text-slate-500">Cloudflare KV 存储</p>
-                </div>
+            <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>数据库</Label>
+                <Input value="D1 (SQLite)" disabled className="bg-slate-50" />
               </div>
               <div className="space-y-2">
-                <Label>文件存储</Label>
-                <Input value="R2" disabled className="bg-slate-50" />
-                <p className="text-xs text-slate-500">Cloudflare R2 对象存储</p>
+                <Label>缓存</Label>
+                <Input value="KV" disabled className="bg-slate-50" />
               </div>
             </CardContent>
           </Card>
@@ -415,30 +307,19 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Key className="h-5 w-5 text-red-500" />
-                <CardTitle>安全设置</CardTitle>
+                <Key className="h-5 w-5 text-slate-600" />
+                <CardTitle>密钥管理</CardTitle>
               </div>
-              <CardDescription>配置 API 密钥和安全策略</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>API 密钥</Label>
+                <Label>接口密钥</Label>
                 <div className="flex gap-2">
-                  <Input 
-                    type="password" 
-                    value="************************" 
-                    disabled 
-                    className="bg-slate-50 flex-1"
-                  />
+                  <Input type="password" value="************************" disabled className="flex-1 bg-slate-50" />
                   <Button variant="outline" size="sm">
-                    重新生成
+                    重置
                   </Button>
                 </div>
-                <p className="text-xs text-slate-500">用于 API 访问鉴权</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch id="audit-log" defaultChecked />
-                <Label htmlFor="audit-log">启用操作审计日志</Label>
               </div>
             </CardContent>
           </Card>

@@ -1,8 +1,7 @@
-import type { Article, ArticleStatus, PlatformType, PromptKey, PromptTemplate, ProviderStatus } from "./types";
+﻿import type { Article, ArticleStatus, PlatformType, PromptKey, PromptTemplate, ProviderStatus } from "./types";
 import type {
 	PublishTask,
 	PublishTaskStep,
-	AccountConfig,
 	ArticlePublication,
 	AccountStatistics,
 	CreatePublishTaskRequest,
@@ -32,8 +31,8 @@ async function parseJson<T>(response: Response): Promise<T> {
 	}
 	try {
 		return JSON.parse(text) as T;
-	} catch (error) {
-		throw new Error(text || "Invalid JSON response");
+	} catch {
+		throw new Error(text || "服务端返回了无效 JSON");
 	}
 }
 
@@ -61,16 +60,14 @@ export async function generateContent(title: string): Promise<{ content: string 
 		body: JSON.stringify({ title }),
 	});
 
-	if (!response.ok) throw new Error("Generate content failed");
+	if (!response.ok) throw new Error("生成正文失败");
 
 	const data = await response.json() as { content: string };
-
-	console.log('Generated content:', data);
 
 	return data;
 }
 
-// 文章摘要数据结构
+// 鏂囩珷鎽樿鏁版嵁缁撴瀯
 export interface ArticleSummary {
 	summary: string;
 	tags: string[];
@@ -136,16 +133,6 @@ export async function transitionArticle(id: string, status: ArticleStatus): Prom
 	);
 }
 
-export async function distributeArticle(id: string, platforms: PlatformType[]): Promise<{ article: Article }> {
-	return parseJson<{ article: Article }>(
-		await fetch("/api/distribute", {
-			method: "POST",
-			headers: jsonHeaders,
-			body: JSON.stringify({ id, platforms }),
-		}),
-	);
-}
-
 export async function getProviderStatus(): Promise<ProviderStatus> {
 	return parseJson<ProviderStatus>(await fetch("/api/ai/status"));
 }
@@ -203,14 +190,11 @@ export async function createPlatformAccount(payload: {
 	authToken?: string;
 	description?: string;
 }): Promise<PlatformAccount> {
-	console.log('🔍 [前端 API createPlatformAccount] 发送的 payload:', payload);
-	console.log('🔍 [前端 API] payload.authToken 类型:', typeof payload.authToken, '值:', payload.authToken);
 	const response = await fetch("/api/accounts", {
 		method: "POST",
 		headers: jsonHeaders,
 		body: JSON.stringify(payload),
 	});
-	console.log('🔍 [前端 API] 请求 body:', JSON.stringify(payload));
 	return parseJson<PlatformAccount>(response);
 }
 
@@ -242,13 +226,13 @@ export async function deletePlatformAccount(id: string): Promise<void> {
 		headers: jsonHeaders,
 	});
 	if (!response.ok) {
-		throw new Error("删除平台帐号失败");
+		throw new Error("删除平台账号失败");
 	}
 }
 
-// ==================== 发布相关 API ====================
+// ==================== 发布任务相关 API ====================
 
-// 创建发布任务（支持批量发布和定时发布）
+// 创建发布任务（支持批量发布与定时发布）
 export async function createPublishTask(request: CreatePublishTaskRequest): Promise<PublishTaskResponse> {
 	return parseJson<PublishTaskResponse>(
 		await fetch("/api/publish/tasks", {
@@ -304,12 +288,12 @@ export async function quickPublish(
 	);
 }
 
-// 获取文章的发布记录
+// 获取文章发布记录
 export async function getArticlePublications(articleId: string): Promise<ArticlePublication[]> {
 	return parseJson<ArticlePublication[]>(await fetch(`/api/articles/${articleId}/publications`));
 }
 
-// 获取所有发布记录
+// 获取全部发布记录
 export async function getPublications(filters?: {
 	articleId?: string;
 	accountId?: string;
@@ -326,7 +310,7 @@ export async function getPublications(filters?: {
 	return parseJson<ArticlePublication[]>(await fetch(url));
 }
 
-// 获取所有账号的发布统计
+// 获取全部账号的发布统计
 export async function getAccountStatistics(platform?: PlatformType): Promise<AccountStatistics[]> {
 	const url = platform ? `/api/accounts/statistics?platform=${platform}` : "/api/accounts/statistics";
 	return parseJson<AccountStatistics[]>(await fetch(url));
@@ -336,3 +320,4 @@ export async function getAccountStatistics(platform?: PlatformType): Promise<Acc
 export async function getPlatformAccountStatistics(accountId: string): Promise<AccountStatistics> {
 	return parseJson<AccountStatistics>(await fetch(`/api/accounts/${accountId}/statistics`));
 }
+

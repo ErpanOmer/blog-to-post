@@ -14,7 +14,7 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<DialogPrimitive.Overlay
 		ref={ref}
-		className={cn("fixed inset-0 z-50 bg-slate-900/60", className)}
+		className={cn("fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm", className)}
 		{...props}
 	/>
 ));
@@ -33,14 +33,14 @@ const DialogContent = React.forwardRef<
 		<DialogPrimitive.Content
 			ref={ref}
 			className={cn(
-				"fixed left-[50%] top-[50%] z-50 w-full max-w-xl translate-x-[-50%] translate-y-[-50%] rounded-2xl bg-white p-6 shadow-xl",
+				"fixed left-[50%] top-[50%] z-50 w-full max-w-xl translate-x-[-50%] translate-y-[-50%] rounded-[18px] border border-slate-200 bg-white p-6 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.25)]",
 				className,
 			)}
 			{...props}
 		>
 			{children}
 			{!hideClose && (
-				<DialogPrimitive.Close className="absolute right-4 top-4 rounded-md text-slate-500 hover:text-slate-900">
+				<DialogPrimitive.Close className="absolute right-4 top-4 rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 shadow-sm transition-colors hover:text-slate-900">
 					<X className="h-4 w-4" />
 				</DialogPrimitive.Close>
 			)}
@@ -50,7 +50,7 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-	<div className={cn("flex flex-col gap-1", className)} {...props} />
+	<div className={cn("flex flex-col gap-1.5", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
 
@@ -72,7 +72,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<DialogPrimitive.Description
 		ref={ref}
-		className={cn("text-sm text-slate-500", className)}
+		className={cn("text-sm leading-relaxed text-slate-500", className)}
 		{...props}
 	/>
 ));
@@ -84,7 +84,7 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
 	<div
 		className={cn(
-			"flex flex-col-reverse sm:flex-row sm:justify-end sm:gap-2",
+			"flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
 			className,
 		)}
 		{...props}

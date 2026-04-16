@@ -130,24 +130,50 @@ export async function createPlatformAccount(
 		};
 	}
 
-	await db
-		.prepare(
-			"INSERT INTO platform_accounts (id, platform, userId, userName, name, avatar, authToken, description, isActive, isVerified, lastVerifiedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)",
-		)
-		.bind(
-			payload.id,
-			payload.platform,
-			userInfo.id,
-			userInfo.name,
-			userInfo.name, // 同时填充 name 字段（兼容旧 schema）
-			userInfo.avatar ?? null,
-			payload.authToken,
-			payload.description ?? null,
-			Date.now(),
-			payload.createdAt,
-			payload.updatedAt,
-		)
-		.run();
+	const columnInfo = await db
+		.prepare("PRAGMA table_info(platform_accounts)")
+		.all<{ name: string }>();
+	const columnNames = new Set((columnInfo.results ?? []).map((item) => item.name));
+	const hasLegacyNameColumn = columnNames.has("name");
+
+	if (hasLegacyNameColumn) {
+		await db
+			.prepare(
+				"INSERT INTO platform_accounts (id, platform, userId, userName, name, avatar, authToken, description, isActive, isVerified, lastVerifiedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)",
+			)
+			.bind(
+				payload.id,
+				payload.platform,
+				userInfo.id,
+				userInfo.name,
+				userInfo.name,
+				userInfo.avatar ?? null,
+				payload.authToken,
+				payload.description ?? null,
+				Date.now(),
+				payload.createdAt,
+				payload.updatedAt,
+			)
+			.run();
+	} else {
+		await db
+			.prepare(
+				"INSERT INTO platform_accounts (id, platform, userId, userName, avatar, authToken, description, isActive, isVerified, lastVerifiedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)",
+			)
+			.bind(
+				payload.id,
+				payload.platform,
+				userInfo.id,
+				userInfo.name,
+				userInfo.avatar ?? null,
+				payload.authToken,
+				payload.description ?? null,
+				Date.now(),
+				payload.createdAt,
+				payload.updatedAt,
+			)
+			.run();
+	}
 
 	const account: PlatformAccount = {
 		...payload,

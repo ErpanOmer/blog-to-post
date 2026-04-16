@@ -1,92 +1,186 @@
-import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { useAppController } from "./hooks/useAppController";
-
-// Layout & Features
-import { MainLayout } from "./layout/MainLayout";
-import { ArticleEditorSheet } from "./features/editor/ArticleEditorSheet";
-
-// Views
-import { ArticlesView } from "./views/ArticlesView";
-import { AccountsView } from "./views/AccountsView";
-import { SettingsView } from "./views/SettingsView";
-
-// Existing Components
+import { useEffect } from "react";
+import { Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dashboard } from "./components/Dashboard";
-import { ArticleDetailDialog } from "./components/ArticleDetailDialog";
-import { PublishDialog } from "./components/PublishDialog";
 import { DistributionStatus } from "./components/DistributionStatus";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"; // Import ConfirmDialog
-
+import { PublishDialog } from "./components/PublishDialog";
+import { useAppController } from "./hooks/useAppController";
+import { MainLayout } from "./layout/MainLayout";
+import { ArticleDetailPage } from "./pages/ArticleDetailPage";
+import { ArticleEditorPage } from "./pages/ArticleEditorPage";
+import { AccountsView } from "./views/AccountsView";
+import { ArticlesView } from "./views/ArticlesView";
+import { SettingsView } from "./views/SettingsView";
 import "./App.css";
+
+function EmptyState({ title, description, backTo }: { title: string; description: string; backTo: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center shadow-sm">
+      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+      <p className="mt-2 text-sm text-slate-500">{description}</p>
+      <Link to={backTo} className="mt-4 inline-flex text-sm font-medium text-brand-600 hover:text-brand-700">
+        返回
+      </Link>
+    </div>
+  );
+}
 
 function App() {
   const { state, actions } = useAppController();
+  const navigate = useNavigate();
 
-  return (
-    <MainLayout
-      activeTab={state.activeTab}
-      onTabChange={actions.setActiveTab}
-      isPublishing={state.isPublishing}
-      isGenerating={state.isGenerating}
-      onOpenEditor={actions.handleOpenEditor}
-    >
-      <Tabs value={state.activeTab} onValueChange={actions.setActiveTab} className="space-y-6">
-        <TabsContent value="dashboard" className="animate-in">
-          <Dashboard
-            articles={state.articles}
-            onNavigate={actions.handleDashboardNavigate}
-          />
-        </TabsContent>
+  const openCreateEditorPage = () => {
+    actions.openNewArticleEditor();
+    navigate("/articles/new");
+  };
 
-        <TabsContent value="articles" className="animate-in">
-          <ArticlesView
-            articles={state.articles}
-            onViewDetail={actions.handleViewDetail}
-            onEdit={actions.handleEdit}
-            onDelete={actions.handleDelete}
-            onPublish={actions.handlePublish}
-          />
-        </TabsContent>
+  const routeFromDashboard = (tab: string) => {
+    const pathMap: Record<string, string> = {
+      dashboard: "/",
+      articles: "/articles",
+      distribution: "/distribution",
+      accounts: "/accounts",
+      settings: "/settings",
+    };
 
-        <TabsContent value="distribution" className="animate-in">
-          <DistributionStatus
-            initialTaskId={state.distributionDetailTaskId}
-            onDeepLinkHandled={() => actions.setDistributionDetailTaskId(null)}
-          />
-        </TabsContent>
+    navigate(pathMap[tab] ?? "/");
+  };
 
-        <TabsContent value="accounts" className="animate-in">
-          <AccountsView />
-        </TabsContent>
+  const handlePublishTaskCompleted = (taskId: string) => {
+    actions.handleOpenDistributionDetail(taskId);
+    navigate("/distribution");
+  };
 
-        <TabsContent value="settings" className="animate-in">
-          <SettingsView providerStatus={state.providerStatus} />
-        </TabsContent>
-      </Tabs>
+  const ArticleNewRoute = () => {
+    useEffect(() => {
+      const draftIsExistingArticle = state.draft ? state.articles.some((article) => article.id === state.draft?.id) : false;
+      if (!state.draft || draftIsExistingArticle) {
+        actions.openNewArticleEditor();
+      }
+    }, [actions, state.articles, state.draft]);
 
-      {/* Global Dialogs & Sheets */}
-      <ArticleEditorSheet
-        isOpen={state.isEditorOpen}
-        onOpenChange={open => !open && actions.handleCloseEditor()}
+    return (
+      <ArticleEditorPage
         draft={state.draft}
         isGenerating={state.isGenerating}
-        isLoading={state.isLoading}
-        isFormValid={state.isFormValid} // Fixed typing
+        isSaving={state.isLoading}
+        isFormValid={state.isFormValid}
+        onBack={() => navigate("/articles")}
         onTitleChange={actions.handleTitleChange}
         onArticleUpdate={actions.handleArticleUpdate}
-        onSave={actions.handleSave}
+        onSave={async () => {
+          const saved = await actions.handleSave();
+          if (saved) navigate(`/articles/${saved.id}`);
+        }}
         onQuickPublish={actions.handleQuickPublish}
-        onClose={actions.handleCloseEditor}
       />
+    );
+  };
 
-      <ArticleDetailDialog
-        article={state.detailArticle}
-        open={state.isDetailOpen}
-        onOpenChange={actions.setIsDetailOpen}
-        onEdit={actions.handleEdit}
+  const ArticleEditRoute = () => {
+    const params = useParams();
+    const articleId = params.id;
+    const article = state.articles.find((item) => item.id === articleId);
+
+    useEffect(() => {
+      if (!article) return;
+      if (state.draft?.id !== article.id) {
+        actions.openArticleEditor(article);
+      }
+    }, [actions, article, state.draft?.id]);
+
+    if (!article) {
+      return <EmptyState title="文章不存在" description="这篇文章可能已被删除，或者仍在加载中。" backTo="/articles" />;
+    }
+
+    if (article.status !== "draft") {
+      return (
+        <EmptyState
+          title="当前文章不可编辑"
+          description="只有草稿状态的文章可以进入编辑器。你可以返回文章详情页查看并重新发起分发。"
+          backTo={`/articles/${article.id}`}
+        />
+      );
+    }
+
+    const currentDraft = state.draft?.id === article.id ? state.draft : article;
+
+    return (
+      <ArticleEditorPage
+        draft={currentDraft}
+        isGenerating={state.isGenerating}
+        isSaving={state.isLoading}
+        isFormValid={state.isFormValid}
+        onBack={() => navigate(`/articles/${article.id}`)}
+        onTitleChange={actions.handleTitleChange}
+        onArticleUpdate={actions.handleArticleUpdate}
+        onSave={async () => {
+          const saved = await actions.handleSave();
+          if (saved) navigate(`/articles/${saved.id}`);
+        }}
+        onQuickPublish={actions.handleQuickPublish}
+      />
+    );
+  };
+
+  const ArticleDetailRoute = () => {
+    const params = useParams();
+    const articleId = params.id;
+    const article = state.articles.find((item) => item.id === articleId);
+
+    if (!article) {
+      return <EmptyState title="文章不存在" description="这篇文章可能已被删除，或者仍在加载中。" backTo="/articles" />;
+    }
+
+    return (
+      <ArticleDetailPage
+        article={article}
+        onBack={() => navigate("/articles")}
+        onEdit={(target) => {
+          const ok = actions.openArticleEditor(target);
+          if (ok) navigate(`/articles/${target.id}/edit`);
+        }}
         onDelete={actions.handleDelete}
         onPublish={actions.handlePublish}
       />
+    );
+  };
+
+  return (
+    <MainLayout isPublishing={state.isPublishing} isGenerating={state.isGenerating} onOpenEditor={openCreateEditorPage}>
+      <Routes>
+        <Route path="/" element={<Dashboard articles={state.articles} onNavigate={routeFromDashboard} />} />
+        <Route
+          path="/articles"
+          element={
+            <ArticlesView
+              articles={state.articles}
+              onViewDetail={(article) => navigate(`/articles/${article.id}`)}
+              onEdit={(article) => {
+                const ok = actions.openArticleEditor(article);
+                if (ok) navigate(`/articles/${article.id}/edit`);
+              }}
+              onDelete={actions.handleDelete}
+              onPublish={actions.handlePublish}
+            />
+          }
+        />
+        <Route path="/articles/new" element={<ArticleNewRoute />} />
+        <Route path="/articles/:id/edit" element={<ArticleEditRoute />} />
+        <Route path="/articles/:id" element={<ArticleDetailRoute />} />
+        <Route
+          path="/distribution"
+          element={
+            <DistributionStatus
+              initialTaskId={state.distributionDetailTaskId}
+              onDeepLinkHandled={() => actions.setDistributionDetailTaskId(null)}
+            />
+          }
+        />
+        <Route path="/accounts" element={<AccountsView />} />
+        <Route path="/settings" element={<SettingsView providerStatus={state.providerStatus} />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
 
       {state.isPublishDialogOpen && (
         <PublishDialog
@@ -95,16 +189,16 @@ function App() {
           onOpenChange={(open) => {
             if (!open) {
               actions.setIsPublishDialogOpen(false);
+              actions.setIsQuickPublishMode(false);
             }
           }}
           onPublishConfirm={actions.handlePublishConfirm}
-          onQuickPublishConfirm={state.draft ? actions.handleQuickPublishConfirm : undefined}
-          isQuickPublish={!!state.draft}
-          onTaskCompleted={actions.handleOpenDistributionDetail}
+          onQuickPublishConfirm={state.isQuickPublishMode ? actions.handleQuickPublishConfirm : undefined}
+          isQuickPublish={state.isQuickPublishMode}
+          onTaskCompleted={handlePublishTaskCompleted}
         />
       )}
 
-      {/* Global Confirmation Dialog */}
       <ConfirmDialog
         open={state.confirmDialog.open}
         onOpenChange={(open) => {
