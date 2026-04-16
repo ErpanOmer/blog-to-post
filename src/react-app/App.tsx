@@ -15,15 +15,117 @@ import "./App.css";
 
 function EmptyState({ title, description, backTo }: { title: string; description: string; backTo: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center shadow-sm">
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      <p className="mt-2 text-sm text-slate-500">{description}</p>
-      <Link to={backTo} className="mt-4 inline-flex text-sm font-medium text-brand-600 hover:text-brand-700">
+    <div className="rounded-xl border border-slate-200/60 bg-white px-6 py-10 text-center shadow-sm page-enter">
+      <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+      <p className="mt-1.5 text-[13px] text-slate-500">{description}</p>
+      <Link to={backTo} className="mt-3 inline-flex text-[13px] font-medium text-brand-500 hover:text-brand-600 transition-colors">
         返回
       </Link>
     </div>
   );
 }
+
+
+
+// Extracted route components to prevent unmounting on every render
+const ArticleNewRoute = ({ state, actions }: { state: any; actions: any }) => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const draftIsExistingArticle = state.draft ? state.articles.some((article: any) => article.id === state.draft?.id) : false;
+    if (!state.draft || draftIsExistingArticle) {
+      actions.openNewArticleEditor();
+    }
+  }, [actions, state.articles, state.draft]);
+
+  return (
+    <ArticleEditorPage
+      draft={state.draft}
+      isGenerating={state.isGenerating}
+      isSaving={state.isLoading}
+      isFormValid={state.isFormValid}
+      onBack={() => navigate("/articles")}
+      onTitleChange={actions.handleTitleChange}
+      onArticleUpdate={actions.handleArticleUpdate}
+      onSave={async () => {
+        const saved = await actions.handleSave();
+        if (saved) navigate(`/articles/${saved.id}`);
+      }}
+      onQuickPublish={actions.handleQuickPublish}
+    />
+  );
+};
+
+const ArticleEditRoute = ({ state, actions }: { state: any; actions: any }) => {
+  const params = useParams();
+  const navigate = useNavigate();
+  const articleId = params.id;
+  const article = state.articles.find((item: any) => item.id === articleId);
+
+  useEffect(() => {
+    if (!article) return;
+    if (state.draft?.id !== article.id) {
+      actions.openArticleEditor(article);
+    }
+  }, [actions, article, state.draft?.id]);
+
+  if (!article) {
+    return <EmptyState title="文章不存在" description="这篇文章可能已被删除，或者仍在加载中。" backTo="/articles" />;
+  }
+
+  if (article.status !== "draft") {
+    return (
+      <EmptyState
+        title="当前文章不可编辑"
+        description="只有草稿状态的文章可以进入编辑器。你可以返回文章详情页查看并重新发起分发。"
+        backTo={`/articles/${article.id}`}
+      />
+    );
+  }
+
+  const currentDraft = state.draft?.id === article.id ? state.draft : article;
+
+  return (
+    <ArticleEditorPage
+      draft={currentDraft}
+      isGenerating={state.isGenerating}
+      isSaving={state.isLoading}
+      isFormValid={state.isFormValid}
+      onBack={() => navigate(`/articles/${article.id}`)}
+      onTitleChange={actions.handleTitleChange}
+      onArticleUpdate={actions.handleArticleUpdate}
+      onSave={async () => {
+        const saved = await actions.handleSave();
+        if (saved) navigate(`/articles/${saved.id}`);
+      }}
+      onQuickPublish={actions.handleQuickPublish}
+    />
+  );
+};
+
+const ArticleDetailRoute = ({ state, actions }: { state: any; actions: any }) => {
+  const params = useParams();
+  const navigate = useNavigate();
+  const articleId = params.id;
+  const article = state.articles.find((item: any) => item.id === articleId);
+
+  if (!article) {
+    return <EmptyState title="文章不存在" description="这篇文章可能已被删除，或者仍在加载中。" backTo="/articles" />;
+  }
+
+  return (
+    <ArticleDetailPage
+      article={article}
+      onBack={() => navigate("/articles")}
+      onEdit={(target) => {
+        const ok = actions.openArticleEditor(target);
+        if (ok) navigate(`/articles/${target.id}/edit`);
+      }}
+      onDelete={actions.handleDelete}
+      onPublish={actions.handlePublish}
+    />
+  );
+};
 
 function App() {
   const { state, actions } = useAppController();
@@ -51,100 +153,7 @@ function App() {
     navigate("/distribution");
   };
 
-  const ArticleNewRoute = () => {
-    useEffect(() => {
-      const draftIsExistingArticle = state.draft ? state.articles.some((article) => article.id === state.draft?.id) : false;
-      if (!state.draft || draftIsExistingArticle) {
-        actions.openNewArticleEditor();
-      }
-    }, [actions, state.articles, state.draft]);
 
-    return (
-      <ArticleEditorPage
-        draft={state.draft}
-        isGenerating={state.isGenerating}
-        isSaving={state.isLoading}
-        isFormValid={state.isFormValid}
-        onBack={() => navigate("/articles")}
-        onTitleChange={actions.handleTitleChange}
-        onArticleUpdate={actions.handleArticleUpdate}
-        onSave={async () => {
-          const saved = await actions.handleSave();
-          if (saved) navigate(`/articles/${saved.id}`);
-        }}
-        onQuickPublish={actions.handleQuickPublish}
-      />
-    );
-  };
-
-  const ArticleEditRoute = () => {
-    const params = useParams();
-    const articleId = params.id;
-    const article = state.articles.find((item) => item.id === articleId);
-
-    useEffect(() => {
-      if (!article) return;
-      if (state.draft?.id !== article.id) {
-        actions.openArticleEditor(article);
-      }
-    }, [actions, article, state.draft?.id]);
-
-    if (!article) {
-      return <EmptyState title="文章不存在" description="这篇文章可能已被删除，或者仍在加载中。" backTo="/articles" />;
-    }
-
-    if (article.status !== "draft") {
-      return (
-        <EmptyState
-          title="当前文章不可编辑"
-          description="只有草稿状态的文章可以进入编辑器。你可以返回文章详情页查看并重新发起分发。"
-          backTo={`/articles/${article.id}`}
-        />
-      );
-    }
-
-    const currentDraft = state.draft?.id === article.id ? state.draft : article;
-
-    return (
-      <ArticleEditorPage
-        draft={currentDraft}
-        isGenerating={state.isGenerating}
-        isSaving={state.isLoading}
-        isFormValid={state.isFormValid}
-        onBack={() => navigate(`/articles/${article.id}`)}
-        onTitleChange={actions.handleTitleChange}
-        onArticleUpdate={actions.handleArticleUpdate}
-        onSave={async () => {
-          const saved = await actions.handleSave();
-          if (saved) navigate(`/articles/${saved.id}`);
-        }}
-        onQuickPublish={actions.handleQuickPublish}
-      />
-    );
-  };
-
-  const ArticleDetailRoute = () => {
-    const params = useParams();
-    const articleId = params.id;
-    const article = state.articles.find((item) => item.id === articleId);
-
-    if (!article) {
-      return <EmptyState title="文章不存在" description="这篇文章可能已被删除，或者仍在加载中。" backTo="/articles" />;
-    }
-
-    return (
-      <ArticleDetailPage
-        article={article}
-        onBack={() => navigate("/articles")}
-        onEdit={(target) => {
-          const ok = actions.openArticleEditor(target);
-          if (ok) navigate(`/articles/${target.id}/edit`);
-        }}
-        onDelete={actions.handleDelete}
-        onPublish={actions.handlePublish}
-      />
-    );
-  };
 
   return (
     <MainLayout isPublishing={state.isPublishing} isGenerating={state.isGenerating} onOpenEditor={openCreateEditorPage}>
@@ -165,9 +174,9 @@ function App() {
             />
           }
         />
-        <Route path="/articles/new" element={<ArticleNewRoute />} />
-        <Route path="/articles/:id/edit" element={<ArticleEditRoute />} />
-        <Route path="/articles/:id" element={<ArticleDetailRoute />} />
+        <Route path="/articles/new" element={<ArticleNewRoute state={state} actions={actions} />} />
+        <Route path="/articles/:id/edit" element={<ArticleEditRoute state={state} actions={actions} />} />
+        <Route path="/articles/:id" element={<ArticleDetailRoute state={state} actions={actions} />} />
         <Route
           path="/distribution"
           element={

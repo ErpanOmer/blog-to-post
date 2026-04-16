@@ -15,15 +15,15 @@ import {
 } from "@/react-app/api";
 import { PlatformAccountForm } from "./PlatformAccountForm";
 import { PlatformAccountList } from "./PlatformAccountList";
-import { Filter, Loader2, Plus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 
-const platformFilters: { value: PlatformType | "all"; label: string; icon: string }[] = [
-  { value: "all", label: "全部", icon: "ALL" },
-  { value: "juejin", label: "掘金", icon: "J" },
-  { value: "zhihu", label: "知乎", icon: "Z" },
-  { value: "xiaohongshu", label: "小红书", icon: "X" },
-  { value: "wechat", label: "公众号", icon: "W" },
-  { value: "csdn", label: "CSDN", icon: "C" },
+const platformFilters: { value: PlatformType | "all"; label: string }[] = [
+  { value: "all", label: "全部" },
+  { value: "juejin", label: "掘金" },
+  { value: "zhihu", label: "知乎" },
+  { value: "xiaohongshu", label: "小红书" },
+  { value: "wechat", label: "公众号" },
+  { value: "csdn", label: "CSDN" },
 ];
 
 export function PlatformAccountsPanel() {
@@ -128,49 +128,37 @@ export function PlatformAccountsPanel() {
   const filteredAccounts = filter === "all" ? accounts : accounts.filter((item) => item.platform === filter);
 
   return (
-    <div className="space-y-5">
-      <section className="surface-subtle flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="eyebrow-label mb-2">Accounts</p>
-          <p className="text-sm leading-relaxed text-slate-600">管理分发所需的平台认证信息。支持按平台筛选、编辑备注、重新验证和删除账号。</p>
-        </div>
-        <Button variant="default" size="sm" onClick={() => setFormOpen(true)} className="gap-2 self-start md:self-auto">
-          <Plus className="h-4 w-4" />
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <p className="text-[13px] text-slate-500">管理分发所需的平台认证信息</p>
+        <Button variant="default" size="sm" onClick={() => setFormOpen(true)} className="gap-1.5 self-start md:self-auto">
+          <Plus className="h-3.5 w-3.5" />
           新增账号
         </Button>
-      </section>
+      </div>
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="mr-1 flex items-center gap-1.5 text-sm text-slate-500">
-            <Filter className="h-4 w-4" />
-            <span>筛选平台</span>
-          </div>
-
-          {platformFilters.map((item) => (
-            <button
-              key={item.value}
-              onClick={() => setFilter(item.value)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                filter === item.value
-                  ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </div>
-
-        <Badge variant="secondary" className="self-start px-3 py-1.5 md:self-auto">
-          账号总数 {filteredAccounts.length}
-        </Badge>
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {platformFilters.map((item) => (
+          <button
+            key={item.value}
+            onClick={() => setFilter(item.value)}
+            className={`rounded-md px-2.5 py-1 text-[12px] font-medium transition-all duration-200 ${
+              filter === item.value
+                ? "bg-slate-900 text-white shadow-sm"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+        <span className="ml-auto text-[11px] text-slate-400">{filteredAccounts.length} 个账号</span>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center rounded-[18px] border border-dashed border-slate-200 bg-slate-50 py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
         </div>
       ) : (
         <PlatformAccountList

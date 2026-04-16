@@ -14,20 +14,19 @@ export function SectionCard({ title, description, children, className, icon, act
   return (
     <section
       className={cn(
-        "surface-panel p-6",
+        "rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm page-enter",
         className,
       )}
     >
-      <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="flex items-start gap-3">
-          {icon && <div className="icon-tile h-10 w-10 flex-shrink-0">{icon}</div>}
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2.5">
+          {icon && <div className="icon-tile h-8 w-8 flex-shrink-0 rounded-lg">{icon}</div>}
           <div>
-            <p className="eyebrow-label mb-2">Workspace Module</p>
-            <h2 className="text-xl font-semibold leading-tight text-slate-900">{title}</h2>
-            {description ? <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">{description}</p> : null}
+            <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+            {description ? <p className="mt-0.5 text-[13px] text-slate-500">{description}</p> : null}
           </div>
         </div>
-        {action && <div className="flex-shrink-0 self-start">{action}</div>}
+        {action && <div className="flex-shrink-0">{action}</div>}
       </div>
       <div>{children}</div>
     </section>

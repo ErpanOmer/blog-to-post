@@ -29,32 +29,32 @@ const platformIcons: Record<string, string> = {
 const statusConfig = {
   pending: {
     label: "等待中",
-    color: "bg-slate-100 text-slate-600 border-slate-200",
+    color: "bg-slate-50 text-slate-500 border-slate-200",
     icon: Clock,
   },
   draft_created: {
     label: "草稿",
-    color: "bg-amber-100 text-amber-700 border-amber-200",
+    color: "bg-amber-50 text-amber-600 border-amber-200/60",
     icon: FileEdit,
   },
   publishing: {
     label: "发布中",
-    color: "bg-blue-100 text-blue-700 border-blue-200",
+    color: "bg-blue-50 text-blue-600 border-blue-200/60",
     icon: Loader2,
   },
   published: {
     label: "已发布",
-    color: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    color: "bg-emerald-50 text-emerald-600 border-emerald-200/60",
     icon: CheckCircle2,
   },
   failed: {
     label: "失败",
-    color: "bg-red-100 text-red-700 border-red-200",
+    color: "bg-red-50 text-red-600 border-red-200/60",
     icon: XCircle,
   },
   cancelled: {
     label: "已取消",
-    color: "bg-gray-100 text-gray-600 border-gray-200",
+    color: "bg-slate-50 text-slate-500 border-slate-200",
     icon: XCircle,
   },
 } as const;
@@ -89,7 +89,7 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-1 text-xs text-slate-400">
+      <div className="flex items-center gap-1 text-[11px] text-slate-400">
         <Loader2 className="h-3 w-3 animate-spin" />
         <span>加载中...</span>
       </div>
@@ -97,7 +97,7 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
   }
 
   if (publications.length === 0) {
-    return <div className="text-xs text-slate-400">尚未分发到任何平台</div>;
+    return <div className="text-[11px] text-slate-400">尚未分发到任何平台</div>;
   }
 
   const visiblePublications = publications.slice(0, 8);
@@ -105,8 +105,8 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
 
   return (
     <TooltipProvider>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-xs text-slate-500">分发记录:</span>
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-0.5 text-[11px] text-slate-400">分发:</span>
         {visiblePublications.map((publication) => {
           const status = statusConfig[publication.status];
           const StatusIcon = status.icon;
@@ -117,35 +117,35 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
               <TooltipTrigger asChild>
                 <Badge
                   variant="outline"
-                  className={cn("cursor-pointer px-1.5 py-0.5 text-xs transition-opacity hover:opacity-80", status.color)}
+                  className={cn("cursor-pointer px-1.5 py-0 text-[10px] transition-opacity hover:opacity-80", status.color)}
                 >
-                  <span className="mr-1">{platformIcons[publication.platform]}</span>
+                  <span className="mr-0.5">{platformIcons[publication.platform]}</span>
                   <span>{platformLabels[publication.platform] || publication.platform}</span>
-                  <StatusIcon className={cn("ml-1 h-3 w-3", publication.status === "publishing" && "animate-spin")} />
+                  <StatusIcon className={cn("ml-0.5 h-2.5 w-2.5", publication.status === "publishing" && "animate-spin")} />
                 </Badge>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-xs">
-                <div className="space-y-2 text-xs">
+                <div className="space-y-1.5 text-[11px]">
                   <div className="font-medium">
                     {platformLabels[publication.platform] || publication.platform}
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-600">{accountName}</span>
-                    <Badge className={cn("text-xs", status.color)}>{status.label}</Badge>
+                    <span className="text-slate-500">{accountName}</span>
+                    <Badge className={cn("text-[10px]", status.color)}>{status.label}</Badge>
                   </div>
-                  <div className="text-slate-500">时间: {new Date(publication.updatedAt).toLocaleString("zh-CN")}</div>
+                  <div className="text-slate-400">{new Date(publication.updatedAt).toLocaleString("zh-CN")}</div>
                   {publication.publishId && (
-                    <div className="truncate text-slate-500" title={publication.publishId}>
+                    <div className="truncate text-slate-400" title={publication.publishId}>
                       ID: {publication.publishId}
                     </div>
                   )}
-                  {publication.errorMessage && <div className="text-red-600">{publication.errorMessage}</div>}
+                  {publication.errorMessage && <div className="text-red-500">{publication.errorMessage}</div>}
                   {publication.publishedUrl && (
                     <a
                       href={publication.publishedUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-blue-500 hover:underline"
+                      className="inline-flex items-center gap-1 text-brand-500 hover:underline"
                       onClick={(event) => event.stopPropagation()}
                     >
                       <ExternalLink className="h-3 w-3" />
@@ -159,7 +159,7 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
         })}
 
         {hiddenCount > 0 && (
-          <Badge variant="outline" className="text-xs text-slate-500">
+          <Badge variant="outline" className="text-[10px] text-slate-400">
             +{hiddenCount}
           </Badge>
         )}

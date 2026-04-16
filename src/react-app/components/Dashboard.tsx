@@ -105,57 +105,56 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
   }, [accountStats, articles]);
 
   const statCards = [
-    { label: "文章总数", value: summary.totalArticles, detail: `草稿 ${summary.draftArticles} / 已发布 ${summary.publishedArticles}`, icon: FileText },
-    { label: "分发动作", value: summary.totalPublished + summary.totalDrafts, detail: `成功 ${summary.totalPublished} / 草稿 ${summary.totalDrafts}`, icon: Send },
-    { label: "活跃平台", value: summary.totalPlatforms, detail: "已经接入并产生统计的平台", icon: Users },
-    { label: "失败记录", value: summary.totalFailed, detail: "需要回看平台结果与日志", icon: AlertCircle },
+    { label: "文章总数", value: summary.totalArticles, detail: `草稿 ${summary.draftArticles} · 已发布 ${summary.publishedArticles}`, icon: FileText, color: "text-brand-500", bg: "bg-brand-50" },
+    { label: "分发动作", value: summary.totalPublished + summary.totalDrafts, detail: `成功 ${summary.totalPublished} · 草稿 ${summary.totalDrafts}`, icon: Send, color: "text-emerald-500", bg: "bg-emerald-50" },
+    { label: "活跃平台", value: summary.totalPlatforms, detail: "已接入并产生统计", icon: Users, color: "text-violet-500", bg: "bg-violet-50" },
+    { label: "失败记录", value: summary.totalFailed, detail: "需要回看与处理", icon: AlertCircle, color: "text-rose-500", bg: "bg-rose-50" },
   ];
 
   return (
-    <div className="space-y-6">
-      <section className="surface-panel p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="eyebrow-label mb-2">Overview</p>
-            <h1 className="text-[28px] font-semibold text-slate-900">内容分发工作台</h1>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              用来查看文章储备、平台状态和最近分发结果。整体上它应该更像一个内容运营工具，而不是展示型首页。
-            </p>
-          </div>
+    <div className="space-y-5 page-enter">
+      {/* Hero section */}
+      <section className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-gradient-to-br from-white via-white to-brand-50/30 p-6">
+        <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-brand-100/20 blur-3xl" />
+        <div className="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-violet-100/20 blur-3xl" />
+        <div className="relative">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-xl">
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">内容分发工作台</h1>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-500">
+                查看文章储备、平台状态和最近分发结果。
+              </p>
+            </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Drafts</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">{summary.draftArticles}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Published</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">{summary.totalPublished}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Platforms</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">{summary.totalPlatforms}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">Failures</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">{summary.totalFailed}</p>
+            <div className="flex items-center gap-3">
+              {[
+                { label: "草稿", value: summary.draftArticles },
+                { label: "已发布", value: summary.totalPublished },
+                { label: "平台", value: summary.totalPlatforms },
+              ].map((item) => (
+                <div key={item.label} className="text-center">
+                  <p className="text-2xl font-semibold tabular-nums text-slate-900">{item.value}</p>
+                  <p className="text-[11px] text-slate-400">{item.label}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
-            <Card key={card.label}>
-              <CardContent className="flex items-start justify-between p-5">
-                <div>
-                  <p className="text-sm text-slate-500">{card.label}</p>
-                  <p className="mt-3 text-3xl font-semibold text-slate-900">{card.value}</p>
-                  <p className="mt-3 text-xs leading-relaxed text-slate-500">{card.detail}</p>
+            <Card key={card.label} className="stat-card group hover:shadow-card-hover transition-all duration-300">
+              <CardContent className="flex items-start justify-between p-4">
+                <div className="min-w-0">
+                  <p className="text-[12px] font-medium text-slate-400">{card.label}</p>
+                  <p className="mt-1.5 text-2xl font-semibold tabular-nums text-slate-900">{card.value}</p>
+                  <p className="mt-1.5 text-[11px] text-slate-400">{card.detail}</p>
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${card.bg} ${card.color}`}>
                   <Icon className="h-4 w-4" />
                 </div>
               </CardContent>
@@ -164,55 +163,58 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
+      {/* Main content grid */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
         <Card>
-          <CardHeader className="flex-row items-start justify-between space-y-0">
+          <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
             <div>
-              <p className="eyebrow-label mb-2">Distribution Health</p>
-              <CardTitle>平台分发统计</CardTitle>
-              <CardDescription>按平台看发布、草稿和失败情况，方便你快速定位当前瓶颈。</CardDescription>
+              <CardTitle className="text-sm">平台分发统计</CardTitle>
+              <CardDescription className="mt-1">按平台查看发布、草稿和失败情况</CardDescription>
             </div>
-            <Badge variant="secondary" className="gap-1.5">
-              <RefreshCw className="h-3.5 w-3.5" />
-              实时汇总
+            <Badge variant="secondary" className="gap-1.5 text-[10px]">
+              <RefreshCw className="h-3 w-3" />
+              实时
             </Badge>
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
+              <div className="flex min-h-[180px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-[13px] text-slate-400">
                 正在加载统计数据...
               </div>
             ) : summary.platformRows.length === 0 ? (
-              <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
+              <div className="flex min-h-[180px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-[13px] text-slate-400">
                 还没有平台统计数据
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {summary.platformRows.map((row) => {
                   const total = row.published + row.drafts + row.failed;
                   const successRatio = total > 0 ? (row.published / total) * 100 : 0;
 
                   return (
-                    <div key={row.platform} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-sm font-semibold text-slate-700">
+                    <div key={row.platform} className="rounded-lg border border-slate-100 bg-slate-50/50 p-3.5 transition-colors hover:bg-slate-50">
+                      <div className="mb-2.5 flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-white text-xs font-semibold text-slate-600 shadow-sm">
                             {(platformLabels[row.platform] || row.platform).slice(0, 1)}
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-slate-900">{platformLabels[row.platform] || row.platform}</p>
-                            <p className="text-xs text-slate-500">成功率 {Math.round(successRatio)}%</p>
+                            <p className="text-[13px] font-medium text-slate-800">{platformLabels[row.platform] || row.platform}</p>
+                            <p className="text-[11px] text-slate-400">成功率 {Math.round(successRatio)}%</p>
                           </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          <Badge className="border-transparent bg-emerald-100 text-emerald-700">发布 {row.published}</Badge>
-                          <Badge className="border-transparent bg-amber-100 text-amber-700">草稿 {row.drafts}</Badge>
-                          <Badge className="border-transparent bg-rose-100 text-rose-700">失败 {row.failed}</Badge>
+                        <div className="flex items-center gap-1.5">
+                          <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">{row.published}</span>
+                          <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">{row.drafts}</span>
+                          <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600">{row.failed}</span>
                         </div>
                       </div>
 
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                        <div className="h-full rounded-full bg-brand-600" style={{ width: `${successRatio}%` }} />
+                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-500 transition-all duration-700"
+                          style={{ width: `${successRatio}%` }}
+                        />
                       </div>
                     </div>
                   );
@@ -223,32 +225,31 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
         </Card>
 
         <Card>
-          <CardHeader>
-            <p className="eyebrow-label mb-2">Recent Activity</p>
-            <CardTitle>最近动态</CardTitle>
-            <CardDescription>最近发生了什么，哪些文章刚刚推送出去，哪些任务出现了异常。</CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">最近动态</CardTitle>
+            <CardDescription className="mt-1">最近的分发记录和状态变更</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+            <div className="max-h-[380px] space-y-2 overflow-y-auto pr-1">
               {summary.recentActivity.length === 0 ? (
-                <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
+                <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-[13px] text-slate-400">
                   还没有分发记录
                 </div>
               ) : (
                 summary.recentActivity.map((activity, index) => {
                   const statusColor =
-                    activity.status === "published" ? "bg-emerald-500" : activity.status === "draft_created" ? "bg-amber-500" : "bg-rose-500";
+                    activity.status === "published" ? "bg-emerald-400" : activity.status === "draft_created" ? "bg-amber-400" : "bg-rose-400";
 
                   return (
                     <div
                       key={`${activity.articleTitle}-${activity.time}-${index}`}
-                      className="rounded-xl border border-slate-200 bg-white p-4"
+                      className="rounded-lg border border-slate-100 bg-white p-3 transition-colors hover:bg-slate-50/50"
                     >
-                      <div className="flex items-start gap-3">
-                        <div className={`mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full ${statusColor}`} />
+                      <div className="flex items-start gap-2.5">
+                        <div className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${statusColor}`} />
                         <div className="min-w-0 flex-1">
-                          <p className="line-clamp-2 text-sm font-medium leading-relaxed text-slate-900">{activity.articleTitle}</p>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <p className="line-clamp-2 text-[13px] font-medium leading-snug text-slate-800">{activity.articleTitle}</p>
+                          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
                             <span>{platformLabels[activity.platform] || activity.platform}</span>
                             <span>·</span>
                             <span>{getRelativeTime(activity.time)}</span>
@@ -264,34 +265,21 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
         </Card>
       </div>
 
-      <section className="surface-panel p-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="eyebrow-label mb-2">Quick Entry</p>
-            <h2 className="text-lg font-semibold text-slate-900">常用入口</h2>
-            <p className="mt-1 text-sm text-slate-500">保留最常用的几个动作，不做营销式大卡片。</p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" className="gap-2" onClick={() => onNavigate?.("articles")}>
-              文章列表
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-            <Button variant="secondary" size="sm" className="gap-2" onClick={() => onNavigate?.("distribution")}>
-              分发状态
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-            <Button variant="secondary" size="sm" className="gap-2" onClick={() => onNavigate?.("accounts")}>
-              平台账号
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-            <Button variant="secondary" size="sm" className="gap-2" onClick={() => onNavigate?.("settings")}>
-              平台设置
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </section>
+      {/* Quick actions */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/60 bg-white/80 p-3">
+        <span className="mr-1 text-[12px] font-medium text-slate-400">快速入口</span>
+        {[
+          { label: "文章列表", tab: "articles" },
+          { label: "分发状态", tab: "distribution" },
+          { label: "平台账号", tab: "accounts" },
+          { label: "平台设置", tab: "settings" },
+        ].map((item) => (
+          <Button key={item.tab} variant="ghost" size="xs" className="gap-1.5 text-slate-500" onClick={() => onNavigate?.(item.tab)}>
+            {item.label}
+            <ArrowRight className="h-3 w-3" />
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }

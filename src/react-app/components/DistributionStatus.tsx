@@ -66,20 +66,20 @@ const stepTypeLabels: Record<string, string> = {
 };
 
 const stepStatusConfig: Record<string, { label: string; icon: ReactNode; className: string }> = {
-  pending: { label: "待执行", icon: <Clock className="h-4 w-4" />, className: "text-slate-500" },
-  running: { label: "执行中", icon: <Loader2 className="h-4 w-4 animate-spin" />, className: "text-brand-600" },
-  completed: { label: "已完成", icon: <CheckCircle2 className="h-4 w-4" />, className: "text-emerald-600" },
-  failed: { label: "失败", icon: <XCircle className="h-4 w-4" />, className: "text-red-600" },
-  skipped: { label: "已跳过", icon: <SkipForward className="h-4 w-4" />, className: "text-amber-600" },
-  cancelled: { label: "已取消", icon: <XCircle className="h-4 w-4" />, className: "text-slate-400" },
+  pending: { label: "待执行", icon: <Clock className="h-3.5 w-3.5" />, className: "text-slate-400" },
+  running: { label: "执行中", icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, className: "text-brand-500" },
+  completed: { label: "已完成", icon: <CheckCircle2 className="h-3.5 w-3.5" />, className: "text-emerald-500" },
+  failed: { label: "失败", icon: <XCircle className="h-3.5 w-3.5" />, className: "text-red-500" },
+  skipped: { label: "已跳过", icon: <SkipForward className="h-3.5 w-3.5" />, className: "text-amber-500" },
+  cancelled: { label: "已取消", icon: <XCircle className="h-3.5 w-3.5" />, className: "text-slate-400" },
 };
 
 const taskStatusConfig: Record<string, { label: string; badgeClass: string }> = {
-  pending: { label: "待执行", badgeClass: "border-slate-200 bg-slate-100 text-slate-700" },
-  processing: { label: "执行中", badgeClass: "border-blue-200 bg-blue-50 text-blue-700" },
-  completed: { label: "已完成", badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  failed: { label: "失败", badgeClass: "border-red-200 bg-red-50 text-red-700" },
-  cancelled: { label: "已取消", badgeClass: "border-slate-200 bg-slate-100 text-slate-600" },
+  pending: { label: "待执行", badgeClass: "border-slate-200 bg-slate-50 text-slate-600" },
+  processing: { label: "执行中", badgeClass: "border-blue-200/60 bg-blue-50 text-blue-600" },
+  completed: { label: "已完成", badgeClass: "border-emerald-200/60 bg-emerald-50 text-emerald-600" },
+  failed: { label: "失败", badgeClass: "border-red-200/60 bg-red-50 text-red-600" },
+  cancelled: { label: "已取消", badgeClass: "border-slate-200 bg-slate-50 text-slate-500" },
 };
 
 function formatDateTime(timestamp: number): string {
@@ -184,70 +184,56 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
     [tasks],
   );
 
+  const summaryCards = [
+    { label: "Tasks", value: summary.total, icon: Layers, color: "text-slate-400" },
+    { label: "Running", value: summary.running, icon: PlayCircle, color: "text-brand-400" },
+    { label: "Completed", value: summary.completed, icon: CheckCircle2, color: "text-emerald-400" },
+    { label: "Failed", value: summary.failed, icon: AlertTriangle, color: "text-red-400" },
+  ];
+
   return (
-    <div className="space-y-5">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Tasks</p>
-            <div className="mt-3 flex items-end justify-between">
-              <p className="text-3xl font-semibold text-slate-900">{summary.total}</p>
-              <Layers className="h-5 w-5 text-slate-300" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Running</p>
-            <div className="mt-3 flex items-end justify-between">
-              <p className="text-3xl font-semibold text-brand-600">{summary.running}</p>
-              <PlayCircle className="h-5 w-5 text-brand-300" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Completed</p>
-            <div className="mt-3 flex items-end justify-between">
-              <p className="text-3xl font-semibold text-emerald-600">{summary.completed}</p>
-              <CheckCircle2 className="h-5 w-5 text-emerald-300" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Failed</p>
-            <div className="mt-3 flex items-end justify-between">
-              <p className="text-3xl font-semibold text-red-600">{summary.failed}</p>
-              <AlertTriangle className="h-5 w-5 text-red-300" />
-            </div>
-          </CardContent>
-        </Card>
+    <div className="space-y-4 page-enter">
+      {/* Summary cards */}
+      <div className="grid gap-3 grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <Card key={card.label}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{card.label}</p>
+                    <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{card.value}</p>
+                  </div>
+                  <Icon className={cn("h-5 w-5", card.color)} />
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
+      {/* Task list */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <Layers className="h-5 w-5 text-brand-600" />
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Layers className="h-4 w-4 text-brand-500" />
                 分发任务看板
               </CardTitle>
-              <CardDescription>查看任务队列、执行进度、失败步骤和适配器日志，风格统一为后台任务监控页。</CardDescription>
+              <CardDescription className="mt-1">查看任务队列、执行进度和步骤日志</CardDescription>
             </div>
 
-            <Button variant="outline" size="sm" onClick={() => void loadData()} disabled={isLoading} className="gap-2">
-              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            <Button variant="outline" size="xs" onClick={() => void loadData()} disabled={isLoading} className="gap-1.5 self-start">
+              <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
               刷新
             </Button>
           </div>
         </CardHeader>
 
         <CardContent>
-          <Tabs value={activeFilter} onValueChange={setActiveFilter} className="mb-4">
+          <Tabs value={activeFilter} onValueChange={setActiveFilter} className="mb-3">
             <TabsList>
               <TabsTrigger value="all">全部</TabsTrigger>
               <TabsTrigger value="running">执行中</TabsTrigger>
@@ -257,19 +243,19 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
             </TabsList>
           </Tabs>
 
-          <ScrollArea className="h-[560px]">
+          <ScrollArea className="h-[520px]">
             {isLoading && filteredTasks.length === 0 ? (
-              <div className="flex items-center justify-center py-16 text-slate-500">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              <div className="flex items-center justify-center py-16 text-[13px] text-slate-400">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 正在加载任务...
               </div>
             ) : filteredTasks.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-16 text-center text-slate-500">
-                <Layers className="mx-auto mb-3 h-10 w-10 text-slate-300" />
-                当前筛选下暂无任务。
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-16 text-center text-[13px] text-slate-400">
+                <Layers className="mx-auto mb-2 h-8 w-8 text-slate-200" />
+                当前筛选下暂无任务
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {filteredTasks.map((task) => {
                   const status = taskStatusConfig[task.status] || taskStatusConfig.pending;
                   const completed = task.progressData?.completedSteps ?? task.steps?.filter((step) => step.status === "completed").length ?? 0;
@@ -284,51 +270,50 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                     <button
                       key={task.id}
                       type="button"
-                      className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left transition-colors hover:border-slate-300 hover:bg-slate-50"
+                      className="w-full rounded-lg border border-slate-100 bg-white p-3.5 text-left transition-all duration-200 hover:border-slate-200 hover:bg-slate-50/50 hover:shadow-sm"
                       onClick={() => {
                         setSelectedTaskId(task.id);
                         setIsDetailOpen(true);
                       }}
                     >
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="mb-2 flex flex-wrap items-center gap-2">
-                            <Badge className={cn("border text-xs", status.badgeClass)}>{status.label}</Badge>
-                            <span className="text-xs text-slate-400">创建于 {formatDateTime(task.createdAt)}</span>
-                            {task.scheduleTime ? <span className="text-xs text-slate-400">排期 {formatDateTime(task.scheduleTime)}</span> : null}
+                          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                            <Badge className={cn("border text-[10px]", status.badgeClass)}>{status.label}</Badge>
+                            <span className="text-[11px] text-slate-400">{formatDateTime(task.createdAt)}</span>
                           </div>
 
-                          <div className="grid gap-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-4">
-                            <span className="inline-flex items-center gap-1.5">
-                              <FileText className="h-4 w-4 text-slate-400" />
-                              文章 {task.articleIds.length}
+                          <div className="flex flex-wrap items-center gap-3 text-[12px] text-slate-500">
+                            <span className="inline-flex items-center gap-1">
+                              <FileText className="h-3.5 w-3.5 text-slate-300" />
+                              {task.articleIds.length}
                             </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <User className="h-4 w-4 text-slate-400" />
-                              账号 {accountCount}
+                            <span className="inline-flex items-center gap-1">
+                              <User className="h-3.5 w-3.5 text-slate-300" />
+                              {accountCount}
                             </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <Layers className="h-4 w-4 text-slate-400" />
-                              平台 {platformCount}
+                            <span className="inline-flex items-center gap-1">
+                              <Layers className="h-3.5 w-3.5 text-slate-300" />
+                              {platformCount}
                             </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <CheckCircle2 className="h-4 w-4 text-slate-400" />
-                              步骤 {formatProgressPair(done, task.totalSteps || 0)}
+                            <span className="inline-flex items-center gap-1">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-slate-300" />
+                              {formatProgressPair(done, task.totalSteps || 0)}
                             </span>
                           </div>
 
-                          <div className="mt-3">
-                            <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+                          <div className="mt-2.5">
+                            <div className="mb-1 flex items-center justify-between text-[11px] text-slate-400">
                               <span>{task.progressData?.currentStep || "等待执行"}</span>
-                              <span>{progress}%</span>
+                              <span className="tabular-nums">{progress}%</span>
                             </div>
-                            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                              <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${progress}%` }} />
+                            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                              <div className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-500 transition-all duration-500" style={{ width: `${progress}%` }} />
                             </div>
                           </div>
                         </div>
 
-                        <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-300" />
+                        <ChevronRight className="mt-1 h-4 w-4 flex-shrink-0 text-slate-300" />
                       </div>
                     </button>
                   );
@@ -339,52 +324,55 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
         </CardContent>
       </Card>
 
+      {/* Detail dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="flex max-h-[92vh] max-w-6xl flex-col overflow-hidden p-0">
+        <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col overflow-hidden p-0">
           {selectedTask && (
             <>
-              <DialogHeader className="border-b border-slate-200 px-6 py-5">
-                <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-                  <Layers className="h-5 w-5 text-brand-600" />
+              <DialogHeader className="border-b border-slate-100 px-5 py-4">
+                <DialogTitle className="flex items-center gap-2 text-base">
+                  <Layers className="h-4 w-4 text-brand-500" />
                   任务详情
                 </DialogTitle>
-                <DialogDescription className="text-sm text-slate-500">
-                  创建时间 {formatDateTime(selectedTask.createdAt)} · 任务 ID {selectedTask.id}
+                <DialogDescription>
+                  {formatDateTime(selectedTask.createdAt)} · {selectedTask.id}
                 </DialogDescription>
               </DialogHeader>
 
-              <ScrollArea className="flex-1 px-6 py-5">
-                <div className="space-y-6">
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Status</p>
-                      <Badge className={cn("mt-3 border", taskStatusConfig[selectedTask.status]?.badgeClass)}>
+              <ScrollArea className="flex-1 px-5 py-4">
+                <div className="space-y-4">
+                  {/* Detail stat cards */}
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Status</p>
+                      <Badge className={cn("mt-2 border", taskStatusConfig[selectedTask.status]?.badgeClass)}>
                         {taskStatusConfig[selectedTask.status]?.label || selectedTask.status}
                       </Badge>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Progress</p>
-                      <p className="mt-3 text-xl font-semibold text-slate-900">
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Progress</p>
+                      <p className="mt-2 text-lg font-semibold tabular-nums text-slate-900">
                         {formatProgressPair(selectedTask.currentStep, selectedTask.totalSteps)}
                       </p>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Articles</p>
-                      <p className="mt-3 text-xl font-semibold text-slate-900">{selectedTask.articleIds.length}</p>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Articles</p>
+                      <p className="mt-2 text-lg font-semibold tabular-nums text-slate-900">{selectedTask.articleIds.length}</p>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Updated</p>
-                      <p className="mt-3 text-sm font-medium text-slate-900">{formatDateTime(selectedTask.updatedAt)}</p>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Updated</p>
+                      <p className="mt-2 text-[13px] font-medium text-slate-700">{formatDateTime(selectedTask.updatedAt)}</p>
                     </div>
                   </div>
 
+                  {/* Progress data */}
                   {selectedTask.progressData && (
-                    <section className="rounded-xl border border-slate-200 bg-white p-4">
-                      <h4 className="text-sm font-semibold text-slate-900">实时进度</h4>
-                      <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2">
+                    <div className="rounded-lg border border-slate-100 bg-white p-3.5">
+                      <h4 className="text-[13px] font-semibold text-slate-800">实时进度</h4>
+                      <div className="mt-2.5 grid gap-1.5 text-[12px] text-slate-500 md:grid-cols-2">
                         <div>当前步骤: {selectedTask.progressData.currentStep}</div>
                         <div>
                           步骤统计: 完成 {selectedTask.progressData.completedSteps} / 失败 {selectedTask.progressData.failedSteps} / 跳过{" "}
@@ -405,13 +393,14 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                           )}
                         </div>
                       </div>
-                    </section>
+                    </div>
                   )}
 
+                  {/* Steps */}
                   {selectedTask.steps && selectedTask.steps.length > 0 && (
-                    <section>
-                      <h4 className="mb-3 text-sm font-semibold text-slate-900">执行步骤</h4>
-                      <div className="space-y-3">
+                    <div>
+                      <h4 className="mb-2 text-[13px] font-semibold text-slate-800">执行步骤</h4>
+                      <div className="space-y-2">
                         {selectedTask.steps.map((step) => {
                           const status = stepStatusConfig[step.status] || stepStatusConfig.pending;
                           const inputData = step.inputData ?? null;
@@ -437,23 +426,23 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                               : stepTypeLabels[step.stepType] || step.stepType;
 
                           return (
-                            <div key={step.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div key={step.id} className="rounded-lg border border-slate-100 bg-white p-3.5">
+                              <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                                 <div className="min-w-0 flex-1">
-                                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                                    <Badge variant="outline" className="text-[11px]">
-                                      步骤 #{step.stepNumber}
+                                  <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                                    <Badge variant="outline" className="text-[10px]">
+                                      #{step.stepNumber}
                                     </Badge>
-                                    <span className={cn("inline-flex items-center gap-1 text-sm font-medium", status.className)}>
+                                    <span className={cn("inline-flex items-center gap-1 text-[12px] font-medium", status.className)}>
                                       {status.icon}
                                       {status.label}
                                     </span>
-                                    <span className="text-sm text-slate-700">{stepLabel}</span>
+                                    <span className="text-[12px] text-slate-600">{stepLabel}</span>
                                   </div>
 
-                                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                                     <span>
-                                      平台 {platformIcons[step.platform]} · {platformLabels[step.platform] || step.platform}
+                                      {platformIcons[step.platform]} {platformLabels[step.platform] || step.platform}
                                     </span>
                                     {step.articleId ? (
                                       <span>文章: {selectedTask.articleTitles?.get(step.articleId) || "未知文章"}</span>
@@ -462,14 +451,14 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                                   </div>
 
                                   {traceMessage ? (
-                                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                                    <div className="mt-2 rounded-md border border-slate-100 bg-slate-50/50 px-2.5 py-1.5 text-[11px] text-slate-600">
                                       {traceMessage}
                                     </div>
                                   ) : null}
 
                                   {step.errorMessage ? (
-                                    <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                                      <AlertCircle className="mr-1 inline h-3.5 w-3.5" />
+                                    <div className="mt-2 rounded-md border border-red-100 bg-red-50/50 px-2.5 py-1.5 text-[11px] text-red-600">
+                                      <AlertCircle className="mr-1 inline h-3 w-3" />
                                       {step.errorMessage}
                                     </div>
                                   ) : null}
@@ -477,33 +466,33 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                               </div>
 
                               {inputData && (
-                                <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                                  <summary className="cursor-pointer text-xs font-medium text-slate-600">输入数据</summary>
-                                  <pre className="mt-2 overflow-x-auto text-[11px] text-slate-700">{safeStringify(inputData)}</pre>
+                                <details className="mt-2 rounded-md border border-slate-100 bg-slate-50/50 p-2.5">
+                                  <summary className="cursor-pointer text-[11px] font-medium text-slate-500">输入数据</summary>
+                                  <pre className="mt-1.5 overflow-x-auto text-[10px] text-slate-600">{safeStringify(inputData)}</pre>
                                 </details>
                               )}
 
                               {outputData && (
-                                <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                                  <summary className="cursor-pointer text-xs font-medium text-slate-600">输出数据</summary>
-                                  <pre className="mt-2 overflow-x-auto text-[11px] text-slate-700">{safeStringify(outputData)}</pre>
+                                <details className="mt-2 rounded-md border border-slate-100 bg-slate-50/50 p-2.5">
+                                  <summary className="cursor-pointer text-[11px] font-medium text-slate-500">输出数据</summary>
+                                  <pre className="mt-1.5 overflow-x-auto text-[10px] text-slate-600">{safeStringify(outputData)}</pre>
                                 </details>
                               )}
                             </div>
                           );
                         })}
                       </div>
-                    </section>
+                    </div>
                   )}
 
                   {selectedTask.errorData && (
-                    <section className="rounded-xl border border-red-200 bg-red-50 p-4">
-                      <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-700">
-                        <AlertCircle className="h-4 w-4" />
+                    <div className="rounded-lg border border-red-100 bg-red-50/50 p-3.5">
+                      <h4 className="mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold text-red-600">
+                        <AlertCircle className="h-3.5 w-3.5" />
                         任务错误信息
                       </h4>
-                      <pre className="whitespace-pre-wrap text-xs text-red-700">{safeStringify(selectedTask.errorData)}</pre>
-                    </section>
+                      <pre className="whitespace-pre-wrap text-[11px] text-red-600">{safeStringify(selectedTask.errorData)}</pre>
+                    </div>
                   )}
                 </div>
               </ScrollArea>

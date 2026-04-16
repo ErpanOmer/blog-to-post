@@ -20,25 +20,25 @@ interface NotificationItemProps {
 
 const notificationConfig: Record<NotificationType, { icon: React.ReactNode; bgColor: string; borderColor: string; textColor: string }> = {
   success: {
-    icon: <CheckCircle2 className="h-5 w-5" />,
+    icon: <CheckCircle2 className="h-4 w-4" />,
     bgColor: "bg-emerald-50",
-    borderColor: "border-emerald-200",
+    borderColor: "border-emerald-200/60",
     textColor: "text-emerald-700",
   },
   error: {
-    icon: <AlertCircle className="h-5 w-5" />,
+    icon: <AlertCircle className="h-4 w-4" />,
     bgColor: "bg-red-50",
-    borderColor: "border-red-200",
+    borderColor: "border-red-200/60",
     textColor: "text-red-700",
   },
   info: {
-    icon: <Info className="h-5 w-5" />,
+    icon: <Info className="h-4 w-4" />,
     bgColor: "bg-blue-50",
-    borderColor: "border-blue-200",
+    borderColor: "border-blue-200/60",
     textColor: "text-blue-700",
   },
   loading: {
-    icon: <Loader2 className="h-5 w-5 animate-spin" />,
+    icon: <Loader2 className="h-4 w-4 animate-spin" />,
     bgColor: "bg-slate-50",
     borderColor: "border-slate-200",
     textColor: "text-slate-700",
@@ -60,9 +60,8 @@ function NotificationItem({ notification, onRemove }: NotificationItemProps) {
   return (
     <div
       className={cn(
-        "relative flex items-start gap-3 p-4 rounded-xl border shadow-lg backdrop-blur-sm",
-        "transform transition-all duration-300 ease-out",
-        "animate-in slide-in-from-right-full fade-in",
+        "relative flex items-start gap-2.5 p-3.5 rounded-xl border shadow-elevated backdrop-blur-sm",
+        "animate-in",
         config.bgColor,
         config.borderColor,
         config.textColor
@@ -70,16 +69,16 @@ function NotificationItem({ notification, onRemove }: NotificationItemProps) {
     >
       <div className="flex-shrink-0 mt-0.5">{config.icon}</div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm">{notification.title}</p>
+        <p className="font-medium text-[13px]">{notification.title}</p>
         {notification.message && (
-          <p className="text-xs opacity-80 mt-1">{notification.message}</p>
+          <p className="text-[12px] opacity-75 mt-0.5">{notification.message}</p>
         )}
       </div>
       <button
         onClick={() => onRemove(notification.id)}
-        className="flex-shrink-0 p-1 rounded-lg hover:bg-black/5 transition-colors"
+        className="flex-shrink-0 p-1 rounded-md hover:bg-black/5 transition-colors"
       >
-        <X className="h-4 w-4" />
+        <X className="h-3.5 w-3.5" />
       </button>
     </div>
   );
@@ -220,7 +219,7 @@ export function NotificationContainer() {
   }, []);
 
   return (
-    <div className="fixed top-20 right-4 z-50 flex flex-col gap-2 w-80 pointer-events-none">
+    <div className="fixed top-16 right-4 z-50 flex flex-col gap-2 w-72 pointer-events-none">
       {notifications.map((notification) => (
         <div key={notification.id} className="pointer-events-auto">
           <NotificationItem notification={notification} onRemove={handleRemove} />

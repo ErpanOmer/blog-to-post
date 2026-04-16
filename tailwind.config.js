@@ -50,19 +50,19 @@ export default {
     				'4': 'hsl(var(--chart-4))',
     				'5': 'hsl(var(--chart-5))'
     			},
-				// Brand colors
+				// Brand colors — shifted to indigo for a more premium feel
 				brand: {
-					50: '#eff6ff',
-					100: '#dbeafe',
-					200: '#bfdbfe',
-					300: '#93c5fd',
-					400: '#60a5fa',
-					500: '#3b82f6',
-					600: '#2563eb',
-					700: '#1d4ed8',
-					800: '#1e40af',
-					900: '#1e3a8a',
-					950: '#172554',
+					50: '#eef2ff',
+					100: '#e0e7ff',
+					200: '#c7d2fe',
+					300: '#a5b4fc',
+					400: '#818cf8',
+					500: '#6366f1',
+					600: '#4f46e5',
+					700: '#4338ca',
+					800: '#3730a3',
+					900: '#312e81',
+					950: '#1e1b4b',
 				},
 				sunset: {
 					50: '#fff7ed',
@@ -93,11 +93,11 @@ export default {
 					600: '#d97706',
 				},
 				info: {
-					DEFAULT: '#3b82f6',
-					50: '#eff6ff',
-					100: '#dbeafe',
-					500: '#3b82f6',
-					600: '#2563eb',
+					DEFAULT: '#6366f1',
+					50: '#eef2ff',
+					100: '#e0e7ff',
+					500: '#6366f1',
+					600: '#4f46e5',
 				},
     		},
     		borderRadius: {
@@ -111,27 +111,29 @@ export default {
 				mono: ['"JetBrains Mono"', '"Cascadia Code"', '"SFMono-Regular"', 'monospace'],
 			},
 			boxShadow: {
-				'soft': '0 12px 32px -20px rgba(15, 23, 42, 0.14), 0 4px 12px -8px rgba(15, 23, 42, 0.08)',
-				'card': '0 8px 24px -14px rgba(15, 23, 42, 0.12), 0 2px 8px -4px rgba(15, 23, 42, 0.06)',
-				'card-hover': '0 16px 36px -18px rgba(15, 23, 42, 0.16), 0 6px 16px -8px rgba(15, 23, 42, 0.08)',
-				'glow': '0 14px 34px -22px rgba(37, 99, 235, 0.35)',
-				'glow-lg': '0 18px 42px -24px rgba(37, 99, 235, 0.38)',
-				'inner-soft': 'inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(148,163,184,0.08)',
+				'soft': '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
+				'card': '0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 16px -2px rgba(0, 0, 0, 0.04)',
+				'card-hover': '0 8px 24px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04)',
+				'elevated': '0 10px 32px -4px rgba(0, 0, 0, 0.1), 0 6px 16px -2px rgba(0, 0, 0, 0.06)',
+				'glow': '0 0 20px -4px rgba(99, 102, 241, 0.25)',
+				'glow-lg': '0 0 30px -4px rgba(99, 102, 241, 0.3)',
+				'inner-soft': 'inset 0 1px 0 rgba(255,255,255,0.6)',
 			},
 			backgroundImage: {
 				'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-				'gradient-brand': 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)',
-				'gradient-indigo': 'linear-gradient(135deg, #334155 0%, #0f172a 100%)',
-				'gradient-blue': 'linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 100%)',
+				'gradient-brand': 'linear-gradient(135deg, #6366f1 0%, #818cf8 100%)',
+				'gradient-indigo': 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+				'gradient-blue': 'linear-gradient(135deg, #6366f1 0%, #06b6d4 100%)',
 				'gradient-card': 'linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(248,250,252,1) 100%)',
-				'gradient-halo': 'radial-gradient(circle at top left, rgba(59,130,246,0.08), transparent 55%)',
-				'gradient-ember': 'radial-gradient(circle at top right, rgba(14,165,233,0.06), transparent 48%)',
+				'gradient-halo': 'radial-gradient(circle at top left, rgba(99,102,241,0.06), transparent 50%)',
+				'gradient-ember': 'radial-gradient(circle at top right, rgba(244,114,182,0.04), transparent 45%)',
 			},
 			animation: {
 				'fade-in': 'fadeIn 0.3s ease-out',
-				'slide-up': 'slideUp 0.4s ease-out',
+				'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
 				'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
 				'float-soft': 'floatSoft 8s ease-in-out infinite',
+				'scale-in': 'scaleIn 0.2s ease-out',
 			},
 			keyframes: {
 				fadeIn: {
@@ -139,7 +141,7 @@ export default {
 					'100%': { opacity: '1' },
 				},
 				slideUp: {
-					'0%': { opacity: '0', transform: 'translateY(10px)' },
+					'0%': { opacity: '0', transform: 'translateY(8px)' },
 					'100%': { opacity: '1', transform: 'translateY(0)' },
 				},
 				pulseSoft: {
@@ -148,7 +150,11 @@ export default {
 				},
 				floatSoft: {
 					'0%, 100%': { transform: 'translateY(0px)' },
-					'50%': { transform: 'translateY(-8px)' },
+					'50%': { transform: 'translateY(-6px)' },
+				},
+				scaleIn: {
+					'0%': { opacity: '0', transform: 'scale(0.95)' },
+					'100%': { opacity: '1', transform: 'scale(1)' },
 				},
 			},
     	}

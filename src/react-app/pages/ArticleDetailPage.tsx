@@ -37,11 +37,11 @@ interface ArticleDetailPageProps {
 const plugins = [gfm(), highlight(), breaks(), frontmatter(), gemoji(), math()];
 
 const statusConfig = {
-  draft: { label: "草稿", className: "bg-slate-100 text-slate-700" },
-  reviewed: { label: "待审核", className: "bg-sky-100 text-sky-700" },
-  scheduled: { label: "待发布", className: "bg-amber-100 text-amber-700" },
-  published: { label: "已发布", className: "bg-emerald-100 text-emerald-700" },
-  failed: { label: "发布失败", className: "bg-rose-100 text-rose-700" },
+  draft: { label: "草稿", className: "bg-slate-50 text-slate-600 border-slate-200" },
+  reviewed: { label: "待审核", className: "bg-sky-50 text-sky-600 border-sky-200/60" },
+  scheduled: { label: "待发布", className: "bg-amber-50 text-amber-600 border-amber-200/60" },
+  published: { label: "已发布", className: "bg-emerald-50 text-emerald-600 border-emerald-200/60" },
+  failed: { label: "发布失败", className: "bg-rose-50 text-rose-600 border-rose-200/60" },
 } as const;
 
 function formatDateTime(timestamp: number): string {
@@ -59,35 +59,36 @@ export function ArticleDetailPage({ article, onBack, onEdit, onDelete, onPublish
   const status = statusConfig[article.status];
 
   return (
-    <div className="space-y-6">
-      <section className="surface-panel p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start">
-            <div className="h-32 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 md:w-56">
+    <div className="space-y-4 page-enter">
+      {/* Header */}
+      <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start">
+            <div className="h-28 w-full overflow-hidden rounded-xl border border-slate-100 bg-slate-50 md:w-44">
               {article.coverImage ? (
                 <img src={article.coverImage} alt={article.title} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
-                  <ImageIcon className="h-10 w-10 text-slate-300" />
+                  <ImageIcon className="h-8 w-8 text-slate-200" />
                 </div>
               )}
             </div>
 
             <div className="min-w-0 flex-1">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge className={cn("border-0", status.className)}>{status.label}</Badge>
-                <Badge variant="outline">创建于 {formatDateTime(article.createdAt)}</Badge>
-                <Badge variant="outline">更新于 {formatDateTime(article.updatedAt)}</Badge>
+              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                <Badge className={cn("border text-[10px]", status.className)}>{status.label}</Badge>
+                <span className="text-[11px] text-slate-400">创建于 {formatDateTime(article.createdAt)}</span>
+                <span className="text-[11px] text-slate-400">· 更新于 {formatDateTime(article.updatedAt)}</span>
               </div>
 
-              <h1 className="text-[28px] font-semibold leading-tight text-slate-900">{article.title || "未命名文章"}</h1>
-              {article.summary && <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600">{article.summary}</p>}
+              <h1 className="text-xl font-semibold tracking-tight text-slate-900">{article.title || "未命名文章"}</h1>
+              {article.summary && <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-slate-500">{article.summary}</p>}
 
               {article.tags && article.tags.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {article.tags.map((tag, index) => (
-                    <Badge key={`${tag}-${index}`} variant="outline" className="gap-1.5">
-                      <Hash className="h-3 w-3 text-slate-400" />
+                    <Badge key={`${tag}-${index}`} variant="outline" className="gap-1 text-[10px]">
+                      <Hash className="h-2.5 w-2.5 text-slate-400" />
                       {tag}
                     </Badge>
                   ))}
@@ -96,101 +97,100 @@ export function ArticleDetailPage({ article, onBack, onEdit, onDelete, onPublish
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" type="button" onClick={onBack} className="gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              返回列表
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button variant="ghost" size="xs" type="button" onClick={onBack} className="gap-1 text-slate-500">
+              <ArrowLeft className="h-3 w-3" />
+              返回
             </Button>
-            <Button variant="default" size="sm" type="button" onClick={() => onPublish?.([article])} className="gap-2">
-              <Rocket className="h-4 w-4" />
-              发布文章
+            <Button variant="default" size="xs" type="button" onClick={() => onPublish?.([article])} className="gap-1">
+              <Rocket className="h-3 w-3" />
+              发布
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant="ghost"
+              size="xs"
               type="button"
               onClick={() => onEdit?.(article)}
               disabled={article.status !== "draft"}
-              className="gap-2"
+              className="gap-1 text-slate-500"
             >
-              <Pencil className="h-4 w-4" />
+              <Pencil className="h-3 w-3" />
               编辑
             </Button>
             <Button
               variant="ghost"
-              size="sm"
+              size="xs"
               type="button"
               onClick={() => onDelete?.(article)}
               disabled={article.status !== "draft"}
-              className="gap-2 text-red-600 hover:bg-red-50 hover:text-red-700"
+              className="gap-1 text-red-500 hover:bg-red-50 hover:text-red-600"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3 w-3" />
               删除
             </Button>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="surface-panel p-6">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+        {/* Main content */}
+        <section className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm">
           <ArticlePublicationStatus articleId={article.id} />
-          <Separator className="my-6 bg-slate-200" />
-          <div className="prose prose-slate max-w-none">
+          <Separator className="my-5 bg-slate-100" />
+          <div className="prose prose-slate max-w-none prose-headings:tracking-tight prose-p:text-[14px] prose-p:leading-relaxed">
             <div className="bytemd-viewer">
               <Viewer value={article.content} plugins={plugins} />
             </div>
           </div>
         </section>
 
-        <aside className="space-y-4">
-          <div className="surface-panel p-5">
-            <p className="eyebrow-label mb-2">Timeline</p>
-            <h2 className="text-lg font-semibold text-slate-900">时间信息</h2>
-            <div className="mt-4 space-y-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
-                  <Calendar className="h-4 w-4 text-brand-600" />
+        {/* Sidebar */}
+        <aside className="space-y-3">
+          <div className="rounded-xl border border-slate-200/60 bg-white p-4 shadow-sm">
+            <h2 className="text-[13px] font-semibold text-slate-800">时间信息</h2>
+            <div className="mt-3 space-y-2">
+              <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+                <div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
+                  <Calendar className="h-3.5 w-3.5 text-brand-400" />
                   创建时间
                 </div>
-                <p className="mt-2 text-xs text-slate-500">{formatDateTime(article.createdAt)}</p>
+                <p className="mt-1 text-[11px] text-slate-400">{formatDateTime(article.createdAt)}</p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
-                  <Clock className="h-4 w-4 text-slate-600" />
-                  最近更新时间
+              <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+                <div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
+                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                  最近更新
                 </div>
-                <p className="mt-2 text-xs text-slate-500">{formatDateTime(article.updatedAt)}</p>
+                <p className="mt-1 text-[11px] text-slate-400">{formatDateTime(article.updatedAt)}</p>
               </div>
 
               {article.publishedAt && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-emerald-800">
-                    <CheckCircle2 className="h-4 w-4" />
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
+                  <div className="flex items-center gap-1.5 text-[12px] font-medium text-emerald-700">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
                     发布时间
                   </div>
-                  <p className="mt-2 text-xs text-emerald-700">{formatDateTime(article.publishedAt)}</p>
+                  <p className="mt-1 text-[11px] text-emerald-600">{formatDateTime(article.publishedAt)}</p>
                 </div>
               )}
             </div>
           </div>
 
           {article.summary && (
-            <div className="surface-panel p-5">
-              <p className="eyebrow-label mb-2">Summary</p>
-              <h2 className="text-lg font-semibold text-slate-900">摘要</h2>
-              <p className="mt-3 text-sm leading-relaxed text-slate-600">{article.summary}</p>
+            <div className="rounded-xl border border-slate-200/60 bg-white p-4 shadow-sm">
+              <h2 className="text-[13px] font-semibold text-slate-800">摘要</h2>
+              <p className="mt-2 text-[13px] leading-relaxed text-slate-500">{article.summary}</p>
             </div>
           )}
 
           {article.tags && article.tags.length > 0 && (
-            <div className="surface-panel p-5">
-              <p className="eyebrow-label mb-2">Tags</p>
-              <h2 className="text-lg font-semibold text-slate-900">标签</h2>
-              <div className="mt-3 flex flex-wrap gap-2">
+            <div className="rounded-xl border border-slate-200/60 bg-white p-4 shadow-sm">
+              <h2 className="text-[13px] font-semibold text-slate-800">标签</h2>
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {article.tags.map((tag, index) => (
-                  <Badge key={`${tag}-${index}`} variant="outline" className="gap-1.5">
-                    <FileText className="h-3 w-3 text-slate-400" />
+                  <Badge key={`${tag}-${index}`} variant="outline" className="gap-1 text-[10px]">
+                    <FileText className="h-2.5 w-2.5 text-slate-400" />
                     {tag}
                   </Badge>
                 ))}

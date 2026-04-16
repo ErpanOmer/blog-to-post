@@ -9,12 +9,12 @@ const platformConfig: Record<
   PlatformType,
   { label: string; icon: string; textClass: string; badgeClass: string }
 > = {
-  juejin: { label: "掘金", icon: "J", textClass: "text-orange-700", badgeClass: "bg-orange-50 text-orange-700 border-orange-200" },
-  zhihu: { label: "知乎", icon: "Z", textClass: "text-blue-700", badgeClass: "bg-blue-50 text-blue-700 border-blue-200" },
-  xiaohongshu: { label: "小红书", icon: "X", textClass: "text-rose-700", badgeClass: "bg-rose-50 text-rose-700 border-rose-200" },
-  wechat: { label: "公众号", icon: "W", textClass: "text-emerald-700", badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  csdn: { label: "CSDN", icon: "C", textClass: "text-sky-700", badgeClass: "bg-sky-50 text-sky-700 border-sky-200" },
-  "": { label: "未知", icon: "?", textClass: "text-slate-700", badgeClass: "bg-slate-50 text-slate-700 border-slate-200" },
+  juejin: { label: "掘金", icon: "J", textClass: "text-orange-600", badgeClass: "bg-orange-50 text-orange-600 border-orange-200/60" },
+  zhihu: { label: "知乎", icon: "Z", textClass: "text-blue-600", badgeClass: "bg-blue-50 text-blue-600 border-blue-200/60" },
+  xiaohongshu: { label: "小红书", icon: "X", textClass: "text-rose-600", badgeClass: "bg-rose-50 text-rose-600 border-rose-200/60" },
+  wechat: { label: "公众号", icon: "W", textClass: "text-emerald-600", badgeClass: "bg-emerald-50 text-emerald-600 border-emerald-200/60" },
+  csdn: { label: "CSDN", icon: "C", textClass: "text-sky-600", badgeClass: "bg-sky-50 text-sky-600 border-sky-200/60" },
+  "": { label: "未知", icon: "?", textClass: "text-slate-600", badgeClass: "bg-slate-50 text-slate-600 border-slate-200" },
 };
 
 interface PlatformAccountListProps {
@@ -26,94 +26,90 @@ interface PlatformAccountListProps {
 export function PlatformAccountList({ accounts, onEdit, onDelete }: PlatformAccountListProps) {
   if (accounts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-[18px] border border-dashed border-slate-200 bg-slate-50 py-20 text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-slate-900 text-white">
-          <Shield className="h-7 w-7" />
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-16 text-center">
+        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
+          <Shield className="h-5 w-5" />
         </div>
-        <h3 className="text-lg font-semibold text-slate-900">还没有平台账号</h3>
-        <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-500">先补齐常用平台的认证账号，后续分发时才能直接选择目标进行投递。</p>
+        <h3 className="text-base font-semibold text-slate-900">还没有平台账号</h3>
+        <p className="mt-1 max-w-sm text-[13px] text-slate-500">先补齐常用平台的认证账号，后续分发时才能直接选择目标。</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {accounts.map((account) => {
         const config = platformConfig[account.platform];
         const maskedToken = account.authToken ? `${account.authToken.slice(0, 4)}...${account.authToken.slice(-4)}` : null;
 
         return (
-          <article key={account.id} className="rounded-[18px] border border-slate-200 bg-white p-4 shadow-card">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex min-w-0 flex-1 items-start gap-4">
-                <Avatar className="h-14 w-14 border border-slate-200">
+          <article key={account.id} className="rounded-xl border border-slate-200/80 bg-white p-4 transition-all duration-200 hover:shadow-card-hover">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <Avatar className="h-10 w-10 border border-slate-100">
                   <AvatarImage src={account.avatar || undefined} alt={account.userName || ""} />
-                  <AvatarFallback className={config.textClass}>{account.userName?.charAt(0) || config.icon}</AvatarFallback>
+                  <AvatarFallback className={`text-sm ${config.textClass}`}>{account.userName?.charAt(0) || config.icon}</AvatarFallback>
                 </Avatar>
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate text-lg font-semibold text-slate-900">{account.userName || config.label}</h3>
-                        {account.isVerified ? (
-                          <Badge className="gap-1.5 border-transparent bg-emerald-100 text-emerald-700">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            已验证
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="gap-1.5 text-slate-500">
-                            <ShieldX className="h-3.5 w-3.5" />
-                            未验证
-                          </Badge>
-                        )}
-                        {!account.isActive && <Badge variant="outline">已停用</Badge>}
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className={config.badgeClass}>
-                          {config.label}
-                        </Badge>
-                        {account.userId && (
-                          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-mono text-slate-500">
-                            ID: {account.userId.slice(0, 16)}...
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button variant="secondary" size="sm" className="gap-2" onClick={() => onEdit(account)}>
-                        <Pencil className="h-4 w-4" />
-                        编辑
-                      </Button>
-                      <Button variant="ghost" size="sm" className="gap-2 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => onDelete(account)}>
-                        <Trash2 className="h-4 w-4" />
-                        删除
-                      </Button>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <h3 className="truncate text-[14px] font-semibold text-slate-900">{account.userName || config.label}</h3>
+                    {account.isVerified ? (
+                      <Badge className="gap-1 border-emerald-200/60 bg-emerald-50 text-emerald-600 text-[10px]">
+                        <CheckCircle2 className="h-3 w-3" />
+                        已验证
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="gap-1 text-slate-400 text-[10px]">
+                        <ShieldX className="h-3 w-3" />
+                        未验证
+                      </Badge>
+                    )}
+                    {!account.isActive && <Badge variant="outline" className="text-[10px]">已停用</Badge>}
                   </div>
 
-                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <Badge variant="outline" className={`${config.badgeClass} text-[10px]`}>
+                      {config.label}
+                    </Badge>
+                    {account.userId && (
+                      <span className="rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-mono text-slate-400">
+                        {account.userId.slice(0, 12)}...
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
                     {maskedToken && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
-                        <Key className="h-3.5 w-3.5" />
+                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-1.5 py-0.5">
+                        <Key className="h-3 w-3" />
                         <span className="font-mono">{maskedToken}</span>
                       </span>
                     )}
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
-                      <Clock className="h-3.5 w-3.5" />
-                      创建于 {format(account.createdAt)}
+                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-1.5 py-0.5">
+                      <Clock className="h-3 w-3" />
+                      {format(account.createdAt)}
                     </span>
                     {account.lastVerifiedAt && (
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-700">
+                      <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-emerald-600">
                         验证于 {format(account.lastVerifiedAt)}
                       </span>
                     )}
                   </div>
 
-                  {account.description && <p className="mt-3 text-sm leading-relaxed text-slate-500">{account.description}</p>}
+                  {account.description && <p className="mt-2 text-[13px] text-slate-500">{account.description}</p>}
                 </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="xs" className="gap-1 text-slate-500" onClick={() => onEdit(account)}>
+                  <Pencil className="h-3 w-3" />
+                  编辑
+                </Button>
+                <Button variant="ghost" size="xs" className="gap-1 text-red-500 hover:bg-red-50 hover:text-red-600" onClick={() => onDelete(account)}>
+                  <Trash2 className="h-3 w-3" />
+                  删除
+                </Button>
               </div>
             </div>
           </article>

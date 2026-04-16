@@ -278,21 +278,21 @@ export function PublishDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-4xl flex-col overflow-hidden p-0">
-        <DialogHeader className="border-b border-slate-200 px-6 py-5">
+      <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col overflow-hidden p-0">
+        <DialogHeader className="border-b border-slate-100 px-5 py-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-                {isQuickPublish ? <Rocket className="h-5 w-5 text-brand-600" /> : <Upload className="h-5 w-5 text-brand-600" />}
+              <DialogTitle className="flex items-center gap-2 text-base">
+                {isQuickPublish ? <Rocket className="h-4 w-4 text-brand-500" /> : <Upload className="h-4 w-4 text-brand-500" />}
                 {isSingleArticle ? "发布文章" : `批量发布 ${articles.length} 篇文章`}
               </DialogTitle>
-              <DialogDescription className="mt-1 text-sm text-slate-500">
-                选择投递账号与发布方式，保持工具平台的工作流操作，不改变原有功能逻辑。
+              <DialogDescription className="mt-1 text-[13px] text-slate-500">
+                选择投递账号与发布方式，保持工具平台的工作流操作。
               </DialogDescription>
             </div>
 
-            <Badge variant="secondary" className="w-fit px-2.5 py-1 text-xs">
-              已选文章 {articles.length}
+            <Badge variant="secondary" className="w-fit text-[10px]">
+              已选 {articles.length} 篇
             </Badge>
           </div>
         </DialogHeader>
@@ -532,24 +532,24 @@ export function PublishDialog({
           </div>
         )}
 
-        <DialogFooter className="gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+        <DialogFooter className="gap-2 border-t border-slate-100 bg-slate-50/50 px-5 py-3">
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             取消
           </Button>
-          <Button onClick={() => void handlePublish()} disabled={isSubmitting || selectedAccounts.size === 0 || isLoading}>
+          <Button size="sm" onClick={() => void handlePublish()} disabled={isSubmitting || selectedAccounts.size === 0 || isLoading}>
             {isSubmitting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                 提交中...
               </>
             ) : publishMode === "scheduled" ? (
               <>
-                <Clock className="mr-2 h-4 w-4" />
+                <Clock className="mr-1.5 h-3.5 w-3.5" />
                 创建定时任务
               </>
             ) : (
               <>
-                <Rocket className="mr-2 h-4 w-4" />
+                <Rocket className="mr-1.5 h-3.5 w-3.5" />
                 立即发布
               </>
             )}
