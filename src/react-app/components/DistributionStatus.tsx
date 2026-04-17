@@ -41,6 +41,7 @@ const platformLabels: Record<string, string> = {
   xiaohongshu: "小红书",
   wechat: "公众号",
   csdn: "CSDN",
+  cnblogs: "博客园",
 };
 
 const platformIcons: Record<string, string> = {
@@ -49,6 +50,7 @@ const platformIcons: Record<string, string> = {
   xiaohongshu: "X",
   wechat: "W",
   csdn: "C",
+  cnblogs: "B",
 };
 
 const stepTypeLabels: Record<string, string> = {

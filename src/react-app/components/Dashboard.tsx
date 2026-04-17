@@ -25,6 +25,7 @@ const platformLabels: Record<string, string> = {
   xiaohongshu: "小红书",
   wechat: "公众号",
   csdn: "CSDN",
+  cnblogs: "博客园",
 };
 
 function getRelativeTime(timestamp: number): string {

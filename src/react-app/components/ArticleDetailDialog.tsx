@@ -23,7 +23,7 @@ import {
 	Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Need to ensure these exist or use basic title
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 // ByteMD 插件
@@ -60,6 +60,8 @@ const platformLabels: Record<string, string> = {
 	zhihu: "知乎",
 	xiaohongshu: "小红书",
 	wechat: "公众号",
+	csdn: "CSDN",
+	cnblogs: "博客园",
 };
 
 const platformIcons: Record<string, string> = {
@@ -67,6 +69,8 @@ const platformIcons: Record<string, string> = {
 	zhihu: "💡",
 	xiaohongshu: "📕",
 	wechat: "💬",
+	csdn: "C",
+	cnblogs: "B",
 };
 
 const statusConfig = {
@@ -121,7 +125,7 @@ export function ArticleDetailDialog({
 	onOpenChange,
 	onEdit,
 	onDelete,
-	onPublish
+	onPublish,
 }: ArticleDetailDialogProps) {
 	if (!article) return null;
 
@@ -162,7 +166,7 @@ export function ArticleDetailDialog({
 										<Badge
 											className={cn(
 												"gap-1 px-2 py-0.5",
-												status.color
+												status.color,
 											)}
 										>
 											<StatusIcon className="h-3 w-3" />
@@ -300,7 +304,7 @@ export function ArticleDetailDialog({
 									size="icon"
 									className="h-12 w-12 rounded-full border-slate-200 bg-white shadow-lg hover:bg-red-50 hover:text-red-600 hover:border-red-100 hover:scale-110 transition-all duration-200"
 									onClick={() => {
-										// onDelete usually requires confirmation, handle in parent or here? 
+										// onDelete usually requires confirmation, handle in parent or here?
 										// Parent handler usually has confirm logic.
 										// But keeping dialog open might be weird if deleted.
 										onDelete?.(article);
@@ -316,6 +320,6 @@ export function ArticleDetailDialog({
 					</TooltipProvider>
 				</div>
 			</DialogContent>
-		</Dialog >
+		</Dialog>
 	);
 }

@@ -40,6 +40,8 @@ export function getPlatformAdapter(platform: PlatformType): PlatformAdapter {
 			return new WechatAdapter();
 		case "csdn":
 			return new CSDNAdapter();
+		case "cnblogs":
+			return new CnblogsAdapter();
 		default:
 			throw new Error(`Unsupported platform: ${platform}`);
 	}
@@ -48,5 +50,11 @@ export function getPlatformAdapter(platform: PlatformType): PlatformAdapter {
 class CSDNAdapter implements PlatformAdapter {
 	adapt(content: string) {
 		return `# CSDN 鎶�鏈彂甯僜n\n${content}\n\n> 鏈枃鐢辫嚜鍔ㄥ彂甯冨伐鍏风敓鎴愩�俙;
+	}
+}
+
+class CnblogsAdapter implements PlatformAdapter {
+	adapt(content: string) {
+		return `# 博客园技术发布\n\n${content}\n\n> 本文由自动分发系统生成。`;
 	}
 }

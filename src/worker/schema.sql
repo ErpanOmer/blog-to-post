@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE TABLE IF NOT EXISTS platform_accounts (
 	id TEXT PRIMARY KEY,
-	platform TEXT NOT NULL, -- juejin, zhihu, xiaohongshu, wechat, csdn
+	platform TEXT NOT NULL, -- juejin, zhihu, xiaohongshu, wechat, csdn, cnblogs
 	userId TEXT,
 	userName TEXT,
 	avatar TEXT,
@@ -124,4 +124,3 @@ CREATE TABLE IF NOT EXISTS account_statistics (
 );
 
 CREATE INDEX IF NOT EXISTS idx_account_statistics_platform ON account_statistics(platform);
-

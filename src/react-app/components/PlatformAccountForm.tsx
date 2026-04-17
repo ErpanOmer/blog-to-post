@@ -13,6 +13,7 @@ const platformOptions: { value: PlatformType; label: string; icon: string }[] = 
   { value: "xiaohongshu", label: "小红书", icon: "X" },
   { value: "wechat", label: "微信公众号", icon: "W" },
   { value: "csdn", label: "CSDN", icon: "C" },
+  { value: "cnblogs", label: "博客园", icon: "B" },
 ];
 
 interface PlatformAccountFormProps {
