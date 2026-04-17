@@ -68,7 +68,7 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-900">文章标题</p>
-            <p className="text-xs text-slate-500">标题决定后续内容生成和列表展示气质。</p>
+            {/* <p className="text-xs text-slate-500">标题决定后续内容生成和列表展示气质。</p> */}
           </div>
         </div>
 

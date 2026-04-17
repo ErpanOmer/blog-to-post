@@ -63,11 +63,11 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between px-1">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 w-full">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
             <FileText className="h-4 w-4" />
           </div>
-          <div>
+          <div className="flex justify-between w-full">
             <h3 className="text-[14px] font-semibold text-slate-900 leading-tight">正文编辑区</h3>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
               <span>Markdown 编辑器</span>

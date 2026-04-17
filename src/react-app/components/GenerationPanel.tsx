@@ -107,7 +107,7 @@ export function GenerationPanel({
 						</div>
 						<div>
 							<p className="text-sm font-semibold text-slate-900">封面图</p>
-							<p className="text-xs text-slate-500">支持手动粘贴链接和本地上传</p>
+							{/* <p className="text-xs text-slate-500">支持手动粘贴链接和本地上传</p> */}
 						</div>
 					</div>
 
@@ -135,11 +135,6 @@ export function GenerationPanel({
 							}}
 						/>
 					</div>
-				</div>
-
-				<div className="mb-3 flex items-center gap-2 text-xs text-slate-500">
-					<Link2 className="h-3.5 w-3.5" />
-					图片地址会直接作为发布封面使用
 				</div>
 
 				<Input
@@ -181,7 +176,7 @@ export function GenerationPanel({
 						</div>
 						<div>
 							<p className="text-sm font-semibold text-slate-900">文章摘要</p>
-							<p className="text-xs text-slate-500">用于列表摘要和部分平台的描述字段</p>
+							{/* <p className="text-xs text-slate-500">用于列表摘要和部分平台的描述字段</p> */}
 						</div>
 					</div>
 
@@ -217,7 +212,7 @@ export function GenerationPanel({
 						</div>
 						<div>
 							<p className="text-sm font-semibold text-slate-900">文章标签</p>
-							<p className="text-xs text-slate-500">多个标签用逗号分隔，可手动编辑，也可 AI 生成</p>
+							{/* <p className="text-xs text-slate-500">多个标签用逗号分隔，可手动编辑，也可 AI 生成</p> */}
 						</div>
 					</div>
 
