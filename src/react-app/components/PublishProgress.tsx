@@ -22,6 +22,7 @@ const platformLabels: Record<string, string> = {
   wechat: "公众号",
   csdn: "CSDN",
   cnblogs: "博客园",
+  segmentfault: "SegmentFault",
 };
 
 const stepTypeLabels: Record<string, string> = {

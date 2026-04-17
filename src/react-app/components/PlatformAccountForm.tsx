@@ -11,17 +11,18 @@ const platformOptions: { value: PlatformType; label: string; icon: string }[] = 
   { value: "juejin", label: "掘金", icon: "J" },
   { value: "zhihu", label: "知乎", icon: "Z" },
   { value: "xiaohongshu", label: "小红书", icon: "X" },
-  { value: "wechat", label: "微信公众号", icon: "W" },
+  { value: "wechat", label: "公众号", icon: "W" },
   { value: "csdn", label: "CSDN", icon: "C" },
   { value: "cnblogs", label: "博客园", icon: "B" },
+  { value: "segmentfault", label: "SegmentFault", icon: "S" },
 ];
 
 interface PlatformAccountFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   account?: PlatformAccount | null;
-  onSave: (data: { platform: PlatformType; authToken?: string; description?: string }) => void;
-  onVerify?: (accountId: string) => void;
+  onSave: (data: { platform: PlatformType; authToken?: string; description?: string }) => Promise<boolean>;
+  onVerify?: (accountId: string) => Promise<void>;
 }
 
 export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVerify }: PlatformAccountFormProps) {
@@ -56,16 +57,18 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!formData.platform) return;
+    if (!formData.platform || saving) return;
 
     setSaving(true);
     try {
-      onSave({
+      const success = await onSave({
         platform: formData.platform,
         authToken: formData.authToken || undefined,
         description: formData.description || undefined,
       });
-      onOpenChange(false);
+      if (success) {
+        onOpenChange(false);
+      }
     } finally {
       setSaving(false);
     }

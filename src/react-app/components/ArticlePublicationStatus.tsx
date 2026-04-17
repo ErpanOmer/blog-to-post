@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ArticlePublication } from "@/react-app/types/publications";
 import { getArticlePublications, getPlatformAccounts } from "@/react-app/api";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ const platformLabels: Record<string, string> = {
 	wechat: "公众号",
 	csdn: "CSDN",
 	cnblogs: "博客园",
+	segmentfault: "SegmentFault",
 };
 
 const platformIcons: Record<string, string> = {
@@ -26,6 +27,7 @@ const platformIcons: Record<string, string> = {
 	wechat: "W",
 	csdn: "C",
 	cnblogs: "B",
+	segmentfault: "S",
 };
 
 const statusConfig = {

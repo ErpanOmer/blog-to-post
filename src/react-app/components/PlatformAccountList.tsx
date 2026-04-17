@@ -15,6 +15,7 @@ const platformConfig: Record<
   wechat: { label: "公众号", icon: "W", textClass: "text-emerald-600", badgeClass: "bg-emerald-50 text-emerald-600 border-emerald-200/60" },
   csdn: { label: "CSDN", icon: "C", textClass: "text-sky-600", badgeClass: "bg-sky-50 text-sky-600 border-sky-200/60" },
   cnblogs: { label: "博客园", icon: "B", textClass: "text-indigo-600", badgeClass: "bg-indigo-50 text-indigo-600 border-indigo-200/60" },
+  segmentfault: { label: "SegmentFault", icon: "S", textClass: "text-teal-600", badgeClass: "bg-teal-50 text-teal-600 border-teal-200/60" },
   "": { label: "未知", icon: "?", textClass: "text-slate-600", badgeClass: "bg-slate-50 text-slate-600 border-slate-200" },
 };
 

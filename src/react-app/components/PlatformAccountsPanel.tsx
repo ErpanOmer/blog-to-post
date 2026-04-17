@@ -24,6 +24,7 @@ const platformFilters: { value: PlatformType | "all"; label: string }[] = [
   { value: "wechat", label: "公众号" },
   { value: "csdn", label: "CSDN" },
   { value: "cnblogs", label: "博客园" },
+  { value: "segmentfault", label: "SegmentFault" },
 ];
 
 export function PlatformAccountsPanel() {

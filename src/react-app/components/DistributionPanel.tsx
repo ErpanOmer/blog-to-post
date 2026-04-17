@@ -16,6 +16,7 @@ export function DistributionPanel({ article, selectedPlatforms, onToggle, onPubl
 		{ value: "wechat", label: "公众号" },
 		{ value: "csdn", label: "CSDN" },
 		{ value: "cnblogs", label: "博客园" },
+		{ value: "segmentfault", label: "SegmentFault" },
 	];
 
 	return (

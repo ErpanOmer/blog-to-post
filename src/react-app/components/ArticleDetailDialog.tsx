@@ -62,15 +62,17 @@ const platformLabels: Record<string, string> = {
 	wechat: "公众号",
 	csdn: "CSDN",
 	cnblogs: "博客园",
+	segmentfault: "SegmentFault",
 };
 
 const platformIcons: Record<string, string> = {
-	juejin: "🔥",
-	zhihu: "💡",
-	xiaohongshu: "📕",
-	wechat: "💬",
+	juejin: "🔟",
+	zhihu: "📕",
+	xiaohongshu: "📓",
+	wechat: "📰",
 	csdn: "C",
 	cnblogs: "B",
+	segmentfault: "S",
 };
 
 const statusConfig = {

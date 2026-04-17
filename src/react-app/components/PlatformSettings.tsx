@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
 	getAIModelSettings,
 	getAIModels,
@@ -377,7 +377,7 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 							<CardDescription>控制哪些平台参与分发</CardDescription>
 						</CardHeader>
 						<CardContent className="space-y-2">
-							{["掘金", "知乎", "小红书", "公众号", "CSDN", "博客园"].map((platform) => (
+							{["掘金", "知乎", "小红书", "公众号", "CSDN", "博客园", "SegmentFault"].map((platform) => (
 								<div key={platform} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3">
 									<span className="text-[13px] font-medium text-slate-700">{platform}</span>
 									<div className="flex items-center gap-2">

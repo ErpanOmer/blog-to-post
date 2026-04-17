@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE TABLE IF NOT EXISTS platform_accounts (
 	id TEXT PRIMARY KEY,
-	platform TEXT NOT NULL, -- juejin, zhihu, xiaohongshu, wechat, csdn, cnblogs
+	platform TEXT NOT NULL, -- juejin, zhihu, xiaohongshu, wechat, csdn, cnblogs, segmentfault
 	userId TEXT,
 	userName TEXT,
 	avatar TEXT,

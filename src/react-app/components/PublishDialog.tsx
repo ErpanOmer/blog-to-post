@@ -52,6 +52,7 @@ const platformLabels: Record<string, string> = {
   wechat: "公众号",
   csdn: "CSDN",
   cnblogs: "博客园",
+  segmentfault: "SegmentFault",
 };
 
 const platformIcons: Record<string, string> = {
@@ -61,6 +62,7 @@ const platformIcons: Record<string, string> = {
   wechat: "W",
   csdn: "C",
   cnblogs: "B",
+  segmentfault: "S",
 };
 
 const articleStatusLabels: Record<string, string> = {
