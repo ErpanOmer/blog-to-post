@@ -75,6 +75,7 @@ const md5 = md5Lib as unknown as (message: string | ArrayBuffer | Uint8Array) =>
 
 export default class ZhihuAccountService extends AbstractAccountService {
 	private imageUrlCache = new Map<string, string>();
+	private draftHtmlContentCache = new Map<string, string>();
 
 	constructor(authToken: string) {
 		super("zhihu", authToken);
@@ -569,7 +570,8 @@ export default class ZhihuAccountService extends AbstractAccountService {
 		}
 	}
 
-	private async uploadImageBlobToZhihu(blob: Blob, _filename: string): Promise<string> {
+	private async uploadImageBlobToZhihu(blob: Blob, filename: string): Promise<string> {
+		void filename;
 		await this.tracePublish({
 			stage: "zhihu_upload_blob_start",
 			message: "Start Zhihu binary image upload",
@@ -905,9 +907,11 @@ export default class ZhihuAccountService extends AbstractAccountService {
 				id: data.id,
 				title: data.title,
 				content: data.content,
+				htmlContent,
 				url: data.url,
 				createdAt: data.created,
 			};
+			this.draftHtmlContentCache.set(draft.id, htmlContent);
 			await this.tracePublish({
 				stage: "zhihu_article_draft_done",
 				message: "Zhihu draft created",
@@ -926,24 +930,42 @@ export default class ZhihuAccountService extends AbstractAccountService {
 	}
 
 	async articlePublish(article: SharedArticle): Promise<ArticlePublishResult> {
+		const draftId = article.draftId;
 		try {
 			await this.tracePublish({
 				stage: "zhihu_article_publish_start",
 				message: "Start publishing Zhihu article",
 				metadata: {
-					draftId: article.draftId ?? null,
+					draftId: draftId ?? null,
 					titleLength: article.title.length,
+					hasPayloadHtmlContent: Boolean(article.htmlContent?.trim()),
 				},
 			});
 
-			if (!article.draftId) {
+			if (!draftId) {
 				return {
 					success: false,
 					message: "发布失败：缺少 draftId",
 				};
 			}
 
-			const htmlContent = await this.resolveArticleHtml(article);
+			let htmlContent = article.htmlContent?.trim();
+			if (!htmlContent) {
+				htmlContent = this.draftHtmlContentCache.get(draftId);
+			}
+
+			if (htmlContent) {
+				await this.tracePublish({
+					stage: "zhihu_resolve_html_reused",
+					message: "Reuse prepared HTML content",
+					metadata: {
+						draftId,
+						htmlLength: htmlContent.length,
+					},
+				});
+			} else {
+				htmlContent = await this.resolveArticleHtml(article);
+			}
 
 			const pcBusinessParams = {
 				commentPermission: "anyone",
@@ -979,7 +1001,7 @@ export default class ZhihuAccountService extends AbstractAccountService {
 							},
 							draft: {
 								disabled: 1,
-								id: article.draftId,
+								id: draftId,
 								isPublished: false,
 							},
 							commentsPermission: {
@@ -1066,6 +1088,10 @@ export default class ZhihuAccountService extends AbstractAccountService {
 				success: false,
 				message: error instanceof Error ? error.message : "发布失败",
 			};
+		} finally {
+			if (draftId) {
+				this.draftHtmlContentCache.delete(draftId);
+			}
 		}
 	}
 

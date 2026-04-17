@@ -1,134 +1,241 @@
 import { Hono } from "hono";
-import type { Env } from "@/worker/types";
-import type { AccountConfig } from "@/worker/types/publications";
+import type { Context } from "hono";
+import type { Env, PlatformType } from "@/worker/types";
+import type { AccountConfig, PublicationStatus, PublishTaskStatus } from "@/worker/types/publications";
 import {
-    createPublishTaskService,
-    getPublishTaskStatus,
-    cancelPublishTask,
-    quickPublish
+	createPublishTaskService,
+	getPublishTaskStatus,
+	cancelPublishTask,
+	quickPublish,
 } from "@/worker/services/publish";
 import {
-    listPublishTasks,
-    listPublishTaskSteps,
-    listArticlePublications
+	listPublishTasks,
+	listPublishTaskSteps,
+	listArticlePublications,
 } from "@/worker/db/publications";
+import {
+	PublishErrorCodes,
+	type PublishErrorCode,
+	PublishServiceError,
+	toPublishServiceError,
+} from "@/worker/services/publish-errors";
+import { createRequestId, logger } from "@/worker/utils/logger";
 
 const app = new Hono<{ Bindings: Env }>();
 
+const allowedTaskStatuses: PublishTaskStatus[] = ["pending", "processing", "completed", "failed", "cancelled"];
+const allowedPublicationStatuses: PublicationStatus[] = ["pending", "draft_created", "publishing", "published", "failed", "cancelled"];
+const allowedPlatforms: PlatformType[] = ["juejin", "zhihu", "xiaohongshu", "wechat", "csdn", ""];
+
+function parseTaskStatus(value?: string): PublishTaskStatus | undefined {
+	if (!value) return undefined;
+	return allowedTaskStatuses.includes(value as PublishTaskStatus) ? (value as PublishTaskStatus) : undefined;
+}
+
+function parsePublicationStatus(value?: string): PublicationStatus | undefined {
+	if (!value) return undefined;
+	return allowedPublicationStatuses.includes(value as PublicationStatus)
+		? (value as PublicationStatus)
+		: undefined;
+}
+
+function parsePlatform(value?: string): PlatformType | undefined {
+	if (!value) return undefined;
+	return allowedPlatforms.includes(value as PlatformType) ? (value as PlatformType) : undefined;
+}
+
+function normalizeRouteError(
+	error: unknown,
+	fallbackCode: PublishErrorCode = PublishErrorCodes.INTERNAL_ERROR,
+): PublishServiceError {
+	if (error instanceof PublishServiceError) {
+		return error;
+	}
+
+	const message = error instanceof Error ? error.message : "Unknown publish route error";
+	if (message === "Task not found") {
+		return new PublishServiceError({
+			code: PublishErrorCodes.TASK_NOT_FOUND,
+			status: 404,
+			message,
+		});
+	}
+
+	return toPublishServiceError(error, fallbackCode);
+}
+
+function jsonError(
+	c: Context<{ Bindings: Env }>,
+	requestId: string,
+	error: unknown,
+	fallbackCode: PublishErrorCode = PublishErrorCodes.INTERNAL_ERROR,
+) {
+	const publishError = normalizeRouteError(error, fallbackCode);
+	logger.error({
+		module: "publish.route",
+		event: "request.failed",
+		requestId,
+		errorCode: publishError.code,
+		message: publishError.message,
+		details: publishError.details,
+		path: c.req.path,
+		method: c.req.method,
+	});
+
+	return c.json(
+		{
+			success: false,
+			errorCode: publishError.code,
+			message: publishError.message,
+			details: publishError.details,
+			requestId,
+		},
+		publishError.status as 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500,
+	);
+}
+
 // Create publish task
 app.post("/tasks", async (c) => {
-    try {
-        const { articleIds, accountConfigs, scheduleTime } = await c.req.json() as {
-            articleIds: string[];
-            accountConfigs: AccountConfig[];
-            scheduleTime?: number | null;
-        };
+	const requestId = createRequestId();
 
-        if (!articleIds?.length || !accountConfigs?.length) {
-            return c.json({ message: "文章ID列表和账号配置不能为空" }, 400);
-        }
+	try {
+		const { articleIds, accountConfigs, scheduleTime, idempotencyKey } =
+			(await c.req.json()) as {
+				articleIds: string[];
+				accountConfigs: AccountConfig[];
+				scheduleTime?: number | null;
+				idempotencyKey?: string;
+			};
 
-        // 至少选择一个账号
-        if (accountConfigs.length === 0) {
-            return c.json({ message: "至少选择一个发布账号" }, 400);
-        }
+		if (!articleIds?.length || !accountConfigs?.length) {
+			throw new PublishServiceError({
+				code: PublishErrorCodes.INVALID_REQUEST,
+				status: 400,
+				message: "articleIds and accountConfigs are required",
+			});
+		}
 
-        const result = await createPublishTaskService(c.env.DB, {
-            articleIds,
-            accountConfigs,
-            scheduleTime,
-        }, c.executionCtx);
+		const result = await createPublishTaskService(
+			c.env.DB,
+			{
+				articleIds,
+				accountConfigs,
+				scheduleTime,
+				idempotencyKey,
+			},
+			c.executionCtx,
+			{ requestId, encryptionKey: c.env.ENCRYPTION_KEY },
+		);
 
-        return c.json(result);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : "创建发布任务失败";
-        return c.json({ message }, 400);
-    }
+		return c.json({ ...result, requestId });
+	} catch (error) {
+		return jsonError(c, requestId, error, PublishErrorCodes.INVALID_REQUEST);
+	}
 });
 
 // List publish tasks
 app.get("/tasks", async (c) => {
-    try {
-        const status = c.req.query("status") as "pending" | "processing" | "completed" | "failed" | "cancelled" | undefined;
-        const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!) : undefined;
+	const requestId = createRequestId();
+	try {
+		const status = parseTaskStatus(c.req.query("status"));
+		const limitRaw = c.req.query("limit");
+		const parsedLimit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
+		if (limitRaw && (!parsedLimit || parsedLimit <= 0)) {
+			throw new PublishServiceError({
+				code: PublishErrorCodes.INVALID_REQUEST,
+				status: 400,
+				message: "limit must be a positive integer",
+			});
+		}
 
-        const tasks = await listPublishTasks(c.env.DB, { status, limit });
-        return c.json(tasks);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : "获取任务列表失败";
-        return c.json({ message }, 500);
-    }
+		const tasks = await listPublishTasks(c.env.DB, { status, limit: parsedLimit });
+		return c.json(tasks);
+	} catch (error) {
+		return jsonError(c, requestId, error, PublishErrorCodes.INVALID_REQUEST);
+	}
 });
 
 // Get task detail
 app.get("/tasks/:id", async (c) => {
-    try {
-        const { task, steps } = await getPublishTaskStatus(c.env.DB, c.req.param("id"));
-        return c.json({ task, steps });
-    } catch (error) {
-        const message = error instanceof Error ? error.message : "获取任务详情失败";
-        return c.json({ message }, 404);
-    }
+	const requestId = createRequestId();
+	try {
+		const { task, steps } = await getPublishTaskStatus(c.env.DB, c.req.param("id"));
+		return c.json({ task, steps });
+	} catch (error) {
+		return jsonError(c, requestId, error, PublishErrorCodes.TASK_NOT_FOUND);
+	}
 });
 
 // Get all publications history
 app.get("/history", async (c) => {
-    try {
-        const filters = {
-            articleId: c.req.query("articleId"),
-            accountId: c.req.query("accountId"),
-            platform: c.req.query("platform") as any,
-            status: c.req.query("status") as any
-        };
-        const publications = await listArticlePublications(c.env.DB, filters);
-        return c.json(publications);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : "获取发布记录失败";
-        return c.json({ message }, 500);
-    }
+	const requestId = createRequestId();
+	try {
+		const filters = {
+			articleId: c.req.query("articleId"),
+			accountId: c.req.query("accountId"),
+			platform: parsePlatform(c.req.query("platform")),
+			status: parsePublicationStatus(c.req.query("status")),
+		};
+		const publications = await listArticlePublications(c.env.DB, filters);
+		return c.json(publications);
+	} catch (error) {
+		return jsonError(c, requestId, error);
+	}
 });
 
 // Cancel task
 app.post("/tasks/:id/cancel", async (c) => {
-    try {
-        const result = await cancelPublishTask(c.env.DB, c.req.param("id"));
-        return c.json(result);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : "取消任务失败";
-        return c.json({ message, success: false }, 500);
-    }
+	const requestId = createRequestId();
+	try {
+		const result = await cancelPublishTask(c.env.DB, c.req.param("id"));
+		const statusCode = result.success ? 200 : 400;
+		return c.json(result, statusCode as 200 | 400);
+	} catch (error) {
+		return jsonError(c, requestId, error);
+	}
 });
 
-// Get task steps (Restored P0 fix)
+// Get task steps
 app.get("/tasks/:id/steps", async (c) => {
-    try {
-        const steps = await listPublishTaskSteps(c.env.DB, c.req.param("id"));
-        return c.json(steps);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : "获取任务步骤失败";
-        return c.json({ message }, 500);
-    }
+	const requestId = createRequestId();
+	try {
+		const steps = await listPublishTaskSteps(c.env.DB, c.req.param("id"));
+		return c.json(steps);
+	} catch (error) {
+		return jsonError(c, requestId, error);
+	}
 });
 
 // Quick publish
 app.post("/quick", async (c) => {
-    try {
-        const { articleId, accountId, draftOnly = false } = await c.req.json() as {
-            articleId: string;
-            accountId: string;
-            draftOnly?: boolean;
-        };
+	const requestId = createRequestId();
+	try {
+		const { articleId, accountId, draftOnly = false } = (await c.req.json()) as {
+			articleId: string;
+			accountId: string;
+			draftOnly?: boolean;
+		};
 
-        if (!articleId || !accountId) {
-            return c.json({ message: "文章ID和账号ID不能为空", success: false }, 400);
-        }
+		if (!articleId || !accountId) {
+			throw new PublishServiceError({
+				code: PublishErrorCodes.INVALID_REQUEST,
+				status: 400,
+				message: "articleId and accountId are required",
+			});
+		}
 
-        const result = await quickPublish(c.env.DB, articleId, accountId, draftOnly, c.executionCtx);
-        return c.json(result);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : "快速发布失败";
-        return c.json({ message, success: false }, 500);
-    }
+		const result = await quickPublish(
+			c.env.DB,
+			articleId,
+			accountId,
+			draftOnly,
+			c.executionCtx,
+			{ requestId, encryptionKey: c.env.ENCRYPTION_KEY },
+		);
+		return c.json({ ...result, requestId });
+	} catch (error) {
+		return jsonError(c, requestId, error, PublishErrorCodes.INVALID_REQUEST);
+	}
 });
 
 export default app;

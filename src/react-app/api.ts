@@ -1,4 +1,14 @@
-﻿import type { Article, ArticleStatus, PlatformType, PromptKey, PromptTemplate, ProviderStatus } from "./types";
+import type {
+	AIModelCatalog,
+	AIModelSettings,
+	ArticleAISettings,
+	Article,
+	ArticleStatus,
+	PlatformType,
+	PromptKey,
+	PromptTemplate,
+	ProviderStatus,
+} from "./types";
 import type {
 	PublishTask,
 	PublishTaskStep,
@@ -67,18 +77,36 @@ export async function generateContent(title: string): Promise<{ content: string 
 	return data;
 }
 
-// 鏂囩珷鎽樿鏁版嵁缁撴瀯
-export interface ArticleSummary {
+export interface GeneratedSummary {
 	summary: string;
+}
+
+export interface GeneratedTags {
 	tags: string[];
 }
 
-export async function generateSummary(content: string): Promise<ArticleSummary> {
-	return parseJson<ArticleSummary>(
+export async function generateArticleSummary(
+	content: string,
+	settings?: ArticleAISettings,
+): Promise<GeneratedSummary> {
+	return parseJson<GeneratedSummary>(
 		await fetch(`/api/articles/generate-summary`, {
 			method: "POST",
 			headers: jsonHeaders,
-			body: JSON.stringify({ content }),
+			body: JSON.stringify({ content, settings }),
+		}),
+	);
+}
+
+export async function generateArticleTags(
+	content: string,
+	settings?: ArticleAISettings,
+): Promise<GeneratedTags> {
+	return parseJson<GeneratedTags>(
+		await fetch(`/api/articles/generate-tags`, {
+			method: "POST",
+			headers: jsonHeaders,
+			body: JSON.stringify({ content, settings }),
 		}),
 	);
 }
@@ -135,6 +163,26 @@ export async function transitionArticle(id: string, status: ArticleStatus): Prom
 
 export async function getProviderStatus(): Promise<ProviderStatus> {
 	return parseJson<ProviderStatus>(await fetch("/api/ai/status"));
+}
+
+export async function getAIModels(): Promise<AIModelCatalog> {
+	return parseJson<AIModelCatalog>(await fetch("/api/ai/models"));
+}
+
+export async function getAIModelSettings(): Promise<AIModelSettings> {
+	return parseJson<AIModelSettings>(await fetch("/api/ai/settings"));
+}
+
+export async function updateAIModelSettings(
+	payload: Partial<AIModelSettings>,
+): Promise<AIModelSettings> {
+	return parseJson<AIModelSettings>(
+		await fetch("/api/ai/settings", {
+			method: "PUT",
+			headers: jsonHeaders,
+			body: JSON.stringify(payload),
+		}),
+	);
 }
 
 export async function getPromptTemplates(): Promise<PromptTemplate[]> {
@@ -320,4 +368,6 @@ export async function getAccountStatistics(platform?: PlatformType): Promise<Acc
 export async function getPlatformAccountStatistics(accountId: string): Promise<AccountStatistics> {
 	return parseJson<AccountStatistics>(await fetch(`/api/accounts/${accountId}/statistics`));
 }
+
+
 

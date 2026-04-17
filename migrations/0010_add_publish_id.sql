@@ -1,3 +1,5 @@
--- Add publishId column to article_publications table
--- This stores the unique ID of the article on the target platform after publication
-ALTER TABLE article_publications ADD COLUMN publishId TEXT;
+-- publishId is already part of the base schema (src/worker/schema.sql).
+-- Keep this migration as a no-op to avoid duplicate-column failures
+-- when a database is initialized from the latest schema before migrations.
+-- For legacy databases that truly miss this column, run manually:
+-- ALTER TABLE article_publications ADD COLUMN publishId TEXT;

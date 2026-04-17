@@ -54,12 +54,25 @@ export function extractJsonString(text: string): string {
  * @param fallback 解析失败时的回退值
  * @returns 解析后的对象或回退值
  */
+function looksLikeJson(text: string): boolean {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+    const first = trimmed[0];
+    return first === "{" || first === "[" || first === "\"";
+}
+
 export function safeParseJson<T>(text: string, fallback: T): T {
+    const cleaned = extractJsonString(text);
+    if (!cleaned) {
+        return fallback;
+    }
+
+    // 对纯文本结果（例如摘要/标题）直接回退，不打 JSON 失败告警。
+    if (!looksLikeJson(cleaned)) {
+        return fallback;
+    }
+
     try {
-        const cleaned = extractJsonString(text);
-        if (!cleaned) {
-            return fallback;
-        }
         return JSON.parse(cleaned) as T;
     } catch {
         console.warn("[safeParseJson] JSON 解析失败，返回回退值:", text.slice(0, 100));

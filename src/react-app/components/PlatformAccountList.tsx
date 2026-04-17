@@ -47,7 +47,11 @@ export function PlatformAccountList({ accounts, onEdit, onDelete }: PlatformAcco
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex min-w-0 flex-1 items-start gap-3">
                 <Avatar className="h-10 w-10 border border-slate-100">
-                  <AvatarImage src={account.avatar || undefined} alt={account.userName || ""} />
+                  <AvatarImage
+                    src={account.avatar || undefined}
+                    alt={account.userName || ""}
+                    referrerPolicy="no-referrer"
+                  />
                   <AvatarFallback className={`text-sm ${config.textClass}`}>{account.userName?.charAt(0) || config.icon}</AvatarFallback>
                 </Avatar>
 

@@ -5,7 +5,8 @@ interface SettingsViewProps {
         provider: string;
         ready: boolean;
         lastCheckedAt: number;
-        message: string
+        message: string;
+        defaultModel?: string;
     } | null;
 }
 

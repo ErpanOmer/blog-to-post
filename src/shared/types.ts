@@ -71,9 +71,35 @@ export interface ProviderStatus {
     ready: boolean;
     lastCheckedAt: number;
     message: string;
+    defaultModel?: string;
 }
 
 export interface PromptTemplate {
     key: PromptKey;
     template: string;
+}
+
+export interface AIModelSettings {
+    defaultModel: string;
+    temperature: number;
+    topP: number;
+    maxTokens: number;
+    requestTimeoutSec: number;
+}
+
+export interface AIModelCatalog {
+    defaultModel: string;
+    cloudModels: string[];
+    localModels: string[];
+    models: string[];
+}
+
+export interface ArticleAISettings {
+    model: string;
+    temperature: number;
+    topP: number;
+    maxTokens: number;
+    requestTimeoutSec: number;
+    summaryPrompt: string;
+    tagsPrompt: string;
 }

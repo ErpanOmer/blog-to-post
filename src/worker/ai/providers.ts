@@ -1,32 +1,26 @@
-import type { AIProvider, Env } from "@/worker/types";
+import type { AIProvider, Env, AIGenerationOverrides } from "@/worker/types";
+import {
+	getAIModelSettings,
+	type AIModelSettings,
+} from "@/worker/services/ai-settings";
 
-const models = {
-	kimi: "kimi-k2.5:cloud",
-	qwen: "qwen3-next:80b-cloud",
-	deepseek: "deepseek-v3.2:cloud",
-	default: 'qwen3:0.6b',
-}
-
-const DEFAULT_MODELS = {
-	title: models.kimi,
-	content: models.kimi,
-	summary: models.qwen,
-	tags: models.qwen,
-	cover: models.qwen
-};
-
-// callModel 参数类型
 interface CallModelOptions {
 	systemPrompt?: string;
 	userPrompt?: string;
 	model?: string;
-	options?: object;
+	options?: Record<string, unknown>;
+	requestTimeoutSec?: number;
 	think?: string | boolean;
 	stream?: boolean;
 	[mkey: string]: unknown;
 }
 
+const FALLBACK_MODEL = "kimi-k2.5:cloud";
+
 export class OllamaProvider implements AIProvider {
+	private settingsCache: { value: AIModelSettings; loadedAt: number } | null = null;
+	private readonly settingsTtlMs = 10_000;
+
 	constructor(private env: Env) {
 	}
 
@@ -34,20 +28,32 @@ export class OllamaProvider implements AIProvider {
 		return (this.env.OLLAMA_BASE_URL ?? "http://localhost:11434").replace(/\/$/, "");
 	}
 
-	private getModel(type: keyof typeof DEFAULT_MODELS, override?: string) {
-		if (override) return override;
-		// 优先使用环境变量中指定的具体模型，例如 OLLAMA_CONTENT_MODEL
-		const envKey = `OLLAMA_${type.toUpperCase()}_MODEL` as keyof Env;
-		return (this.env[envKey] as string) ?? this.env.OLLAMA_MODEL ?? DEFAULT_MODELS[type];
+	private async getSettings(forceRefresh = false): Promise<AIModelSettings> {
+		if (!forceRefresh && this.settingsCache && Date.now() - this.settingsCache.loadedAt < this.settingsTtlMs) {
+			return this.settingsCache.value;
+		}
+
+		const settings = await getAIModelSettings(this.env);
+		this.settingsCache = {
+			value: settings,
+			loadedAt: Date.now(),
+		};
+		return settings;
 	}
 
-	/**
-	 * 带超时和重试的 fetch 封装
-	 */
+	private async resolveModel(override?: string): Promise<string> {
+		if (typeof override === "string" && override.trim()) {
+			return override.trim();
+		}
+
+		const settings = await this.getSettings();
+		return settings.defaultModel || this.env.OLLAMA_MODEL || FALLBACK_MODEL;
+	}
+
 	private async fetchWithTimeout(
 		url: string,
 		options: RequestInit,
-		timeoutMs: number
+		timeoutMs: number,
 	): Promise<Response> {
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -63,30 +69,50 @@ export class OllamaProvider implements AIProvider {
 		}
 	}
 
-	/**
-	 * 通用模型调用方法（带超时和重试机制）
-	 * @param opts 包含所有参数的对象
-	 */
 	async callModel(opts: CallModelOptions): Promise<string> {
 		const MAX_RETRIES = 3;
-		const TIMEOUT_MS = 120_000; // 120 秒超时
 		const BASE_DELAY_MS = 1000;
+		const settings = await this.getSettings();
 
-		// 构建请求体
-		const body = {
-			model: opts.model || models.default,
-			system: opts.systemPrompt || "",
-			prompt: opts.userPrompt || "",
-			stream: opts.stream || false,
-			think: opts.think || false,
-			...opts
+		const {
+			systemPrompt,
+			userPrompt,
+			model,
+			options,
+			requestTimeoutSec,
+			think,
+			stream,
+			...rest
+		} = opts;
+
+		const timeoutMs = Math.max(
+			10,
+			typeof requestTimeoutSec === "number"
+				? requestTimeoutSec
+				: settings.requestTimeoutSec,
+		) * 1000;
+
+		const requestModel =
+			(typeof model === "string" && model.trim())
+				? model.trim()
+				: settings.defaultModel || this.env.OLLAMA_MODEL || FALLBACK_MODEL;
+
+		const mergedOptions: Record<string, unknown> = {
+			temperature: settings.temperature,
+			top_p: settings.topP,
+			num_predict: settings.maxTokens,
+			...(options ?? {}),
 		};
 
-		if (this.env.ENVIRONMENT === "development") {
-			body.model = models.default;
-		}
-
-		console.log("请求模型:", body.model);
+		const body: Record<string, unknown> = {
+			...rest,
+			model: requestModel,
+			system: systemPrompt || "",
+			prompt: userPrompt || "",
+			stream: stream ?? false,
+			think: think ?? false,
+			options: mergedOptions,
+		};
 
 		let lastError: Error | null = null;
 
@@ -98,18 +124,23 @@ export class OllamaProvider implements AIProvider {
 						method: "POST",
 						headers: {
 							"Content-Type": "application/json",
-							...(this.env.OLLAMA_API_KEY ? { Authorization: `Bearer ${this.env.OLLAMA_API_KEY}` } : {}),
+							...(this.env.OLLAMA_API_KEY
+								? { Authorization: `Bearer ${this.env.OLLAMA_API_KEY}` }
+								: {}),
 						},
 						body: JSON.stringify(body),
 					},
-					TIMEOUT_MS
+					timeoutMs,
 				);
 
 				if (!response.ok) {
 					const errorText = await response.text();
-					console.error(`Ollama 请求失败 (尝试 ${attempt}/${MAX_RETRIES})`, response.status, errorText);
+					console.error(
+						`Ollama request failed (attempt ${attempt}/${MAX_RETRIES})`,
+						response.status,
+						errorText,
+					);
 
-					// 4xx 错误不重试（客户端错误）
 					if (response.status >= 400 && response.status < 500) {
 						return "";
 					}
@@ -119,26 +150,23 @@ export class OllamaProvider implements AIProvider {
 
 				const data = (await response.json()) as { response?: string };
 				return data.response?.trim() ?? "";
-
 			} catch (error) {
 				lastError = error as Error;
 				const isAbortError = lastError.name === "AbortError";
 
 				console.warn(
-					`AI 调用失败 (尝试 ${attempt}/${MAX_RETRIES}):`,
-					isAbortError ? "请求超时" : lastError.message
+					`AI call failed (attempt ${attempt}/${MAX_RETRIES}):`,
+					isAbortError ? "request timeout" : lastError.message,
 				);
 
 				if (attempt < MAX_RETRIES) {
-					// 指数退避 + 随机抖动
 					const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1) + Math.random() * 500;
-					console.log(`等待 ${Math.round(delay)}ms 后重试...`);
 					await new Promise((resolve) => setTimeout(resolve, delay));
 				}
 			}
 		}
 
-		console.error("AI 调用最终失败，所有重试已耗尽:", lastError?.message);
+		console.error("AI call failed after max retries:", lastError?.message);
 		return "";
 	}
 
@@ -147,8 +175,14 @@ export class OllamaProvider implements AIProvider {
 			systemPrompt,
 			userPrompt,
 			format: "json",
-			model: this.getModel("title", model),
-			options: { temperature: 0.55, top_p: 0.85, top_k: 40, num_predict: 200, num_ctx: 8192 },
+			model: await this.resolveModel(model),
+			options: {
+				temperature: 0.55,
+				top_p: 0.85,
+				top_k: 40,
+				num_predict: 200,
+				num_ctx: 8192,
+			},
 		});
 	}
 
@@ -156,20 +190,58 @@ export class OllamaProvider implements AIProvider {
 		return this.callModel({
 			systemPrompt,
 			userPrompt,
-			model: this.getModel("content", model),
+			model: await this.resolveModel(model),
 			think: true,
-			options: { temperature: 0.7, num_ctx: 32768, top_p: 0.9, repeat_penalty: 1.1 },
+			options: {
+				temperature: 0.7,
+				num_ctx: 32768,
+				top_p: 0.9,
+				repeat_penalty: 1.1,
+			},
 		});
 	}
 
-	async generateSummary(systemPrompt: string, userPrompt: string, model?: string) {
+	async generateSummary(
+		systemPrompt: string,
+		userPrompt: string,
+		overrides: AIGenerationOverrides = {},
+	) {
 		return this.callModel({
 			systemPrompt,
 			userPrompt,
-			model: this.getModel("summary", model),
-			format: "json",
-			think: 'low',
-			options: { temperature: 0.1, num_ctx: 16384 },
+			model: await this.resolveModel(overrides.model),
+			requestTimeoutSec: overrides.requestTimeoutSec,
+			think: overrides.think ?? false,
+			...(overrides.format ? { format: overrides.format } : {}),
+			options: {
+				temperature: overrides.temperature ?? 0.2,
+				top_p: overrides.topP ?? 0.9,
+				num_predict: overrides.maxTokens ?? 256,
+				num_ctx: overrides.numCtx ?? 16384,
+				...(overrides.extraOptions ?? {}),
+			},
+		});
+	}
+
+	async generateTags(
+		systemPrompt: string,
+		userPrompt: string,
+		overrides: AIGenerationOverrides = {},
+	) {
+		return this.callModel({
+			systemPrompt,
+			userPrompt,
+			model: await this.resolveModel(overrides.model),
+			requestTimeoutSec: overrides.requestTimeoutSec,
+			think: overrides.think ?? false,
+			...(overrides.format ? { format: overrides.format } : {}),
+			options: {
+				temperature: overrides.temperature ?? 0.35,
+				top_p: overrides.topP ?? 0.85,
+				num_predict: overrides.maxTokens ?? 256,
+				num_ctx: overrides.numCtx ?? 16384,
+				...(overrides.extraOptions ?? {}),
+			},
 		});
 	}
 
@@ -177,13 +249,15 @@ export class OllamaProvider implements AIProvider {
 		return this.callModel({
 			systemPrompt,
 			userPrompt,
-			model: this.getModel("cover", model),
-			options: { temperature: 0.6, num_ctx: 4096 },
+			model: await this.resolveModel(model),
+			options: {
+				temperature: 0.6,
+				num_ctx: 4096,
+			},
 		});
 	}
 }
 
 export const createAIProvider = function (env: Env): AIProvider {
-
 	return new OllamaProvider(env);
-}
+};

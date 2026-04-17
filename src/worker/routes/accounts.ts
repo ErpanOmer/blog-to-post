@@ -22,13 +22,13 @@ app.get("/statistics", async (c) => {
 // List accounts
 app.get("/", async (c) => {
     const platform = c.req.query("platform") as PlatformType | undefined;
-    const accounts = await listPlatformAccounts(c.env.DB, platform);
+    const accounts = await listPlatformAccounts(c.env.DB, platform, c.env.ENCRYPTION_KEY);
     return c.json(accounts);
 });
 
 // Get single account
 app.get("/:id", async (c) => {
-    const account = await getPlatformAccount(c.env.DB, c.req.param("id"));
+    const account = await getPlatformAccount(c.env.DB, c.req.param("id"), c.env.ENCRYPTION_KEY);
     if (!account) {
         return c.json({ message: "not found" }, 404);
     }
@@ -49,7 +49,7 @@ app.post("/", async (c) => {
         description: payload.description ?? null,
         createdAt: now,
         updatedAt: now,
-    });
+    }, c.env.ENCRYPTION_KEY);
 
     if (!account) {
         return c.json(
@@ -69,7 +69,7 @@ app.post("/", async (c) => {
 // Update account
 app.put("/:id", async (c) => {
     const payload = (await c.req.json()) as { authToken?: string | null; description?: string | null; isActive?: boolean };
-    const account = await updatePlatformAccount(c.env.DB, c.req.param("id"), payload);
+    const account = await updatePlatformAccount(c.env.DB, c.req.param("id"), payload, c.env.ENCRYPTION_KEY);
     if (!account) {
         return c.json({ message: "not found" }, 404);
     }
@@ -78,7 +78,7 @@ app.put("/:id", async (c) => {
 
 // Verify account
 app.post("/:id/verify", async (c) => {
-    const result = await verifyPlatformAccount(c.env.DB, c.req.param("id"));
+    const result = await verifyPlatformAccount(c.env.DB, c.req.param("id"), c.env.ENCRYPTION_KEY);
     return c.json(result);
 });
 

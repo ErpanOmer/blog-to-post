@@ -28,11 +28,17 @@ function EmptyState({ title, description, backTo }: { title: string; description
 
 
 // Extracted route components to prevent unmounting on every render
-const ArticleNewRoute = ({ state, actions }: { state: any; actions: any }) => {
+type AppController = ReturnType<typeof useAppController>;
+type AppState = AppController["state"];
+type AppActions = AppController["actions"];
+
+const ArticleNewRoute = ({ state, actions }: { state: AppState; actions: AppActions }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const draftIsExistingArticle = state.draft ? state.articles.some((article: any) => article.id === state.draft?.id) : false;
+    const draftIsExistingArticle = state.draft
+      ? state.articles.some((article) => article.id === state.draft?.id)
+      : false;
     if (!state.draft || draftIsExistingArticle) {
       actions.openNewArticleEditor();
     }
@@ -56,11 +62,11 @@ const ArticleNewRoute = ({ state, actions }: { state: any; actions: any }) => {
   );
 };
 
-const ArticleEditRoute = ({ state, actions }: { state: any; actions: any }) => {
+const ArticleEditRoute = ({ state, actions }: { state: AppState; actions: AppActions }) => {
   const params = useParams();
   const navigate = useNavigate();
   const articleId = params.id;
-  const article = state.articles.find((item: any) => item.id === articleId);
+  const article = state.articles.find((item) => item.id === articleId);
 
   useEffect(() => {
     if (!article) return;
@@ -103,11 +109,11 @@ const ArticleEditRoute = ({ state, actions }: { state: any; actions: any }) => {
   );
 };
 
-const ArticleDetailRoute = ({ state, actions }: { state: any; actions: any }) => {
+const ArticleDetailRoute = ({ state, actions }: { state: AppState; actions: AppActions }) => {
   const params = useParams();
   const navigate = useNavigate();
   const articleId = params.id;
-  const article = state.articles.find((item: any) => item.id === articleId);
+  const article = state.articles.find((item) => item.id === articleId);
 
   if (!article) {
     return <EmptyState title="文章不存在" description="这篇文章可能已被删除，或者仍在加载中。" backTo="/articles" />;

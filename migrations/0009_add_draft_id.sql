@@ -1,2 +1,5 @@
--- Add draftId column to articles table
-ALTER TABLE articles ADD COLUMN draftId TEXT;
+-- draftId is already part of the base schema (src/worker/schema.sql).
+-- Keep this migration as a no-op to avoid duplicate-column failures
+-- when a database is initialized from the latest schema before migrations.
+-- For legacy databases that truly miss this column, run manually:
+-- ALTER TABLE articles ADD COLUMN draftId TEXT;

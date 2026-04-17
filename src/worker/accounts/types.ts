@@ -20,6 +20,7 @@ export interface ArticleDraft {
     id: string;
     title: string;
     content: string;
+    htmlContent?: string;
     createdAt: number;
     url: string;
 }

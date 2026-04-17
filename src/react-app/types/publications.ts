@@ -77,6 +77,7 @@ export interface PublishTask {
   status: PublishTaskStatus;
   articleIds: string[];
   accountConfigs: AccountConfig[];
+  idempotencyKey?: string | null;
   scheduleTime?: number | null;
   currentStep: number;
   totalSteps: number;
@@ -118,6 +119,7 @@ export interface PublicationDetail {
   platform: PlatformType;
   success: boolean;
   status: PublicationStatus;
+  errorCode?: string | null;
   draftId?: string | null;
   publishId?: string | null;
   publishedUrl?: string | null;
@@ -198,12 +200,14 @@ export interface CreatePublishTaskRequest {
   articleIds: string[];
   accountConfigs: AccountConfig[];
   scheduleTime?: number | null;
+  idempotencyKey?: string;
 }
 
 // 发布任务响应
 export interface PublishTaskResponse {
   task: PublishTask;
   message: string;
+  reused?: boolean;
 }
 
 // 发布任务状态响应

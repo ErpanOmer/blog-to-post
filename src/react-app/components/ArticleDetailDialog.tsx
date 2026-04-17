@@ -2,7 +2,6 @@ import type { Article } from "@/react-app/types";
 import {
 	Dialog,
 	DialogContent,
-	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,11 +14,9 @@ import {
 	Hash,
 	ImageIcon,
 	FileText,
-	ExternalLink,
 	CheckCircle2,
 	Circle,
 	Clock4,
-	AlertCircle,
 	XCircle,
 	Rocket,
 	Pencil,

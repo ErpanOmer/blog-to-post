@@ -38,6 +38,7 @@ export function useAppController() {
     ready: boolean;
     lastCheckedAt: number;
     message: string;
+    defaultModel?: string;
   } | null>(null);
   const [distributionDetailTaskId, setDistributionDetailTaskId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);

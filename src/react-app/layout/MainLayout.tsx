@@ -26,7 +26,6 @@ export function MainLayout({ isPublishing, isGenerating, onOpenEditor, children 
   const isBusy = isPublishing || isGenerating;
   
   const isEditorPage = location.pathname.includes("/articles/new") || location.pathname.includes("/edit");
-  const fullWidth = isEditorPage;
 
   return (
     <>

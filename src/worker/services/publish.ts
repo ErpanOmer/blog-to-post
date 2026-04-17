@@ -20,11 +20,19 @@ import {
 	updateArticlePublication,
 	createOrUpdateAccountStatistics,
 	getPublishTask,
+	getPublishTaskByIdempotencyKey,
 	updatePublishTask,
 	listPublishTaskSteps,
 	getPendingScheduledTasks,
 } from "@/worker/db/publications";
 import { randomDelay } from "../utils/helpers";
+import { logger } from "@/worker/utils/logger";
+import {
+	PublishErrorCodes,
+	type PublishErrorCode,
+	PublishServiceError,
+	toPublishServiceError,
+} from "@/worker/services/publish-errors";
 
 interface StepExecutionOutput<T> {
 	value: T;
@@ -49,6 +57,11 @@ interface ProgressState {
 	currentStep: string;
 }
 
+interface TaskExecutionOptions {
+	encryptionKey?: string;
+	requestId?: string;
+}
+
 function errorMessageOf(error: unknown): string {
 	if (error instanceof Error) return error.message;
 	return String(error);
@@ -65,6 +78,20 @@ function compactRecord(input: Record<string, unknown> | null | undefined): Recor
 		output[key] = value;
 	}
 	return output;
+}
+
+function mapPublishErrorCodeFromMessage(message: string): PublishErrorCode {
+	const normalized = message.toLowerCase();
+	if (normalized.includes("not found")) {
+		if (normalized.includes("article")) return PublishErrorCodes.ARTICLE_NOT_FOUND;
+		if (normalized.includes("account")) return PublishErrorCodes.ACCOUNT_NOT_FOUND;
+		return PublishErrorCodes.TASK_NOT_FOUND;
+	}
+	if (normalized.includes("inactive")) return PublishErrorCodes.ACCOUNT_INACTIVE;
+	if (normalized.includes("not verified")) return PublishErrorCodes.ACCOUNT_NOT_VERIFIED;
+	if (normalized.includes("token")) return PublishErrorCodes.ACCOUNT_TOKEN_MISSING;
+	if (normalized.includes("unsupported platform")) return PublishErrorCodes.UNSUPPORTED_PLATFORM;
+	return PublishErrorCodes.PUBLISH_EXECUTION_FAILED;
 }
 
 async function createTaskStepAndSetRunning(
@@ -161,21 +188,22 @@ async function runTrackedStep<T>(
 		await updateTaskProgress(db, task, state);
 		return result.value;
 	} catch (error) {
+		const publishError = toPublishServiceError(error, PublishErrorCodes.PUBLISH_EXECUTION_FAILED);
 		const duration = Date.now() - step.startedAt;
-		const message = errorMessageOf(error);
 		await updatePublishTaskStep(db, step.id, {
 			status: "failed",
 			endTime: Date.now(),
 			duration,
-			errorMessage: message,
+			errorMessage: publishError.message,
 			outputData: {
-				error: message,
+				error: publishError.message,
+				errorCode: publishError.code,
 			},
 		});
 		state.failedSteps += 1;
 		state.currentStep = `${params.stepName} failed`;
 		await updateTaskProgress(db, task, state);
-		throw error;
+		throw publishError;
 	}
 }
 
@@ -241,6 +269,7 @@ async function appendAdapterTrace(
 			stage: event.stage,
 			message: event.message,
 			level: event.level ?? "info",
+			...(compactRecord(event.metadata) ?? {}),
 		},
 	});
 
@@ -264,25 +293,86 @@ export async function createPublishTaskService(
 		articleIds: string[];
 		accountConfigs: AccountConfig[];
 		scheduleTime?: number | null;
+		idempotencyKey?: string;
 	},
 	ctx?: ExecutionContext,
-): Promise<{ task: PublishTask; message: string }> {
-	const { articleIds, accountConfigs, scheduleTime } = params;
+	options: TaskExecutionOptions = {},
+): Promise<{ task: PublishTask; message: string; reused?: boolean }> {
+	const { articleIds, accountConfigs, scheduleTime, idempotencyKey } = params;
+	const requestId = options.requestId;
+
+	if (!articleIds?.length || !accountConfigs?.length) {
+		throw new PublishServiceError({
+			code: PublishErrorCodes.INVALID_REQUEST,
+			message: "Article ids and account configs are required",
+			status: 400,
+		});
+	}
+
+	if (idempotencyKey) {
+		const existing = await getPublishTaskByIdempotencyKey(db, idempotencyKey);
+		if (existing) {
+			logger.info({
+				module: "publish.service",
+				event: "task.idempotent_hit",
+				requestId,
+				taskId: existing.id,
+				idempotencyKey,
+				status: existing.status,
+			});
+			return {
+				task: existing,
+				message: "Idempotency key matched existing task",
+				reused: true,
+			};
+		}
+	}
 
 	for (const articleId of articleIds) {
 		const article = await getArticle(db, articleId);
 		if (!article) {
-			throw new Error(`Article not found: ${articleId}`);
+			throw new PublishServiceError({
+				code: PublishErrorCodes.ARTICLE_NOT_FOUND,
+				message: `Article not found: ${articleId}`,
+				status: 404,
+				details: { articleId },
+			});
 		}
 	}
 
 	for (const config of accountConfigs) {
-		const account = await getPlatformAccount(db, config.accountId);
+		const account = await getPlatformAccount(db, config.accountId, options.encryptionKey);
 		if (!account) {
-			throw new Error(`Account not found: ${config.accountId}`);
+			throw new PublishServiceError({
+				code: PublishErrorCodes.ACCOUNT_NOT_FOUND,
+				message: `Account not found: ${config.accountId}`,
+				status: 404,
+				details: { accountId: config.accountId },
+			});
 		}
 		if (!account.isActive) {
-			throw new Error(`Account is inactive: ${account.userName || config.accountId}`);
+			throw new PublishServiceError({
+				code: PublishErrorCodes.ACCOUNT_INACTIVE,
+				message: `Account is inactive: ${account.userName || config.accountId}`,
+				status: 400,
+				details: { accountId: config.accountId, platform: config.platform },
+			});
+		}
+		if (!account.isVerified) {
+			throw new PublishServiceError({
+				code: PublishErrorCodes.ACCOUNT_NOT_VERIFIED,
+				message: `Account is not verified: ${account.userName || config.accountId}`,
+				status: 400,
+				details: { accountId: config.accountId, platform: config.platform },
+			});
+		}
+		if (!account.authToken) {
+			throw new PublishServiceError({
+				code: PublishErrorCodes.ACCOUNT_TOKEN_MISSING,
+				message: `Account auth token is missing: ${account.userName || config.accountId}`,
+				status: 400,
+				details: { accountId: config.accountId, platform: config.platform },
+			});
 		}
 	}
 
@@ -290,17 +380,56 @@ export async function createPublishTaskService(
 	const isScheduled = Boolean(scheduleTime && scheduleTime > now);
 	const taskType = articleIds.length > 1 ? "batch" : isScheduled ? "scheduled" : "single";
 
-	const task = await createPublishTask(db, {
-		id: crypto.randomUUID(),
-		type: taskType,
-		articleIds,
-		accountConfigs,
-		scheduleTime: isScheduled ? scheduleTime : null,
-	});
+	let task: PublishTask;
+	try {
+		task = await createPublishTask(db, {
+			id: crypto.randomUUID(),
+			type: taskType,
+			articleIds,
+			accountConfigs,
+			idempotencyKey: idempotencyKey ?? null,
+			scheduleTime: isScheduled ? scheduleTime : null,
+		});
+	} catch (error) {
+		const message = errorMessageOf(error).toLowerCase();
+		if (idempotencyKey && message.includes("unique") && message.includes("idempotency")) {
+			const existing = await getPublishTaskByIdempotencyKey(db, idempotencyKey);
+			if (existing) {
+				logger.warn({
+					module: "publish.service",
+					event: "task.idempotent_race_reused",
+					requestId,
+					taskId: existing.id,
+					idempotencyKey,
+					status: existing.status,
+				});
+				return {
+					task: existing,
+					message: "Idempotency key matched existing task after race",
+					reused: true,
+				};
+			}
+			throw new PublishServiceError({
+				code: PublishErrorCodes.IDEMPOTENCY_CONFLICT,
+				status: 409,
+				message: "Idempotency key conflict",
+				details: { idempotencyKey },
+			});
+		}
+		throw toPublishServiceError(error, PublishErrorCodes.INTERNAL_ERROR);
+	}
 
 	if (!isScheduled) {
-		const execution = executePublishTask(db, task.id).catch((error) => {
-			console.error("[publish] execute task failed", { taskId: task.id, error: errorMessageOf(error) });
+		const execution = executePublishTask(db, task.id, options).catch((error) => {
+			const publishError = toPublishServiceError(error);
+			logger.error({
+				module: "publish.service",
+				event: "task.execution_failed",
+				requestId,
+				taskId: task.id,
+				errorCode: publishError.code,
+				message: publishError.message,
+			});
 		});
 
 		if (ctx) {
@@ -326,18 +455,38 @@ function estimateCoreTotalSteps(articleCount: number, accountConfigs: AccountCon
 }
 
 // Execute publish task
-export async function executePublishTask(db: D1Database, taskId: string): Promise<PublishResult> {
+export async function executePublishTask(
+	db: D1Database,
+	taskId: string,
+	options: TaskExecutionOptions = {},
+): Promise<PublishResult> {
+	const requestId = options.requestId;
 	const task = await getPublishTask(db, taskId);
 	if (!task) {
-		throw new Error("Task not found");
+		throw new PublishServiceError({
+			code: PublishErrorCodes.TASK_NOT_FOUND,
+			status: 404,
+			message: "Task not found",
+			details: { taskId },
+		});
 	}
 
 	if (task.status === "processing") {
-		throw new Error("Task is already processing");
+		throw new PublishServiceError({
+			code: PublishErrorCodes.TASK_ALREADY_PROCESSING,
+			status: 409,
+			message: "Task is already processing",
+			details: { taskId },
+		});
 	}
 
 	if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
-		throw new Error("Task is already finished");
+		throw new PublishServiceError({
+			code: PublishErrorCodes.TASK_ALREADY_FINISHED,
+			status: 409,
+			message: "Task is already finished",
+			details: { taskId, status: task.status },
+		});
 	}
 
 	const normalizedTotalSteps = estimateCoreTotalSteps(task.articleIds.length, task.accountConfigs);
@@ -403,10 +552,12 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 				});
 
 				let draftId: string | undefined;
+				let draftHtmlContent: string | undefined;
 				let publishId: string | undefined;
 				let publishedUrl: string | undefined;
 				let currentStatus: PublicationStatus = "pending";
 				let errorMessage: string | undefined;
+				let errorCode: string | undefined;
 				const publishStartAt = Date.now();
 
 				let traceChain = Promise.resolve();
@@ -416,7 +567,10 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 					traceChain = traceChain
 						.then(async () => {
 							await appendAdapterTrace(db, task, progressState, stepCtx, event);
-							console.info("[publish][adapter-trace]", {
+							logger.info({
+								module: "publish.service",
+								event: "adapter.trace",
+								requestId,
 								taskId,
 								articleId,
 								accountId: accountConfig.accountId,
@@ -427,7 +581,10 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 							});
 						})
 						.catch((traceError) => {
-							console.warn("[publish] adapter trace append failed", {
+							logger.warn({
+								module: "publish.service",
+								event: "adapter.trace_append_failed",
+								requestId,
 								taskId,
 								error: errorMessageOf(traceError),
 							});
@@ -463,7 +620,11 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 						execute: async () => {
 							const loaded = await getArticle(db, articleId);
 							if (!loaded) {
-								throw new Error(`Article not found: ${articleId}`);
+								throw new PublishServiceError({
+									code: PublishErrorCodes.ARTICLE_NOT_FOUND,
+									status: 404,
+									message: `Article not found: ${articleId}`,
+								});
 							}
 							return {
 								value: loaded,
@@ -482,9 +643,17 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 						stepName: "Load account",
 						inputData: { accountId: accountConfig.accountId, platform: accountConfig.platform },
 						execute: async () => {
-							const loaded = await getPlatformAccount(db, accountConfig.accountId);
+							const loaded = await getPlatformAccount(
+								db,
+								accountConfig.accountId,
+								options.encryptionKey,
+							);
 							if (!loaded) {
-								throw new Error(`Account not found: ${accountConfig.accountId}`);
+								throw new PublishServiceError({
+									code: PublishErrorCodes.ACCOUNT_NOT_FOUND,
+									status: 404,
+									message: `Account not found: ${accountConfig.accountId}`,
+								});
 							}
 							return {
 								value: loaded,
@@ -508,13 +677,25 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 						},
 						execute: async () => {
 							if (!account.isActive) {
-								throw new Error("Account is inactive");
+								throw new PublishServiceError({
+									code: PublishErrorCodes.ACCOUNT_INACTIVE,
+									status: 400,
+									message: "Account is inactive",
+								});
 							}
 							if (!account.isVerified) {
-								throw new Error("Account is not verified");
+								throw new PublishServiceError({
+									code: PublishErrorCodes.ACCOUNT_NOT_VERIFIED,
+									status: 400,
+									message: "Account is not verified",
+								});
 							}
 							if (!account.authToken) {
-								throw new Error("Account auth token is missing");
+								throw new PublishServiceError({
+									code: PublishErrorCodes.ACCOUNT_TOKEN_MISSING,
+									status: 400,
+									message: "Account auth token is missing",
+								});
 							}
 							return {
 								value: true,
@@ -534,11 +715,19 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 						inputData: { platform: account.platform },
 						execute: async () => {
 							if (!account.authToken) {
-								throw new Error("Account auth token is missing");
+								throw new PublishServiceError({
+									code: PublishErrorCodes.ACCOUNT_TOKEN_MISSING,
+									status: 400,
+									message: "Account auth token is missing",
+								});
 							}
 							const service = getAccountService(account.platform, account.authToken);
 							if (!service) {
-								throw new Error(`Unsupported platform: ${account.platform}`);
+								throw new PublishServiceError({
+									code: PublishErrorCodes.UNSUPPORTED_PLATFORM,
+									status: 400,
+									message: `Unsupported platform: ${account.platform}`,
+								});
 							}
 							if (service.setPublishTraceLogger) {
 								service.setPublishTraceLogger(pushAdapterTrace);
@@ -553,7 +742,7 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 						},
 					});
 
-					draftId = await runTrackedStep(db, task, progressState, {
+					const draftOutput = await runTrackedStep(db, task, progressState, {
 						ctx: stepCtx,
 						stepType: "create_draft",
 						stepName: "Create platform draft",
@@ -569,16 +758,23 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 								throw new Error("Platform draft creation returned empty result");
 							}
 							return {
-								value: draft.id,
+								value: {
+									draftId: draft.id,
+									htmlContent: draft.htmlContent ?? undefined,
+								},
 								outputData: {
 									functionName: "articleDraft",
 									draftId: draft.id,
 									draftUrl: draft.url,
 									createdAt: draft.createdAt,
+									hasPreparedHtmlContent: Boolean(draft.htmlContent?.trim()),
+									htmlContentLength: draft.htmlContent?.length ?? null,
 								},
 							};
 						},
 					});
+					draftId = draftOutput.draftId;
+					draftHtmlContent = draftOutput.htmlContent;
 
 					if (accountConfig.draftOnly) {
 						await markStepSkipped(db, task, progressState, {
@@ -596,16 +792,28 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 							inputData: {
 								functionName: "articlePublish",
 								draftId,
+								usingDraftHtmlContent: Boolean(draftHtmlContent?.trim()),
 							},
 							execute: async () => {
 								if (!draftId) {
-									throw new Error("Missing draftId for publish");
+									throw new PublishServiceError({
+										code: PublishErrorCodes.INVALID_REQUEST,
+										status: 400,
+										message: "Missing draftId for publish",
+									});
 								}
 
 								await randomDelay(3000, 5000);
-								const publishResult = await resolvedService!.articlePublish({ ...article, draftId });
+								const publishPayload = draftHtmlContent?.trim()
+									? { ...article, htmlContent: draftHtmlContent, draftId }
+									: { ...article, draftId };
+								const publishResult = await resolvedService!.articlePublish(publishPayload);
 								if (!publishResult.success) {
-									throw new Error(publishResult.message || "Platform publish failed");
+									throw new PublishServiceError({
+										code: PublishErrorCodes.PUBLISH_EXECUTION_FAILED,
+										status: 500,
+										message: publishResult.message || "Platform publish failed",
+									});
 								}
 
 								return {
@@ -618,6 +826,7 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 										draftId,
 										publishId: publishResult.articleId || null,
 										publishedUrl: publishResult.url || null,
+										usingDraftHtmlContent: Boolean(draftHtmlContent?.trim()),
 										message: publishResult.message,
 									},
 								};
@@ -648,14 +857,23 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 						currentStatus = "published";
 					}
 				} catch (error) {
-					errorMessage = errorMessageOf(error);
+					const publishError = toPublishServiceError(
+						error,
+						mapPublishErrorCodeFromMessage(errorMessageOf(error)),
+					);
+					errorMessage = publishError.message;
+					errorCode = publishError.code;
 					currentStatus = "failed";
-					console.error("[publish] account/article execution failed", {
+					logger.error({
+						module: "publish.service",
+						event: "publication.execute_failed",
+						requestId,
 						taskId,
 						articleId,
 						accountId: accountConfig.accountId,
 						platform: accountConfig.platform,
-						error: errorMessage,
+						errorCode,
+						message: errorMessage,
 					});
 				} finally {
 					resolvedService?.clearPublishTraceLogger?.();
@@ -690,6 +908,7 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 									publishId: publishId ?? null,
 									publishedUrl: publishedUrl ?? null,
 									errorMessage: errorMessage ?? null,
+									errorCode: errorCode ?? null,
 									duration,
 								},
 							};
@@ -697,13 +916,17 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 					});
 				} catch (persistError) {
 					const persistMessage = errorMessageOf(persistError);
-					console.error("[publish] persist publication failed", {
+					logger.error({
+						module: "publish.service",
+						event: "publication.persist_failed",
+						requestId,
 						taskId,
 						publicationId: publication.id,
-						error: persistMessage,
+						message: persistMessage,
 					});
 					if (!errorMessage) {
 						errorMessage = persistMessage;
+						errorCode = PublishErrorCodes.PUBLISH_EXECUTION_FAILED;
 						currentStatus = "failed";
 					}
 				}
@@ -744,7 +967,10 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 						},
 					});
 				} catch (statisticsError) {
-					console.error("[publish] update statistics failed", {
+					logger.warn({
+						module: "publish.service",
+						event: "statistics.update_failed",
+						requestId,
 						taskId,
 						accountId: accountConfig.accountId,
 						error: errorMessageOf(statisticsError),
@@ -757,6 +983,7 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 					platform: accountConfig.platform,
 					success: currentStatus === "published" || currentStatus === "draft_created",
 					status: currentStatus,
+					errorCode: errorCode ?? null,
 					draftId: draftId ?? null,
 					publishId: publishId ?? null,
 					publishedUrl: publishedUrl ?? null,
@@ -799,13 +1026,14 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 
 		return result;
 	} catch (error) {
-		const message = errorMessageOf(error);
+		const publishError = toPublishServiceError(error, PublishErrorCodes.PUBLISH_EXECUTION_FAILED);
+		const message = publishError.message;
 		await updatePublishTask(db, taskId, {
 			status: "failed",
 			completedAt: Date.now(),
 			currentStep: progressState.progressStepNumber,
 			errorData: {
-				code: "EXECUTION_ERROR",
+				code: publishError.code,
 				message,
 				details: {
 					stepNumber: progressState.progressStepNumber,
@@ -822,6 +1050,14 @@ export async function executePublishTask(db: D1Database, taskId: string): Promis
 				failedSteps: progressState.failedSteps + 1,
 				skippedSteps: progressState.skippedSteps,
 			},
+		});
+		logger.error({
+			module: "publish.service",
+			event: "task.failed",
+			requestId,
+			taskId,
+			errorCode: publishError.code,
+			message,
 		});
 
 		return {
@@ -865,7 +1101,12 @@ export async function cancelPublishTask(
 export async function getPublishTaskStatus(db: D1Database, taskId: string) {
 	const task = await getPublishTask(db, taskId);
 	if (!task) {
-		throw new Error("Task not found");
+		throw new PublishServiceError({
+			code: PublishErrorCodes.TASK_NOT_FOUND,
+			status: 404,
+			message: "Task not found",
+			details: { taskId },
+		});
 	}
 
 	const steps = await listPublishTaskSteps(db, taskId);
@@ -879,10 +1120,16 @@ export async function quickPublish(
 	accountId: string,
 	draftOnly = false,
 	ctx?: ExecutionContext,
+	options: TaskExecutionOptions = {},
 ): Promise<{ success: boolean; message: string; publicationId?: string }> {
-	const account = await getPlatformAccount(db, accountId);
+	const account = await getPlatformAccount(db, accountId, options.encryptionKey);
 	if (!account) {
-		return { success: false, message: "Account not found" };
+		throw new PublishServiceError({
+			code: PublishErrorCodes.ACCOUNT_NOT_FOUND,
+			status: 404,
+			message: "Account not found",
+			details: { accountId },
+		});
 	}
 
 	const task = await createPublishTaskService(
@@ -896,6 +1143,7 @@ export async function quickPublish(
 			}],
 		},
 		ctx,
+		options,
 	);
 
 	return {
@@ -906,14 +1154,25 @@ export async function quickPublish(
 }
 
 // Process scheduled tasks (triggered by cron)
-export async function processScheduledTasks(db: D1Database): Promise<void> {
+export async function processScheduledTasks(
+	db: D1Database,
+	options: TaskExecutionOptions = {},
+): Promise<void> {
 	const tasks = await getPendingScheduledTasks(db);
 	for (const task of tasks) {
-		console.info("[publish] execute scheduled task", { taskId: task.id });
-		executePublishTask(db, task.id).catch((error) => {
-			console.error("[publish] scheduled task failed", {
+		logger.info({
+			module: "publish.scheduler",
+			event: "task.execute",
+			taskId: task.id,
+		});
+		executePublishTask(db, task.id, options).catch((error) => {
+			const publishError = toPublishServiceError(error, PublishErrorCodes.PUBLISH_EXECUTION_FAILED);
+			logger.error({
+				module: "publish.scheduler",
+				event: "task.failed",
 				taskId: task.id,
-				error: errorMessageOf(error),
+				errorCode: publishError.code,
+				message: publishError.message,
 			});
 		});
 	}

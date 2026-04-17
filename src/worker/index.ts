@@ -119,7 +119,9 @@ export default {
 	fetch: app.fetch,
 	scheduled: async (_event: unknown, env: Env) => {
 		// 执行定时发布任务
-		await processScheduledTasks(env.DB);
+		await processScheduledTasks(env.DB, {
+			encryptionKey: env.ENCRYPTION_KEY,
+		});
 		// 执行日常定时任务
 		await runDailyCron(env);
 	},

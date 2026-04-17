@@ -1,7 +1,16 @@
 import { AbstractAccountService } from "@/worker/accounts/abstract";
 import type { Article as SharedArticle } from "@/shared/types";
 import { registerAccountService } from "@/worker/accounts/index";
-import type { VerifyResult, AccountStatus, AccountInfo, ArticleDraft, Article, ArticlePublishResult, ImageUploadResult, XiaohongshuUserInfo } from "@/worker/accounts/index";
+import type {
+	VerifyResult,
+	AccountStatus,
+	AccountInfo,
+	ArticleDraft,
+	Article,
+	ArticlePublishResult,
+	ImageUploadResult,
+	XiaohongshuUserInfo,
+} from "@/worker/accounts/index";
 
 export default class XiaohongshuAccountService extends AbstractAccountService {
 	constructor(authToken: string) {
@@ -10,7 +19,7 @@ export default class XiaohongshuAccountService extends AbstractAccountService {
 
 	protected buildHeaders(): Record<string, string> {
 		return {
-			"Authorization": `Bearer ${this.authToken}`,
+			Authorization: `Bearer ${this.authToken}`,
 			"Content-Type": "application/json",
 		};
 	}
@@ -23,7 +32,7 @@ export default class XiaohongshuAccountService extends AbstractAccountService {
 
 			return {
 				valid: true,
-				message: "楠岃瘉鎴愬姛",
+				message: "验证成功",
 				accountInfo: {
 					id: data.data.user_id,
 					name: data.data.nickname,
@@ -34,7 +43,7 @@ export default class XiaohongshuAccountService extends AbstractAccountService {
 		} catch (error) {
 			return {
 				valid: false,
-				message: error instanceof Error ? error.message : "楠岃瘉澶辫触",
+				message: error instanceof Error ? error.message : "验证失败",
 			};
 		}
 	}
@@ -62,7 +71,8 @@ export default class XiaohongshuAccountService extends AbstractAccountService {
 		};
 	}
 
-	async articleDraft(_article: SharedArticle): Promise<ArticleDraft | null> {
+	async articleDraft(article: SharedArticle): Promise<ArticleDraft | null> {
+		void article;
 		return null;
 	}
 
@@ -83,19 +93,20 @@ export default class XiaohongshuAccountService extends AbstractAccountService {
 			return {
 				success: true,
 				articleId: data.data.note_id,
-				message: "鍙戝竷鎴愬姛",
+				message: "发布成功",
 				url: `https://www.xiaohongshu.com/explore/${data.data.note_id}`,
 			};
 		} catch (error) {
 			return {
 				success: false,
-				message: error instanceof Error ? error.message : "鍙戝竷澶辫触",
+				message: error instanceof Error ? error.message : "发布失败",
 			};
 		}
 	}
 
-	async articleDelete(_articleId: string): Promise<{ success: boolean; message: string }> {
-		return { success: false, message: "鏆備笉鏀寔鍒犻櫎鏂囩珷" };
+	async articleDelete(articleId: string): Promise<{ success: boolean; message: string }> {
+		void articleId;
+		return { success: false, message: "暂不支持删除文章" };
 	}
 
 	async articleList(page = 1, pageSize = 10): Promise<Article[]> {
@@ -134,12 +145,15 @@ export default class XiaohongshuAccountService extends AbstractAccountService {
 		}
 	}
 
-	async articleTags(_articleId: string): Promise<string[]> {
+	async articleTags(articleId: string): Promise<string[]> {
+		void articleId;
 		return [];
 	}
 
-	async imageUpload(_imageData: string, _filename?: string): Promise<ImageUploadResult> {
-		return { success: false, message: "鏆備笉鏀寔鍥剧墖涓婁紶" };
+	async imageUpload(imageData: string, filename?: string): Promise<ImageUploadResult> {
+		void imageData;
+		void filename;
+		return { success: false, message: "暂不支持图片上传" };
 	}
 }
 

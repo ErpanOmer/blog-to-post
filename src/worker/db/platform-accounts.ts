@@ -1,6 +1,8 @@
-import type { PlatformType, VerifyAccountResult } from "@/worker/types";
+import type { AccountInfo, AccountStatus } from "@/worker/accounts";
 import "../accounts";
 import { getAccountService } from "@/worker/accounts";
+import type { PlatformType, VerifyAccountResult } from "@/worker/types";
+import { decrypt, encrypt, isEncrypted } from "@/worker/utils/crypto";
 
 export interface PlatformAccount {
 	id: string;
@@ -17,7 +19,10 @@ export interface PlatformAccount {
 	updatedAt: number;
 }
 
-type PlatformAccountRow = Omit<PlatformAccount, "createdAt" | "updatedAt" | "isActive" | "isVerified" | "lastVerifiedAt"> & {
+type PlatformAccountRow = Omit<
+	PlatformAccount,
+	"createdAt" | "updatedAt" | "isActive" | "isVerified" | "lastVerifiedAt"
+> & {
 	isActive: number | null;
 	isVerified: number | null;
 	lastVerifiedAt: string | null;
@@ -25,13 +30,47 @@ type PlatformAccountRow = Omit<PlatformAccount, "createdAt" | "updatedAt" | "isA
 	updatedAt: string;
 };
 
-function mapPlatformAccount(row: PlatformAccountRow): PlatformAccount {
+function normalizeAuthToken(token?: string | null): string | null {
+	if (token === undefined || token === null) return null;
+	const trimmed = token.trim();
+	return trimmed.length > 0 ? trimmed : null;
+}
+
+async function encryptAuthToken(
+	token: string,
+	encryptionKey?: string,
+): Promise<string> {
+	if (!encryptionKey) return token;
+	if (isEncrypted(token)) return token;
+	return encrypt(token, encryptionKey);
+}
+
+async function decryptAuthToken(
+	token: string,
+	encryptionKey?: string,
+): Promise<string | null> {
+	if (!token) return null;
+	if (!isEncrypted(token)) return token;
+	if (!encryptionKey) return null;
+
+	try {
+		return await decrypt(token, encryptionKey);
+	} catch {
+		return null;
+	}
+}
+
+async function mapPlatformAccount(
+	row: PlatformAccountRow,
+	encryptionKey?: string,
+): Promise<PlatformAccount> {
+	const authToken = await decryptAuthToken(row.authToken ?? "", encryptionKey);
 	return {
 		...row,
 		userId: row.userId ?? null,
 		userName: row.userName ?? null,
 		avatar: row.avatar ?? null,
-		authToken: row.authToken ?? null,
+		authToken,
 		description: row.description ?? null,
 		isActive: (row.isActive ?? 1) === 1,
 		isVerified: (row.isVerified ?? 0) === 1,
@@ -41,9 +80,53 @@ function mapPlatformAccount(row: PlatformAccountRow): PlatformAccount {
 	};
 }
 
+async function getPlatformAccountRow(
+	db: D1Database,
+	id: string,
+): Promise<PlatformAccountRow | null> {
+	const result = await db
+		.prepare("SELECT * FROM platform_accounts WHERE id = ?")
+		.bind(id)
+		.first<PlatformAccountRow>();
+	return result ?? null;
+}
+
+async function refreshExistingPlatformAccountProfile(
+	db: D1Database,
+	params: {
+		id: string;
+		userInfo: AccountInfo;
+		authToken: string;
+		description?: string | null;
+	},
+	encryptionKey?: string,
+): Promise<PlatformAccount | null> {
+	const now = Date.now();
+	const storedToken = await encryptAuthToken(params.authToken, encryptionKey);
+
+	await db
+		.prepare(
+			"UPDATE platform_accounts SET userId = ?, userName = ?, avatar = ?, authToken = ?, description = ?, isActive = 1, isVerified = 1, lastVerifiedAt = ?, updatedAt = ? WHERE id = ?",
+		)
+		.bind(
+			params.userInfo.id,
+			params.userInfo.name,
+			params.userInfo.avatar ?? null,
+			storedToken,
+			params.description ?? null,
+			now,
+			now,
+			params.id,
+		)
+		.run();
+
+	return getPlatformAccount(db, params.id, encryptionKey);
+}
+
 export async function listPlatformAccounts(
 	db: D1Database,
 	platform?: PlatformType,
+	encryptionKey?: string,
 ): Promise<PlatformAccount[]> {
 	let query = "SELECT * FROM platform_accounts";
 	const params: unknown[] = [];
@@ -56,18 +139,17 @@ export async function listPlatformAccounts(
 	query += " ORDER BY createdAt DESC";
 
 	const result = await db.prepare(query).bind(...params).all<PlatformAccountRow>();
-	return (result.results ?? []).map(mapPlatformAccount);
+	return Promise.all((result.results ?? []).map((row) => mapPlatformAccount(row, encryptionKey)));
 }
 
 export async function getPlatformAccount(
 	db: D1Database,
 	id: string,
+	encryptionKey?: string,
 ): Promise<PlatformAccount | null> {
-	const result = await db
-		.prepare("SELECT * FROM platform_accounts WHERE id = ?")
-		.bind(id)
-		.first<PlatformAccountRow>();
-	return result ? mapPlatformAccount(result) : null;
+	const row = await getPlatformAccountRow(db, id);
+	if (!row) return null;
+	return mapPlatformAccount(row, encryptionKey);
 }
 
 export async function createPlatformAccount(
@@ -80,8 +162,10 @@ export async function createPlatformAccount(
 		createdAt: number;
 		updatedAt: number;
 	},
+	encryptionKey?: string,
 ): Promise<{ account: PlatformAccount; verifyResult: VerifyAccountResult; isDuplicate: boolean }> {
-	if (!payload.authToken) {
+	const token = normalizeAuthToken(payload.authToken);
+	if (!token) {
 		return {
 			account: null as unknown as PlatformAccount,
 			verifyResult: { valid: false, message: "未提供认证信息" },
@@ -89,7 +173,7 @@ export async function createPlatformAccount(
 		};
 	}
 
-	const service = getAccountService(payload.platform, payload.authToken);
+	const service = getAccountService(payload.platform, token);
 	if (!service) {
 		return {
 			account: null as unknown as PlatformAccount,
@@ -99,7 +183,6 @@ export async function createPlatformAccount(
 	}
 
 	const verifyResult = await service.verify();
-
 	if (!verifyResult.valid) {
 		return {
 			account: null as unknown as PlatformAccount,
@@ -123,68 +206,57 @@ export async function createPlatformAccount(
 		.first<PlatformAccountRow>();
 
 	if (existing) {
+		const refreshed = await refreshExistingPlatformAccountProfile(
+			db,
+			{
+				id: existing.id,
+				userInfo,
+				authToken: token,
+				description: payload.description ?? existing.description ?? null,
+			},
+			encryptionKey,
+		);
 		return {
-			account: mapPlatformAccount(existing),
-			verifyResult: { valid: true, message: "该平台帐号已存在", accountInfo: userInfo },
+			account: refreshed ?? await mapPlatformAccount(existing, encryptionKey),
+			verifyResult: { valid: true, message: "该平台账号已存在，已刷新资料与登录态", accountInfo: userInfo },
 			isDuplicate: true,
 		};
 	}
 
-	const columnInfo = await db
-		.prepare("PRAGMA table_info(platform_accounts)")
-		.all<{ name: string }>();
-	const columnNames = new Set((columnInfo.results ?? []).map((item) => item.name));
-	const hasLegacyNameColumn = columnNames.has("name");
+	const storedToken = await encryptAuthToken(token, encryptionKey);
+	const now = Date.now();
 
-	if (hasLegacyNameColumn) {
-		await db
-			.prepare(
-				"INSERT INTO platform_accounts (id, platform, userId, userName, name, avatar, authToken, description, isActive, isVerified, lastVerifiedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)",
-			)
-			.bind(
-				payload.id,
-				payload.platform,
-				userInfo.id,
-				userInfo.name,
-				userInfo.name,
-				userInfo.avatar ?? null,
-				payload.authToken,
-				payload.description ?? null,
-				Date.now(),
-				payload.createdAt,
-				payload.updatedAt,
-			)
-			.run();
-	} else {
-		await db
-			.prepare(
-				"INSERT INTO platform_accounts (id, platform, userId, userName, avatar, authToken, description, isActive, isVerified, lastVerifiedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)",
-			)
-			.bind(
-				payload.id,
-				payload.platform,
-				userInfo.id,
-				userInfo.name,
-				userInfo.avatar ?? null,
-				payload.authToken,
-				payload.description ?? null,
-				Date.now(),
-				payload.createdAt,
-				payload.updatedAt,
-			)
-			.run();
-	}
+	await db
+		.prepare(
+			"INSERT INTO platform_accounts (id, platform, userId, userName, avatar, authToken, description, isActive, isVerified, lastVerifiedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)",
+		)
+		.bind(
+			payload.id,
+			payload.platform,
+			userInfo.id,
+			userInfo.name,
+			userInfo.avatar ?? null,
+			storedToken,
+			payload.description ?? null,
+			now,
+			payload.createdAt,
+			payload.updatedAt,
+		)
+		.run();
 
 	const account: PlatformAccount = {
-		...payload,
+		id: payload.id,
+		platform: payload.platform,
 		userId: userInfo.id,
 		userName: userInfo.name,
-		avatar: userInfo.avatar,
-		authToken: payload.authToken,
+		avatar: userInfo.avatar ?? null,
+		authToken: token,
 		description: payload.description ?? null,
 		isActive: true,
 		isVerified: true,
-		lastVerifiedAt: Date.now(),
+		lastVerifiedAt: now,
+		createdAt: payload.createdAt,
+		updatedAt: payload.updatedAt,
 	};
 
 	return { account, verifyResult, isDuplicate: false };
@@ -200,14 +272,23 @@ export async function updatePlatformAccount(
 		isVerified?: boolean;
 		lastVerifiedAt?: number | null;
 	},
+	encryptionKey?: string,
 ): Promise<PlatformAccount | null> {
-	const current = await getPlatformAccount(db, id);
-	if (!current) {
+	const currentRow = await getPlatformAccountRow(db, id);
+	if (!currentRow) {
 		return null;
 	}
+	const current = await mapPlatformAccount(currentRow, encryptionKey);
+
+	const tokenFromPayload = normalizeAuthToken(payload.authToken);
+	const shouldUpdateToken = payload.authToken !== undefined;
+	const nextStoredToken = shouldUpdateToken
+		? tokenFromPayload
+			? await encryptAuthToken(tokenFromPayload, encryptionKey)
+			: null
+		: currentRow.authToken ?? null;
 
 	const next = {
-		authToken: payload.authToken ?? current.authToken ?? null,
 		description: payload.description ?? current.description ?? null,
 		isActive: payload.isActive ?? current.isActive,
 		isVerified: payload.isVerified ?? current.isVerified,
@@ -220,7 +301,7 @@ export async function updatePlatformAccount(
 			"UPDATE platform_accounts SET authToken = ?, description = ?, isActive = ?, isVerified = ?, lastVerifiedAt = ?, updatedAt = ? WHERE id = ?",
 		)
 		.bind(
-			next.authToken,
+			nextStoredToken,
 			next.description,
 			next.isActive ? 1 : 0,
 			next.isVerified ? 1 : 0,
@@ -230,11 +311,12 @@ export async function updatePlatformAccount(
 		)
 		.run();
 
-	return { ...current, ...next };
+	const updated = await getPlatformAccount(db, id, encryptionKey);
+	return updated ?? { ...current, ...next, authToken: shouldUpdateToken ? tokenFromPayload : current.authToken };
 }
 
 export async function deletePlatformAccount(db: D1Database, id: string): Promise<boolean> {
-	const current = await getPlatformAccount(db, id);
+	const current = await getPlatformAccountRow(db, id);
 	if (!current) {
 		return false;
 	}
@@ -246,10 +328,11 @@ export async function deletePlatformAccount(db: D1Database, id: string): Promise
 export async function verifyPlatformAccount(
 	db: D1Database,
 	id: string,
+	encryptionKey?: string,
 ): Promise<VerifyAccountResult> {
-	const account = await getPlatformAccount(db, id);
+	const account = await getPlatformAccount(db, id, encryptionKey);
 	if (!account) {
-		return { valid: false, message: "帐号不存在" };
+		return { valid: false, message: "账号不存在" };
 	}
 
 	if (!account.authToken) {
@@ -263,11 +346,33 @@ export async function verifyPlatformAccount(
 
 	try {
 		const result = await service.verify();
+		const now = Date.now();
 
-		await updatePlatformAccount(db, id, {
-			isVerified: result.valid,
-			lastVerifiedAt: Date.now(),
-		});
+		if (result.valid && result.accountInfo) {
+			await db
+				.prepare(
+					"UPDATE platform_accounts SET userId = ?, userName = ?, avatar = ?, isVerified = 1, lastVerifiedAt = ?, updatedAt = ? WHERE id = ?",
+				)
+				.bind(
+					result.accountInfo.id,
+					result.accountInfo.name,
+					result.accountInfo.avatar ?? account.avatar ?? null,
+					now,
+					now,
+					id,
+				)
+				.run();
+		} else {
+			await updatePlatformAccount(
+				db,
+				id,
+				{
+					isVerified: result.valid,
+					lastVerifiedAt: now,
+				},
+				encryptionKey,
+			);
+		}
 
 		return {
 			valid: result.valid,
@@ -275,19 +380,28 @@ export async function verifyPlatformAccount(
 			accountInfo: result.accountInfo,
 		};
 	} catch (error) {
-		await updatePlatformAccount(db, id, {
-			isVerified: false,
-			lastVerifiedAt: Date.now(),
-		});
-		return { valid: false, message: `验证失败: ${error instanceof Error ? error.message : "未知错误"}` };
+		await updatePlatformAccount(
+			db,
+			id,
+			{
+				isVerified: false,
+				lastVerifiedAt: Date.now(),
+			},
+			encryptionKey,
+		);
+		return {
+			valid: false,
+			message: `验证失败: ${error instanceof Error ? error.message : "未知错误"}`,
+		};
 	}
 }
 
 export async function getAccountStatus(
 	db: D1Database,
 	id: string,
+	encryptionKey?: string,
 ): Promise<AccountStatus | null> {
-	const account = await getPlatformAccount(db, id);
+	const account = await getPlatformAccount(db, id, encryptionKey);
 	if (!account) {
 		return null;
 	}
@@ -322,6 +436,3 @@ export async function getAccountStatus(
 		};
 	}
 }
-
-
-import type { AccountStatus } from "@/worker/accounts";

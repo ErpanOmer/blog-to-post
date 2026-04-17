@@ -8,8 +8,6 @@ import type { AccountStatistics } from "@/react-app/types/publications";
 import {
   AlertCircle,
   ArrowRight,
-  CheckCircle2,
-  Clock,
   FileText,
   RefreshCw,
   Send,

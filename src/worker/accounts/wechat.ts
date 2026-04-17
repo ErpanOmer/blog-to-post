@@ -68,7 +68,8 @@ export default class WechatAccountService extends AbstractAccountService {
 		};
 	}
 
-	async articleDraft(_article: SharedArticle): Promise<ArticleDraft | null> {
+	async articleDraft(article: SharedArticle): Promise<ArticleDraft | null> {
+		void article;
 		return null;
 	}
 
@@ -173,11 +174,13 @@ export default class WechatAccountService extends AbstractAccountService {
 		}
 	}
 
-	async articleTags(_articleId: string): Promise<string[]> {
+	async articleTags(articleId: string): Promise<string[]> {
+		void articleId;
 		return [];
 	}
 
-	async imageUpload(imageData: string, _filename?: string): Promise<ImageUploadResult> {
+	async imageUpload(imageData: string, filename?: string): Promise<ImageUploadResult> {
+		void filename;
 		try {
 			const formData = new FormData();
 			formData.append("media", imageData);

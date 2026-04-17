@@ -157,6 +157,7 @@ export async function createPublishTask(
     type: PublishTaskType;
     articleIds: string[];
     accountConfigs: AccountConfig[];
+    idempotencyKey?: string | null;
     scheduleTime?: number | null;
   }
 ): Promise<PublishTask> {
@@ -185,8 +186,8 @@ export async function createPublishTask(
 
   await db.prepare(
     `INSERT INTO publish_tasks 
-     (id, type, status, articleIds, accountConfigs, scheduleTime, currentStep, totalSteps, progressData, resultData, errorData, createdAt, startedAt, completedAt, updatedAt) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     (id, type, status, articleIds, accountConfigs, scheduleTime, currentStep, idempotencyKey, totalSteps, progressData, resultData, errorData, createdAt, startedAt, completedAt, updatedAt) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     task.id,
     task.type,
@@ -195,6 +196,7 @@ export async function createPublishTask(
     JSON.stringify(task.accountConfigs),
     task.scheduleTime ?? null,
     task.currentStep,
+    task.idempotencyKey ?? null,
     task.totalSteps,
     task.progressData ? JSON.stringify(task.progressData) : null,
     task.resultData ? JSON.stringify(task.resultData) : null,
@@ -217,6 +219,7 @@ export async function getPublishTask(db: D1Database, id: string): Promise<Publis
     accountConfigs: string;
     scheduleTime: number | null;
     currentStep: number;
+    idempotencyKey: string | null;
     totalSteps: number;
     progressData: string | null;
     resultData: string | null;
@@ -274,6 +277,44 @@ export async function updatePublishTask(
   return next;
 }
 
+export async function getPublishTaskByIdempotencyKey(
+  db: D1Database,
+  idempotencyKey: string,
+): Promise<PublishTask | null> {
+  const result = await db
+    .prepare("SELECT * FROM publish_tasks WHERE idempotencyKey = ? ORDER BY createdAt DESC LIMIT 1")
+    .bind(idempotencyKey)
+    .first<{
+      id: string;
+      type: PublishTaskType;
+      status: PublishTaskStatus;
+      articleIds: string;
+      accountConfigs: string;
+      scheduleTime: number | null;
+      currentStep: number;
+      idempotencyKey: string | null;
+      totalSteps: number;
+      progressData: string | null;
+      resultData: string | null;
+      errorData: string | null;
+      createdAt: number;
+      startedAt: number | null;
+      completedAt: number | null;
+      updatedAt: number;
+    }>();
+
+  if (!result) return null;
+
+  return {
+    ...result,
+    articleIds: JSON.parse(result.articleIds),
+    accountConfigs: JSON.parse(result.accountConfigs),
+    progressData: result.progressData ? JSON.parse(result.progressData) : null,
+    resultData: result.resultData ? JSON.parse(result.resultData) : null,
+    errorData: result.errorData ? JSON.parse(result.errorData) : null,
+  };
+}
+
 export async function listPublishTasks(
   db: D1Database,
   filters?: { status?: PublishTaskStatus; limit?: number }
@@ -301,6 +342,7 @@ export async function listPublishTasks(
     accountConfigs: string;
     scheduleTime: number | null;
     currentStep: number;
+    idempotencyKey: string | null;
     totalSteps: number;
     progressData: string | null;
     resultData: string | null;
@@ -335,6 +377,7 @@ export async function getPendingScheduledTasks(db: D1Database): Promise<PublishT
     accountConfigs: string;
     scheduleTime: number | null;
     currentStep: number;
+    idempotencyKey: string | null;
     totalSteps: number;
     progressData: string | null;
     resultData: string | null;

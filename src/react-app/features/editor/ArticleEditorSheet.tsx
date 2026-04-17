@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Save, Rocket, X, Sparkles } from "lucide-react";
+import { Loader2, Save, Rocket, Settings2, X, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { ArticleAISettingsDialog } from "@/react-app/components/ArticleAISettingsDialog";
 import { ArticleEditor } from "@/react-app/components/ArticleEditor";
 import { TitleGenerator } from "@/react-app/components/TitleGenerator";
 import { GenerationPanel } from "@/react-app/components/GenerationPanel";
@@ -33,24 +35,27 @@ export function ArticleEditorSheet({
     onQuickPublish,
     onClose,
 }: ArticleEditorSheetProps) {
+    const [showAISettings, setShowAISettings] = useState(false);
+
     return (
-        <Dialog
-            open={isOpen}
-            onOpenChange={(open) => {
-                if (!open && isGenerating) return;
-                onOpenChange(open);
-            }}
-        >
-            <DialogContent
-                className="flex flex-col h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none overflow-hidden border-slate-200/60 bg-white/95 backdrop-blur-xl p-0 gap-0"
-                hideClose
-                onPointerDownOutside={(e) => {
-                    if (isGenerating) e.preventDefault();
-                }}
-                onEscapeKeyDown={(e) => {
-                    if (isGenerating) e.preventDefault();
+        <>
+            <Dialog
+                open={isOpen}
+                onOpenChange={(open) => {
+                    if (!open && isGenerating) return;
+                    onOpenChange(open);
                 }}
             >
+                <DialogContent
+                    className="flex flex-col h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none overflow-hidden border-slate-200/60 bg-white/95 backdrop-blur-xl p-0 gap-0"
+                    hideClose
+                    onPointerDownOutside={(e) => {
+                        if (isGenerating) e.preventDefault();
+                    }}
+                    onEscapeKeyDown={(e) => {
+                        if (isGenerating) e.preventDefault();
+                    }}
+                >
                 {/* Header */}
                 <DialogHeader className="flex-shrink-0 border-b border-slate-200/60 px-6 py-4 pr-4">
                     <div className="flex items-center justify-between">
@@ -64,6 +69,18 @@ export function ArticleEditorSheet({
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowAISettings(true)}
+                                disabled={isGenerating}
+                                type="button"
+                                className="gap-2"
+                            >
+                                <Settings2 className="h-4 w-4" />
+                                AI 设置
+                            </Button>
+
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -112,6 +129,7 @@ export function ArticleEditorSheet({
                                     title={draft?.title ?? ""}
                                     onTitleChange={onTitleChange}
                                     disabled={isGenerating}
+                                    hideAIActions
                                 />
                             </div>
 
@@ -129,11 +147,14 @@ export function ArticleEditorSheet({
                                 article={draft}
                                 onChange={(article: Article) => onArticleUpdate(article)} // ArticleEditor expects (article) => void, but I can pass full object
                                 disabled={isGenerating}
+                                hideAIActions
                             />
                         </div>
                     </div>
                 </div>
-            </DialogContent>
-        </Dialog>
+                </DialogContent>
+            </Dialog>
+            <ArticleAISettingsDialog open={showAISettings} onOpenChange={setShowAISettings} />
+        </>
     );
 }

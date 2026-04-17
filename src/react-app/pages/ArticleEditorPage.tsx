@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, Rocket, Save, Sparkles } from "lucide-react";
+import { ArrowLeft, Loader2, Rocket, Save, Settings2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ArticleEditor } from "@/react-app/components/ArticleEditor";
+import { ArticleAISettingsDialog } from "@/react-app/components/ArticleAISettingsDialog";
 import { GenerationPanel } from "@/react-app/components/GenerationPanel";
 import { TitleGenerator } from "@/react-app/components/TitleGenerator";
 import type { Article } from "@/react-app/types";
@@ -33,6 +34,7 @@ export function ArticleEditorPage({
   const hasTitle = Boolean(draft?.title?.trim());
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [showAISettings, setShowAISettings] = useState(false);
 
   // 保护机制：如果用户试图关闭页面或刷新，给出浏览器原生提示
   useEffect(() => {
@@ -101,6 +103,18 @@ export function ArticleEditorPage({
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setShowAISettings(true)}
+              disabled={isGenerating}
+              type="button"
+              className="gap-1.5 border-slate-200 bg-white shadow-sm hover:bg-slate-50"
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">AI 设置</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 setHasUnsavedChanges(false);
                 onSave();
@@ -131,10 +145,10 @@ export function ArticleEditorPage({
       {/* Editor layout */}
       <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[400px_minmax(0,1fr)] 2xl:grid-cols-[440px_minmax(0,1fr)]">
         <aside className="border-r border-slate-200/60 bg-slate-50/50 p-5 overflow-y-auto custom-scrollbar">
-          <div className="space-y-4">
+            <div className="space-y-4">
             <TitleGenerator title={draft?.title ?? ""} onTitleChange={handleTitle} disabled={isGenerating} hideAIActions />
-            <GenerationPanel article={draft} onArticleUpdate={handleUpdate} disabled={isGenerating} hideAIActions />
-          </div>
+            </div>
+            <GenerationPanel article={draft} onArticleUpdate={handleUpdate} disabled={isGenerating} />
         </aside>
 
         <section className="min-w-0 bg-white p-5 lg:p-6 xl:p-8 overflow-y-auto custom-scrollbar shadow-[-4px_0_24px_rgba(0,0,0,0.02)]">
@@ -152,6 +166,7 @@ export function ArticleEditorPage({
         variant="destructive"
         onConfirm={handleConfirmExit}
       />
+      <ArticleAISettingsDialog open={showAISettings} onOpenChange={setShowAISettings} />
     </div>
   );
 }

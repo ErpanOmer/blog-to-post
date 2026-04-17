@@ -64,7 +64,8 @@ export default class JuejinAccountService extends AbstractAccountService {
 		};
 	}
 
-	async articleDraft(_article: SharedArticle): Promise<ArticleDraft | null> {
+	async articleDraft(article: SharedArticle): Promise<ArticleDraft | null> {
+		void article;
 		try {
 			const data = await this.request<{ data: { article_id: string; title: string; content: string; ctime: number } }>(
 				"https://api.juejin.cn/user_api/v1/draft/list?size=1",
