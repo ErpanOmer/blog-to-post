@@ -327,6 +327,7 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 			const html = await this.request<string>(SEGMENTFAULT_WRITE_URL, {
 				method: "GET",
 				headers: {
+					cookie: this.cookieHeader,
 					accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 				},
 			});
@@ -395,6 +396,7 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 		const headers: Record<string, string> = {
 			token,
 			accept: "*/*",
+			cookie: this.cookieHeader,
 			origin: SEGMENTFAULT_BASE_URL,
 			referer: SEGMENTFAULT_REFERER,
 		};
@@ -564,6 +566,7 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 	}
 
 	private async resolveTagIds(tagNames: string[]): Promise<number[]> {
+		return [];
 		if (tagNames.length === 0) return [];
 		const ids: number[] = [];
 
@@ -708,7 +711,8 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 	private buildDraftPayload(article: SharedArticle, content: SegmentFaultResolvedContent): Record<string, unknown> {
 		return {
 			title: article.title,
-			tags: this.ensureTagIds(content.tagIds),
+			// tags: this.ensureTagIds(content.tagIds),
+			tags: [],
 			text: content.markdownContent,
 			object_id: "",
 			type: "article",
@@ -724,7 +728,8 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 	): Record<string, unknown> {
 		const parsedDraftId = this.toNumber(draftId) ?? draftId;
 		return {
-			tags: this.ensureTagIds(content.tagIds),
+			// tags: this.ensureTagIds(content.tagIds),
+			tags: [],
 			title: article.title,
 			text: content.markdownContent,
 			draft_id: parsedDraftId,
@@ -815,6 +820,7 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 			const settingsHtml = await this.request<string>(SEGMENTFAULT_SETTINGS_URL, {
 				method: "GET",
 				headers: {
+					cookie: this.cookieHeader,
 					accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 				},
 			});
