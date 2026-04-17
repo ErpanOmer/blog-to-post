@@ -3,7 +3,6 @@ import {
 	AlignLeft,
 	CheckCircle2,
 	Image,
-	Link2,
 	Loader2,
 	Tags,
 	Upload,
@@ -66,7 +65,10 @@ export function GenerationPanel({
 			const featureSettings = getLocalArticleAIFeatureSettings("tags");
 			const requestSettings = toArticleAIRequestSettings("tags", featureSettings);
 			const data = await generateArticleTags(article.content, requestSettings);
-			onArticleUpdate({ tags: data.tags });
+			const normalizedTags = Array.isArray(data.tags)
+				? data.tags.map((item) => String(item).trim()).filter(Boolean)
+				: [];
+			onArticleUpdate({ tags: normalizedTags });
 		} catch (error) {
 			console.error("Generate tags failed", error);
 		} finally {
@@ -200,7 +202,7 @@ export function GenerationPanel({
 					value={article?.summary ?? ""}
 					onChange={(event) => article && onArticleUpdate({ summary: event.target.value })}
 					placeholder="输入文章摘要"
-					className="min-h-[88px] resize-none"
+					className="min-h-32 resize-none"
 				/>
 			</section>
 

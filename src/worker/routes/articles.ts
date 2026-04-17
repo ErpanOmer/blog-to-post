@@ -247,16 +247,23 @@ app.post("/generate-tags", async (c) => {
 				think: false,
 			},
 		);
-		const parsed = safeParseJson<{ tags?: unknown } | string[]>(tagsRaw, {});
+
+		console.log(tagsRaw)
+
+		const parsed = safeParseJson<{ tags?: unknown } | string[] | null>(tagsRaw, null);
 
 		let tags: string[] = [];
+		let explicitEmptyTags = false;
 		if (Array.isArray(parsed)) {
 			tags = parsed.map((item) => String(item).trim()).filter(Boolean);
-		} else if (Array.isArray(parsed.tags)) {
+			explicitEmptyTags = parsed.length === 0;
+		} else if (parsed && Array.isArray(parsed.tags)) {
 			tags = parsed.tags.map((item) => String(item).trim()).filter(Boolean);
+			explicitEmptyTags = parsed.tags.length === 0;
 		}
 
-		if (tags.length === 0) {
+		// If the model explicitly returns {"tags":[]}, keep it empty.
+		if (tags.length === 0 && !explicitEmptyTags) {
 			tags = extractStringArray(tagsRaw, 10)
 				.flatMap((item) => item.split(/[\u002c\uFF0C\u3001]/))
 				.map((item) => item.trim())
