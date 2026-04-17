@@ -9,12 +9,13 @@ import math from "@bytemd/plugin-math";
 import { AlertCircle, CloudUpload, FileText, Loader2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { generateContent } from "@/react-app/api";
+import { createAlignPlugin } from "@/react-app/components/bytemd/align-plugin";
 import { uploadImagesToImageHosting } from "@/react-app/services/image-hosting";
 import type { Article } from "@/react-app/types";
 import "bytemd/dist/index.css";
 import "../jueijn.css";
 
-const plugins = [gfm(), breaks(), frontmatter(), gemoji(), highlight(), math()];
+const plugins = [gfm(), breaks(), frontmatter(), gemoji(), highlight(), math(), createAlignPlugin()];
 
 interface ArticleEditorProps {
   article: Article | null;

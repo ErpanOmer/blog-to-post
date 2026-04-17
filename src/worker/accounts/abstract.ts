@@ -59,6 +59,102 @@ export abstract class AbstractAccountService implements AccountService {
 
 	protected abstract buildHeaders(): Record<string, string>;
 
+	/**
+	 * Extract all image URLs from HTML `<img src="...">`.
+	 */
+	protected extractImageUrlsFromHtmlContent(htmlContent: string): string[] {
+		if (!htmlContent) return [];
+		const urls = new Set<string>();
+		const htmlImageRegex = /<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
+		let match: RegExpExecArray | null;
+		while ((match = htmlImageRegex.exec(htmlContent)) !== null) {
+			if (match[1]) {
+				urls.add(match[1]);
+			}
+		}
+		return [...urls];
+	}
+
+	/**
+	 * Extract image URLs from markdown image syntax and embedded HTML `<img>`.
+	 */
+	protected extractImageUrlsFromMarkdownContent(markdownContent: string): string[] {
+		if (!markdownContent) return [];
+		const urls = new Set<string>();
+		const markdownImageRegex = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+		let match: RegExpExecArray | null;
+		while ((match = markdownImageRegex.exec(markdownContent)) !== null) {
+			if (match[1]) {
+				urls.add(match[1]);
+			}
+		}
+
+		// Markdown may contain raw HTML, e.g. <p><img src="..."></p>.
+		for (const htmlImageUrl of this.extractImageUrlsFromHtmlContent(markdownContent)) {
+			urls.add(htmlImageUrl);
+		}
+
+		return [...urls];
+	}
+
+	/**
+	 * Collect image URLs from markdown and html in one pass (deduplicated).
+	 */
+	protected collectImageUrlsFromMarkdownAndHtml(markdownContent: string, htmlContent: string): string[] {
+		const urls = new Set<string>([
+			...this.extractImageUrlsFromMarkdownContent(markdownContent),
+			...this.extractImageUrlsFromHtmlContent(htmlContent),
+		]);
+		return [...urls];
+	}
+
+	/**
+	 * Replace HTML image URLs according to mapped platform URL cache.
+	 */
+	protected replaceHtmlImageUrlsByMap(
+		htmlContent: string,
+		normalizeImageUrl: (rawUrl: string) => string | null,
+		imageUrlMap: Map<string, string>,
+	): string {
+		if (!htmlContent) return htmlContent;
+		return htmlContent.replace(
+			/(<img\b[^>]*\bsrc=["'])([^"']+)(["'][^>]*>)/gi,
+			(fullMatch, prefix: string, src: string, suffix: string) => {
+				const normalized = normalizeImageUrl(src);
+				if (!normalized) return fullMatch;
+				const replacement = imageUrlMap.get(normalized);
+				if (!replacement) return fullMatch;
+				return `${prefix}${replacement}${suffix}`;
+			},
+		);
+	}
+
+	/**
+	 * Replace markdown image syntax and embedded HTML `<img>` URLs by map.
+	 */
+	protected replaceMarkdownImageUrlsByMap(
+		markdownContent: string,
+		normalizeImageUrl: (rawUrl: string) => string | null,
+		imageUrlMap: Map<string, string>,
+	): string {
+		if (!markdownContent) return markdownContent;
+
+		const replacedMarkdownSyntax = markdownContent.replace(
+			/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
+			(fullMatch, alt: string, src: string, title: string | undefined) => {
+				const normalized = normalizeImageUrl(src);
+				if (!normalized) return fullMatch;
+				const replacement = imageUrlMap.get(normalized);
+				if (!replacement) return fullMatch;
+				const titlePart = title ? ` "${title}"` : "";
+				return `![${alt}](${replacement}${titlePart})`;
+			},
+		);
+
+		// Also replace raw HTML image tags that appear inside markdown.
+		return this.replaceHtmlImageUrlsByMap(replacedMarkdownSyntax, normalizeImageUrl, imageUrlMap);
+	}
+
 	protected async request<T>(
 		url: string,
 		options: RequestInit = {},

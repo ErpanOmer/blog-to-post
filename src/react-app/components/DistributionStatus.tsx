@@ -243,7 +243,7 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
             </TabsList>
           </Tabs>
 
-          <ScrollArea className="h-[520px]">
+          <div>
             {isLoading && filteredTasks.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-[13px] text-slate-400">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -320,7 +320,7 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                 })}
               </div>
             )}
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
 
@@ -339,7 +339,7 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                 </DialogDescription>
               </DialogHeader>
 
-              <ScrollArea className="flex-1 px-5 py-4">
+              <ScrollArea className="flex-1 px-5 py-4 overflow-y-scroll">
                 <div className="space-y-4">
                   {/* Detail stat cards */}
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

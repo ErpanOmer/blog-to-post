@@ -18,15 +18,13 @@ export function ArticlesView({ articles, onViewDetail, onEdit, onDelete, onPubli
       description="在这里管理你的文章，支持批量选择、查看详情、编辑和分发。"
       icon={<FileText className="h-5 w-5" />}
     >
-      <div className="max-h-[calc(100vh-220px)] overflow-y-auto pr-2">
-        <ArticleList
-          articles={articles}
-          onViewDetail={onViewDetail}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onPublish={onPublish}
-        />
-      </div>
+      <ArticleList
+        articles={articles}
+        onViewDetail={onViewDetail}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onPublish={onPublish}
+      />
     </SectionCard>
   );
 }

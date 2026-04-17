@@ -80,8 +80,6 @@ const CSDN_BASE_INFO_PATH = "/blog-console-api/v3/editor/getBaseInfo";
 const CSDN_SAVE_ARTICLE_PATH = "/blog-console-api/v3/mdeditor/saveArticle";
 const CSDN_UPLOAD_SIGNATURE_PATH = "/resource-api/v1/image/direct/upload/signature";
 const CSDN_EDITOR_REFERER = "https://editor.csdn.net/";
-const IMAGE_SRC_REGEX = /<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
-const MARKDOWN_IMAGE_REGEX = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 const CSDN_API_KEY = "260196572";
 const CSDN_API_SECRET = "t5PaqxVQpWoHgLGt7XPIvd5ipJcwJTU7";
 
@@ -153,52 +151,19 @@ export default class CSDNAccountService extends AbstractAccountService {
 		}
 	}
 
-	private extractImageUrlsFromHtml(htmlContent: string): string[] {
-		const urls = new Set<string>();
-		let match: RegExpExecArray | null;
-		while ((match = IMAGE_SRC_REGEX.exec(htmlContent)) !== null) {
-			if (match[1]) {
-				urls.add(match[1]);
-			}
-		}
-		return [...urls];
-	}
-
-	private extractImageUrlsFromMarkdown(markdownContent: string): string[] {
-		const urls = new Set<string>();
-		let match: RegExpExecArray | null;
-		while ((match = MARKDOWN_IMAGE_REGEX.exec(markdownContent)) !== null) {
-			if (match[1]) {
-				urls.add(match[1]);
-			}
-		}
-		return [...urls];
-	}
-
 	private replaceHtmlImageUrls(htmlContent: string): string {
-		return htmlContent.replace(
-			/(<img\b[^>]*\bsrc=["'])([^"']+)(["'][^>]*>)/gi,
-			(fullMatch, prefix: string, src: string, suffix: string) => {
-				const normalized = this.normalizeImageUrl(src);
-				if (!normalized) return fullMatch;
-				const replacement = this.imageUrlCache.get(normalized);
-				if (!replacement) return fullMatch;
-				return `${prefix}${replacement}${suffix}`;
-			},
+		return this.replaceHtmlImageUrlsByMap(
+			htmlContent,
+			(rawUrl) => this.normalizeImageUrl(rawUrl),
+			this.imageUrlCache,
 		);
 	}
 
 	private replaceMarkdownImageUrls(markdownContent: string): string {
-		return markdownContent.replace(
-			/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
-			(fullMatch, alt: string, src: string, title: string | undefined) => {
-				const normalized = this.normalizeImageUrl(src);
-				if (!normalized) return fullMatch;
-				const replacement = this.imageUrlCache.get(normalized);
-				if (!replacement) return fullMatch;
-				const titlePart = title ? ` "${title}"` : "";
-				return `![${alt}](${replacement}${titlePart})`;
-			},
+		return this.replaceMarkdownImageUrlsByMap(
+			markdownContent,
+			(rawUrl) => this.normalizeImageUrl(rawUrl),
+			this.imageUrlCache,
 		);
 	}
 
@@ -538,10 +503,9 @@ export default class CSDNAccountService extends AbstractAccountService {
 		const markdownContent = this.resolveMarkdownContent(article);
 		const htmlContent = this.resolveHtmlContent(article, markdownContent);
 
-		const imageSources = new Set<string>([
-			...this.extractImageUrlsFromMarkdown(markdownContent),
-			...this.extractImageUrlsFromHtml(htmlContent),
-		]);
+		const imageSources = new Set<string>(
+			this.collectImageUrlsFromMarkdownAndHtml(markdownContent, htmlContent),
+		);
 
 		if (imageSources.size > 0) {
 			await this.tracePublish({
@@ -827,15 +791,9 @@ export default class CSDNAccountService extends AbstractAccountService {
 						htmlLength: content.htmlContent.length,
 					},
 				});
-			} else if (article.htmlContent?.trim()) {
-				const markdownContent = this.resolveMarkdownContent(article);
-				const coverImages = await this.resolveCoverImages(article);
-				content = {
-					markdownContent,
-					htmlContent: article.htmlContent.trim(),
-					coverImages,
-				};
 			} else {
+				// Always resolve from markdown+html pipeline so markdown image links and
+				// embedded HTML <img> links are both normalized and replaced.
 				content = await this.resolveArticleContent(article);
 			}
 

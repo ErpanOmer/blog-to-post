@@ -317,7 +317,7 @@ export function PublishDialog({
 
               {showArticles && (
                 <CardContent className="p-0">
-                  <ScrollArea className="max-h-[240px]">
+                  <ScrollArea className="max-h-[240px] overflow-y-auto">
                     <div className="divide-y divide-slate-100">
                       {articles.map((article, index) => (
                         <div key={article.id} className="flex items-center gap-3 px-4 py-3">

@@ -70,7 +70,6 @@ const ZHIHU_IMAGE_DETAIL_ENDPOINT = "https://api.zhihu.com/images";
 const ZHIHU_OSS_UPLOAD_ENDPOINT = "https://zhihu-pics-upload.zhimg.com";
 const ZHIHU_OSS_BUCKET = "zhihu-pics";
 const ZHIHU_OSS_USER_AGENT = "aliyun-sdk-js/6.8.0";
-const IMAGE_SRC_REGEX = /<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
 const md5 = md5Lib as unknown as (message: string | ArrayBuffer | Uint8Array) => string;
 
 export default class ZhihuAccountService extends AbstractAccountService {
@@ -269,17 +268,6 @@ export default class ZhihuAccountService extends AbstractAccountService {
 		} catch {
 			return false;
 		}
-	}
-
-	private extractImageUrlsFromHtml(htmlContent: string): string[] {
-		const urls = new Set<string>();
-		let match: RegExpExecArray | null;
-		while ((match = IMAGE_SRC_REGEX.exec(htmlContent)) !== null) {
-			if (match[1]) {
-				urls.add(match[1]);
-			}
-		}
-		return [...urls];
 	}
 
 	private guessFileName(imageUrl: string, contentType: string): string {
@@ -672,7 +660,7 @@ export default class ZhihuAccountService extends AbstractAccountService {
 	}
 
 	private async replaceHtmlImageUrls(htmlContent: string): Promise<string> {
-		const imageSources = this.extractImageUrlsFromHtml(htmlContent);
+		const imageSources = this.extractImageUrlsFromHtmlContent(htmlContent);
 		if (imageSources.length === 0) {
 			return htmlContent;
 		}
@@ -736,15 +724,10 @@ export default class ZhihuAccountService extends AbstractAccountService {
 			}
 		}
 
-		const replaced = htmlContent.replace(
-			/(<img\b[^>]*\bsrc=["'])([^"']+)(["'][^>]*>)/gi,
-			(fullMatch, prefix: string, src: string, suffix: string) => {
-				const normalized = this.normalizeImageUrl(src);
-				if (!normalized) return fullMatch;
-				const replacement = this.imageUrlCache.get(normalized);
-				if (!replacement) return fullMatch;
-				return `${prefix}${replacement}${suffix}`;
-			},
+		const replaced = this.replaceHtmlImageUrlsByMap(
+			htmlContent,
+			(rawUrl) => this.normalizeImageUrl(rawUrl),
+			this.imageUrlCache,
 		);
 
 		await this.tracePublish({
