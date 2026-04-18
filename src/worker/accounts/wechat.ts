@@ -715,7 +715,7 @@ export default class WechatAccountService extends AbstractAccountService {
 
 	private applyInlineStyleToTag(htmlContent: string, tagName: string, inlineStyle: string): string {
 		const regex = new RegExp(`<(${tagName})(\\s[^>]*?)?(\\s*\\/?)>`, "gi");
-		return htmlContent.replace(regex, (fullMatch, matchedTagName: string, rawAttrs: string | undefined, tail: string | undefined) => {
+		return htmlContent.replace(regex, (_fullMatch, matchedTagName: string, rawAttrs: string | undefined, tail: string | undefined) => {
 			const attrs = rawAttrs ?? "";
 			const styleMatch = /\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(attrs);
 			let nextAttrs = attrs;

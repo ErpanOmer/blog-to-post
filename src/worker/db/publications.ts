@@ -149,7 +149,7 @@ export async function listArticlePublications(
     params.push(filters.status);
   }
 
-  query += " ORDER BY createdAt DESC";
+  query += " ORDER BY updatedAt DESC, createdAt DESC";
 
   const result = await db.prepare(query).bind(...params).all<ArticlePublication>();
   return result.results ?? [];

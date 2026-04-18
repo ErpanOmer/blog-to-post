@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ArticlePublication } from "@/react-app/types/publications";
 import { getArticlePublications, getPlatformAccounts } from "@/react-app/api";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, Clock, ExternalLink, FileEdit, Loader2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -66,6 +67,7 @@ const statusConfig = {
 export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatusProps) {
 	const [publications, setPublications] = useState<ArticlePublication[]>([]);
 	const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
+	const [activePlatform, setActivePlatform] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 
 	const loadData = useCallback(async () => {
@@ -94,25 +96,36 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
 		void loadData();
 	}, [loadData]);
 
-	const platformLatestPublications = useMemo(() => {
-		const latestByPlatform = new Map<string, ArticlePublication>();
+	useEffect(() => {
+		setActivePlatform(null);
+	}, [articleId]);
 
-		for (const publication of publications) {
-			const existing = latestByPlatform.get(publication.platform);
-			if (!existing) {
-				latestByPlatform.set(publication.platform, publication);
-				continue;
-			}
+	const linkPublications = useMemo(
+		() => publications.filter((item) => Boolean(item.publishedUrl?.trim())).sort((a, b) => b.updatedAt - a.updatedAt),
+		[publications],
+	);
 
-			const existingScore = Number(Boolean(existing.publishedUrl)) * 10 + Number(existing.updatedAt);
-			const candidateScore = Number(Boolean(publication.publishedUrl)) * 10 + Number(publication.updatedAt);
-			if (candidateScore > existingScore) {
-				latestByPlatform.set(publication.platform, publication);
-			}
+	const platformGroups = useMemo(() => {
+		const perPlatformCounter = new Map<string, number>();
+		const byPlatform = new Map<string, Array<{ publication: ArticlePublication; sequence: number }>>();
+
+		for (const publication of linkPublications) {
+			const nextCount = (perPlatformCounter.get(publication.platform) ?? 0) + 1;
+			perPlatformCounter.set(publication.platform, nextCount);
+			const current = byPlatform.get(publication.platform) ?? [];
+			current.push({ publication, sequence: nextCount });
+			byPlatform.set(publication.platform, current);
 		}
 
-		return [...latestByPlatform.values()].sort((a, b) => b.updatedAt - a.updatedAt);
-	}, [publications]);
+		return [...byPlatform.entries()]
+			.map(([platform, entries]) => ({ platform, entries }))
+			.sort((a, b) => b.entries[0].publication.updatedAt - a.entries[0].publication.updatedAt);
+	}, [linkPublications]);
+
+	const activeGroup = useMemo(
+		() => (activePlatform ? platformGroups.find((group) => group.platform === activePlatform) ?? null : null),
+		[activePlatform, platformGroups],
+	);
 
 	if (isLoading) {
 		return (
@@ -123,88 +136,94 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
 		);
 	}
 
-	if (platformLatestPublications.length === 0) {
+	if (linkPublications.length === 0) {
+		if (publications.length > 0) {
+			return <div className="text-[11px] text-slate-400">存在分发记录，但暂无可访问链接</div>;
+		}
 		return <div className="text-[11px] text-slate-400">尚未分发到任何平台</div>;
 	}
 
-	const visiblePublications = platformLatestPublications.slice(0, 8);
-	const hiddenCount = Math.max(0, platformLatestPublications.length - visiblePublications.length);
+	const renderPublicationLink = (entry: { publication: ArticlePublication; sequence: number }) => {
+		const { publication, sequence } = entry;
+		const status = statusConfig[publication.status];
+		const StatusIcon = status.icon;
+		const accountName = accountNames.get(publication.accountId) || "未知账号";
+
+		return (
+			<div
+				key={publication.id}
+				className="rounded-lg border border-slate-200/80 bg-white px-3 py-2 shadow-[0_1px_0_0_rgba(148,163,184,0.08)]"
+			>
+				<div className="mb-1 flex items-center justify-between gap-2">
+					<div className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+						<span>#{sequence}</span>
+						<StatusIcon className={cn("h-3 w-3", publication.status === "publishing" && "animate-spin")} />
+					</div>
+					<Badge className={cn("text-[10px]", status.color)}>{status.label}</Badge>
+				</div>
+				<div className="text-[12px] text-slate-600">{accountName}</div>
+				<div className="mt-0.5 text-[11px] text-slate-400">{new Date(publication.updatedAt).toLocaleString("zh-CN")}</div>
+				<div className="mt-1">
+					<a
+						href={publication.publishedUrl ?? undefined}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="inline-flex items-center gap-1 text-[11px] text-brand-600 hover:text-brand-700"
+					>
+						<ExternalLink className="h-3 w-3" />
+						打开链接
+					</a>
+				</div>
+				{publication.publishId && (
+					<div className="mt-1 truncate text-[10px] text-slate-400" title={publication.publishId}>
+						ID: {publication.publishId}
+					</div>
+				)}
+				{publication.errorMessage && <div className="mt-1 text-[11px] text-red-500">{publication.errorMessage}</div>}
+			</div>
+		);
+	};
 
 	return (
-		<TooltipProvider>
-			<div className="flex flex-wrap items-center gap-1">
-				<span className="mr-0.5 text-[11px] text-slate-400">分发:</span>
-				{visiblePublications.map((publication) => {
-					const status = statusConfig[publication.status];
-					const StatusIcon = status.icon;
-					const accountName = accountNames.get(publication.accountId) || "未知账号";
-					const hasOnlineUrl = Boolean(publication.publishedUrl?.trim());
-					const badgeNode = (
-						<Badge
-							variant="outline"
-							className={cn(
-								"px-1.5 py-0 text-[10px] transition-opacity hover:opacity-90",
-								status.color,
-								hasOnlineUrl ? "cursor-pointer" : "cursor-default",
-							)}
+		<>
+			<div className="overflow-x-auto">
+				<div className="flex min-w-max items-center gap-1.5 whitespace-nowrap">
+					<span className="text-[11px] font-medium text-slate-500">分发链接</span>
+					<span className="mr-1 text-[11px] text-slate-400">{linkPublications.length} 条</span>
+					{platformGroups.map(({ platform, entries }) => (
+						<button
+							key={platform}
+							type="button"
+							onClick={() => setActivePlatform(platform)}
+							className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 transition-colors hover:bg-slate-50"
 						>
-							<span className="mr-0.5">{platformIcons[publication.platform]}</span>
-							<span>{platformLabels[publication.platform] || publication.platform}</span>
-							<StatusIcon className={cn("ml-0.5 h-2.5 w-2.5", publication.status === "publishing" && "animate-spin")} />
-							{hasOnlineUrl && <ExternalLink className="ml-0.5 h-2.5 w-2.5" />}
-						</Badge>
-					);
-
-					return (
-						<Tooltip key={publication.id}>
-							<TooltipTrigger asChild>
-								{hasOnlineUrl ? (
-									<a
-										href={publication.publishedUrl ?? undefined}
-										target="_blank"
-										rel="noopener noreferrer"
-										onClick={(event) => event.stopPropagation()}
-									>
-										{badgeNode}
-									</a>
-								) : (
-									badgeNode
-								)}
-							</TooltipTrigger>
-							<TooltipContent side="bottom" className="max-w-xs">
-								<div className="space-y-1.5 text-[11px]">
-									<div className="font-medium">
-										{platformLabels[publication.platform] || publication.platform}
-									</div>
-									<div className="flex items-center justify-between gap-3">
-										<span className="text-slate-500">{accountName}</span>
-										<Badge className={cn("text-[10px]", status.color)}>{status.label}</Badge>
-									</div>
-									<div className="text-slate-400">{new Date(publication.updatedAt).toLocaleString("zh-CN")}</div>
-									{publication.publishId && (
-										<div className="truncate text-slate-400" title={publication.publishId}>
-											ID: {publication.publishId}
-										</div>
-									)}
-									{publication.errorMessage && <div className="text-red-500">{publication.errorMessage}</div>}
-									{hasOnlineUrl && (
-										<div className="inline-flex items-center gap-1 text-brand-500">
-											<ExternalLink className="h-3 w-3" />
-											点击标签可打开线上地址
-										</div>
-									)}
-								</div>
-							</TooltipContent>
-						</Tooltip>
-					);
-				})}
-
-				{hiddenCount > 0 && (
-					<Badge variant="outline" className="text-[10px] text-slate-400">
-						+{hiddenCount}
-					</Badge>
-				)}
+							<span className="text-slate-500">{platformIcons[platform]}</span>
+							<span>{platformLabels[platform] || platform}</span>
+							<span className="rounded bg-slate-100 px-1 py-0 text-[10px] text-slate-500">{entries.length}</span>
+						</button>
+					))}
+				</div>
 			</div>
-		</TooltipProvider>
+
+			<Dialog open={Boolean(activeGroup)} onOpenChange={(open) => !open && setActivePlatform(null)}>
+				<DialogContent className="max-h-[82vh] max-w-2xl overflow-hidden">
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<Badge
+								variant="outline"
+								className="rounded-md border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700"
+							>
+								{activeGroup ? `${platformIcons[activeGroup.platform]} ${platformLabels[activeGroup.platform] || activeGroup.platform}` : ""}
+							</Badge>
+							<span className="text-sm text-slate-500">{activeGroup?.entries.length ?? 0} 条发布记录</span>
+						</DialogTitle>
+					</DialogHeader>
+
+					<ScrollArea className="max-h-[62vh] pr-2">
+						<div className="space-y-2">{activeGroup?.entries.map((entry) => renderPublicationLink(entry))}</div>
+					</ScrollArea>
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 }
