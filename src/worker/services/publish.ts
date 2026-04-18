@@ -552,6 +552,7 @@ export async function executePublishTask(
 				});
 
 				let draftId: string | undefined;
+				let draftUrl: string | undefined;
 				let draftHtmlContent: string | undefined;
 				let publishId: string | undefined;
 				let publishedUrl: string | undefined;
@@ -760,6 +761,7 @@ export async function executePublishTask(
 							return {
 								value: {
 									draftId: draft.id,
+									draftUrl: draft.url ?? undefined,
 									htmlContent: draft.htmlContent ?? undefined,
 								},
 								outputData: {
@@ -774,7 +776,14 @@ export async function executePublishTask(
 						},
 					});
 					draftId = draftOutput.draftId;
+					draftUrl = draftOutput.draftUrl;
 					draftHtmlContent = draftOutput.htmlContent;
+
+					// For WeChat accounts that cannot call formal publish API,
+					// keep draft URL as the frontend jump link for manual publish.
+					if (accountConfig.platform === "wechat" && draftUrl) {
+						publishedUrl = draftUrl;
+					}
 
 					if (accountConfig.draftOnly) {
 						await markStepSkipped(db, task, progressState, {

@@ -237,7 +237,12 @@ export function PublishDialog({
       const configs: AccountConfig[] = [];
       selectedAccounts.forEach((accountId) => {
         const config = accountConfigs.get(accountId);
-        if (config) configs.push(config);
+        if (!config) return;
+        const forceDraftOnly = config.platform === "wechat";
+        configs.push({
+          ...config,
+          draftOnly: forceDraftOnly ? true : config.draftOnly,
+        });
       });
 
       let scheduleTimeMs: number | null = null;
@@ -467,6 +472,8 @@ export function PublishDialog({
                           {platformAccounts.map((account) => {
                             const config = accountConfigs.get(account.id);
                             const isSelected = selectedAccounts.has(account.id);
+                            const forceDraftOnly = account.platform === "wechat";
+                            const checkedDraftOnly = forceDraftOnly ? true : (config?.draftOnly ?? true);
 
                             return (
                               <div
@@ -496,11 +503,16 @@ export function PublishDialog({
                                 </div>
 
                                 <div className="flex items-center gap-3">
-                                  <span className={cn("text-xs", isSelected ? "text-slate-600" : "text-slate-400")}>仅发草稿</span>
+                                  <span className={cn("text-xs", isSelected ? "text-slate-600" : "text-slate-400")}>
+                                    {forceDraftOnly ? "仅发草稿（公众号固定）" : "仅发草稿"}
+                                  </span>
                                   <Switch
-                                    checked={config?.draftOnly ?? true}
-                                    onCheckedChange={(checked) => toggleDraftOnly(account.id, checked)}
-                                    disabled={!isSelected}
+                                    checked={checkedDraftOnly}
+                                    onCheckedChange={(checked) => {
+                                      if (forceDraftOnly) return;
+                                      toggleDraftOnly(account.id, checked);
+                                    }}
+                                    disabled={!isSelected || forceDraftOnly}
                                   />
                                 </div>
                               </div>

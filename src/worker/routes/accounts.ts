@@ -12,6 +12,49 @@ import { getAccountStatistics, listAccountStatistics } from "@/worker/db/publica
 
 const app = new Hono<{ Bindings: Env }>();
 
+function normalizeCredentialValue(value?: string | null): string | null {
+    if (value === undefined || value === null) return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+}
+
+function buildWechatCredentialToken(appId?: string | null, appSecret?: string | null): string | null {
+    const normalizedAppId = normalizeCredentialValue(appId);
+    const normalizedAppSecret = normalizeCredentialValue(appSecret);
+    if (!normalizedAppId || !normalizedAppSecret) return null;
+
+    return JSON.stringify({
+        appId: normalizedAppId,
+        appSecret: normalizedAppSecret,
+    });
+}
+
+function resolveAuthTokenForCreate(payload: {
+    platform: PlatformType;
+    authToken?: string | null;
+    appId?: string | null;
+    appSecret?: string | null;
+}): string | null {
+    if (payload.platform === "wechat") {
+        const wechatToken = buildWechatCredentialToken(payload.appId, payload.appSecret);
+        if (wechatToken) return wechatToken;
+    }
+    return normalizeCredentialValue(payload.authToken);
+}
+
+function resolveAuthTokenForUpdate(payload: {
+    platform: PlatformType;
+    authToken?: string | null;
+    appId?: string | null;
+    appSecret?: string | null;
+}): string | null {
+    if (payload.platform === "wechat") {
+        const wechatToken = buildWechatCredentialToken(payload.appId, payload.appSecret);
+        if (wechatToken) return wechatToken;
+    }
+    return normalizeCredentialValue(payload.authToken);
+}
+
 // Get all account statistics
 app.get("/statistics", async (c) => {
     const platform = c.req.query("platform") as PlatformType | undefined;
@@ -37,15 +80,24 @@ app.get("/:id", async (c) => {
 
 // Create account
 app.post("/", async (c) => {
-    const payload = (await c.req.json()) as { platform: PlatformType; authToken?: string; description?: string };
+    const payload = (await c.req.json()) as {
+        platform: PlatformType;
+        authToken?: string | null;
+        appId?: string | null;
+        appSecret?: string | null;
+        description?: string | null;
+    };
     if (!payload.platform) {
         return c.json({ message: "platform is required" }, 400);
     }
+
+    const resolvedAuthToken = resolveAuthTokenForCreate(payload);
+
     const now = Date.now();
     const { account, verifyResult, isDuplicate } = await createPlatformAccount(c.env.DB, {
         id: crypto.randomUUID(),
         platform: payload.platform,
-        authToken: payload.authToken ?? null,
+        authToken: resolvedAuthToken,
         description: payload.description ?? null,
         createdAt: now,
         updatedAt: now,
@@ -68,8 +120,39 @@ app.post("/", async (c) => {
 
 // Update account
 app.put("/:id", async (c) => {
-    const payload = (await c.req.json()) as { authToken?: string | null; description?: string | null; isActive?: boolean };
-    const account = await updatePlatformAccount(c.env.DB, c.req.param("id"), payload, c.env.ENCRYPTION_KEY);
+    const accountId = c.req.param("id");
+    const payload = (await c.req.json()) as {
+        authToken?: string | null;
+        appId?: string | null;
+        appSecret?: string | null;
+        description?: string | null;
+        isActive?: boolean;
+    };
+
+    const existingAccount = await getPlatformAccount(c.env.DB, accountId, c.env.ENCRYPTION_KEY);
+    if (!existingAccount) {
+        return c.json({ message: "not found" }, 404);
+    }
+
+    const shouldUpdateCredential = (
+        Object.prototype.hasOwnProperty.call(payload, "authToken")
+        || Object.prototype.hasOwnProperty.call(payload, "appId")
+        || Object.prototype.hasOwnProperty.call(payload, "appSecret")
+    );
+    const nextAuthToken = shouldUpdateCredential
+        ? resolveAuthTokenForUpdate({
+            platform: existingAccount.platform,
+            authToken: payload.authToken,
+            appId: payload.appId,
+            appSecret: payload.appSecret,
+        })
+        : undefined;
+
+    const account = await updatePlatformAccount(c.env.DB, accountId, {
+        authToken: nextAuthToken,
+        description: payload.description,
+        isActive: payload.isActive,
+    }, c.env.ENCRYPTION_KEY);
     if (!account) {
         return c.json({ message: "not found" }, 404);
     }

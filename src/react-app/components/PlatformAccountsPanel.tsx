@@ -63,7 +63,13 @@ export function PlatformAccountsPanel() {
     void fetchAccounts();
   }, [fetchAccounts]);
 
-  const handleCreate = async (data: { platform: PlatformType; authToken?: string; description?: string }) => {
+  const handleCreate = async (data: {
+    platform: PlatformType;
+    authToken?: string;
+    appId?: string;
+    appSecret?: string;
+    description?: string;
+  }) => {
     try {
       await createPlatformAccount(data);
       toast.success("账号添加成功");
@@ -76,11 +82,19 @@ export function PlatformAccountsPanel() {
     }
   };
 
-  const handleUpdate = async (data: { platform: PlatformType; authToken?: string; description?: string }) => {
+  const handleUpdate = async (data: {
+    platform: PlatformType;
+    authToken?: string;
+    appId?: string;
+    appSecret?: string;
+    description?: string;
+  }) => {
     if (!editingAccount) return false;
     try {
       await updatePlatformAccount(editingAccount.id, {
         authToken: data.authToken,
+        appId: data.appId,
+        appSecret: data.appSecret,
         description: data.description,
       });
       toast.success("账号更新成功");

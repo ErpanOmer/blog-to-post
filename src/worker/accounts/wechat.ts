@@ -13,112 +13,165 @@ import type { Article as SharedArticle } from "@/shared/types";
 import { marked } from "marked";
 import { randomDelay } from "@/worker/utils/helpers";
 
-interface WechatSessionMeta {
-	token: string;
-	userName: string;
-	nickName: string;
-	ticket: string;
-	svrTime: number;
-	avatar?: string;
+interface WechatApiCredential {
+	appId: string;
+	appSecret: string;
 }
 
-interface WechatDraftRequest {
-	title: string;
-	htmlContent: string;
-	digest: string;
-	appMsgId?: string;
-	cover?: WechatCoverAsset | null;
+interface WechatTokenResponse {
+	access_token?: string;
+	expires_in?: number;
+	errcode?: number;
+	errmsg?: string;
 }
 
-interface WechatUploadedImage {
-	url: string;
-	fileId: string | null;
-	cdnUrl235: string | null;
-	cdnUrl11: string | null;
-	cdnUrlBack: string | null;
+interface WechatThumbMedia {
+	mediaId: string;
+	url?: string;
 }
 
-interface WechatCoverAsset {
-	fileId: string | null;
-	cdnUrl: string;
-	cdnUrl235: string;
-	cdnUrl11: string;
-	cdnUrlBack: string;
+interface PublishStatusSnapshot {
+	state: "success" | "processing" | "failed" | "unknown";
+	statusCode: number | null;
+	statusLabel: string;
+	payload: Record<string, unknown>;
 }
 
-const WECHAT_MP_BASE_URL = "https://mp.weixin.qq.com";
-const WECHAT_MP_HOME_URL = `${WECHAT_MP_BASE_URL}/`;
-const WECHAT_MP_OPERATE_APPMSG_URL = `${WECHAT_MP_BASE_URL}/cgi-bin/operate_appmsg`;
-const WECHAT_MP_FILETRANSFER_URL = `${WECHAT_MP_BASE_URL}/cgi-bin/filetransfer`;
-const WECHAT_REFERER = `${WECHAT_MP_BASE_URL}/`;
-const WECHAT_INLINE_CSS: Record<string, string> = {
-	p: "color:rgb(51,51,51);font-size:15px;line-height:1.75em;margin:0 0 1em 0;",
-	h1: "font-size:1.25em;line-height:1.4em;font-weight:700;margin:1em 0 0.5em 0;",
-	h2: "font-size:1.125em;font-weight:700;margin:2em 0 0.5em 0;",
-	h3: "font-size:1.05em;font-weight:700;margin:1.8em 0 0.4em 0;",
-	h4: "font-size:1em;font-weight:700;margin:0.8em 0 0.4em 0;",
-	h5: "font-size:1em;font-weight:700;margin:0.8em 0 0.4em 0;",
-	h6: "font-size:1em;font-weight:700;margin:0.8em 0 0.4em 0;",
-	ul: "margin:1em 0;padding-left:2em;",
-	ol: "margin:1em 0;padding-left:2em;",
-	li: "margin-bottom:0.4em;",
-	pre: "font-family:monospace;white-space:pre;line-height:1.6em;margin:1em 0;padding:12px;border-radius:6px;background:#f5f7fa;overflow:auto;",
-	code: "font-family:monospace;background:#f5f7fa;padding:0.12em 0.32em;border-radius:4px;",
-	tt: "font-family:monospace;",
-	kbd: "font-family:monospace;",
-	samp: "font-family:monospace;",
-	blockquote: "border-left:4px solid #ddd;padding-left:1em;margin:1em 0;color:#666;",
-	hr: "border:none;border-top:1px solid #ddd;margin:1.5em 0;",
-	img: "max-width:100%;height:auto;vertical-align:middle;",
-	table: "border-collapse:collapse;width:100%;font-size:14px;margin:1em 0;",
-	th: "border:1px solid #e5e7eb;padding:8px;background:#f8fafc;text-align:left;",
-	td: "border:1px solid #e5e7eb;padding:8px;",
-	a: "color:#576b95;text-decoration:none;",
-	strong: "font-weight:bolder;",
-	b: "font-weight:bolder;",
-	em: "font-style:italic;",
-	i: "font-style:italic;",
-	cite: "font-style:italic;",
-	var: "font-style:italic;",
-	address: "font-style:italic;",
+const WECHAT_API_BASE_URL = "https://api.weixin.qq.com";
+const WECHAT_MP_HOME_URL = "https://mp.weixin.qq.com/";
+const WECHAT_DEFAULT_USER_AGENT =
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+const WECHAT_PUBLISH_STATUS_LABEL: Record<number, string> = {
+	0: "publish_success",
+	1: "publishing",
+	2: "publish_failed_original_check",
+	3: "publish_failed_normal",
+	4: "publish_success_after_platform_review",
+	5: "publish_failed_after_platform_review",
+	6: "platform_reviewing",
+	7: "draft_deleted",
+	8: "system_error",
 };
 
+const WECHAT_ERROR_MESSAGE_MAP: Record<number, string> = {
+	40001: "access_token 无效，请检查 appId/appSecret",
+	40013: "无效的 appId",
+	40014: "access_token 失效，请重新获取",
+	40125: "无效的 appSecret",
+	41001: "缺少必填参数",
+	42001: "access_token 已过期",
+	45009: "调用频率超限，请稍后重试",
+	48001: "接口未授权，请确认公众号权限",
+};
+
+const WECHAT_ARTICLE_INLINE_STYLE_MAP: ReadonlyArray<{
+	tagName: string;
+	style: string;
+}> = [
+  {
+    tagName: "p",
+    style: "font-size:16px;line-height:26px;color:#000;margin:1em 4px;padding:8px 0;"
+  },
+  {
+    tagName: "h1",
+    style: "font-size:24px;font-weight:700;margin:1.2em 0 1em;color:#35b378;"
+  },
+  {
+    tagName: "h2",
+    style: "font-size:23px;font-weight:700;margin:1em 0 0.5em;color:#35b378;padding:0.5em 0;border-bottom:1px solid #35b378;display:inline-block;"
+  },
+  {
+    tagName: "h3",
+    style: "font-size:20px;font-weight:700;margin:1.2em 0 1em;color:#35b378;"
+  },
+  {
+    tagName: "ul",
+    style: "margin:8px 0;padding-left:25px;list-style-type:disc;color:#000;"
+  },
+  {
+    tagName: "ol",
+    style: "margin:8px 0;padding-left:25px;list-style-type:decimal;color:#000;"
+  },
+  {
+    tagName: "li",
+    style: "margin:10px 0;line-height:26px;color:rgb(1,1,1);font-weight:500;"
+  },
+  {
+    tagName: "blockquote",
+    style: "margin:10px 5px;padding:10px 10px 10px 20px;border-left:3px solid #35b378;background:#FBF9FD;color:#616161;font-size:0.9em;"
+  },
+  {
+    tagName: "code",
+    style: "font-size:14px;padding:2px 4px;border-radius:4px;background:rgba(27,31,35,.05);font-family:monospace;color:#35b378;"
+  },
+  {
+    tagName: "pre",
+    style: "margin:10px 0;border-radius:5px;background:#fafafa;overflow-x:auto;padding:16px;font-size:12px;"
+  },
+  {
+    tagName: "a",
+    style: "color:#35b378;font-weight:700;text-decoration:none;border-bottom:1px solid #35b378;"
+  },
+  {
+    tagName: "strong",
+    style: "font-weight:700;color:#35b378;"
+  },
+  {
+    tagName: "em",
+    style: "font-style:italic;color:#000;"
+  },
+  {
+    tagName: "hr",
+    style: "margin:1.5em auto;border:1px solid #35b378;height:1px;"
+  },
+  {
+    tagName: "table",
+    style: "border-collapse:collapse;width:100%;"
+  },
+  {
+    tagName: "th",
+    style: "font-size:16px;padding:5px 10px;border:1px solid #ccc;background:#f0f0f0;font-weight:700;"
+  },
+  {
+    tagName: "td",
+    style: "font-size:16px;padding:5px 10px;border:1px solid #ccc;"
+  },
+  {
+    tagName: "img",
+    style: "display:block;margin:0 auto;max-width:100%;"
+  },
+  {
+    tagName: "figure",
+    style: "margin:10px 0;display:flex;flex-direction:column;align-items:center;justify-content:center;"
+  },
+  {
+    tagName: "figcaption",
+    style: "margin-top:5px;text-align:center;color:#888;font-size:14px;"
+  }
+];
+
+// 640x360 white JPEG generated by ffmpeg, validated against WeChat `material/add_material?type=thumb`.
+const WECHAT_FALLBACK_THUMB_DATA_URI =
+	"data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xABLAAEBAAAAAAAAAAAAAAAAAAAABwEBAAAAAAAAAAAAAAAAAAAAABABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIAWgCgAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AL+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/2Q==";
+
 export default class WechatAccountService extends AbstractAccountService {
-	private sessionMetaCache: WechatSessionMeta | null = null;
+	private credential: WechatApiCredential | null;
+	private accessTokenCache: { token: string; expiresAt: number } | null = null;
 	private imageUrlCache = new Map<string, string>();
-	private uploadedImageCache = new Map<string, WechatUploadedImage>();
+	private thumbMediaCache = new Map<string, WechatThumbMedia>();
 	private draftHtmlContentCache = new Map<string, string>();
-	private cookieHeader: string;
 
 	constructor(authToken: string) {
 		super("wechat", authToken);
-		this.cookieHeader = this.normalizeCookieHeader(authToken);
+		this.credential = this.parseCredential(authToken);
 	}
 
 	protected buildHeaders(): Record<string, string> {
-		const headers: Record<string, string> = {
-			origin: WECHAT_MP_BASE_URL,
-			referer: WECHAT_REFERER,
-			accept: "*/*",
-			"user-agent":
-				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+		return {
+			accept: "application/json, text/plain, */*",
+			"user-agent": WECHAT_DEFAULT_USER_AGENT,
 		};
-
-		if (this.cookieHeader) {
-			headers.cookie = this.cookieHeader;
-		}
-
-		return headers;
-	}
-
-	private normalizeCookieHeader(rawToken: string): string {
-		if (!rawToken) return "";
-		let token = rawToken.trim();
-		token = token.replace(/^cookie\s*:/i, "").trim();
-		token = token.replace(/\r?\n/g, ";");
-		token = token.replace(/\s*;\s*/g, "; ");
-		token = token.replace(/;{2,}/g, ";");
-		return token.trim();
 	}
 
 	private tryParseJson(raw: string): unknown | null {
@@ -144,13 +197,6 @@ export default class WechatAccountService extends AbstractAccountService {
 		return null;
 	}
 
-	private toStringId(value: unknown): string | null {
-		if (typeof value === "string" && value.trim()) return value.trim();
-		const numeric = this.toNumber(value);
-		if (numeric !== null) return String(numeric);
-		return null;
-	}
-
 	private pickString(record: Record<string, unknown> | null, key: string): string | null {
 		const value = record?.[key];
 		if (typeof value !== "string") return null;
@@ -158,133 +204,78 @@ export default class WechatAccountService extends AbstractAccountService {
 		return trimmed || null;
 	}
 
-	private pickId(record: Record<string, unknown> | null, key: string): string | null {
-		return this.toStringId(record?.[key]);
+	private pickCredentialFromRecord(record: Record<string, unknown> | null): WechatApiCredential | null {
+		if (!record) return null;
+
+		const appId = this.pickString(record, "appId")
+			?? this.pickString(record, "appid")
+			?? this.pickString(record, "app_id")
+			?? this.pickString(record, "wxAppId");
+		const appSecret = this.pickString(record, "appSecret")
+			?? this.pickString(record, "appsecret")
+			?? this.pickString(record, "app_secret")
+			?? this.pickString(record, "secret")
+			?? this.pickString(record, "wxAppSecret");
+
+		if (!appId || !appSecret) return null;
+		return { appId, appSecret };
 	}
 
-	private mergeCssStyle(existing: string, append: string): string {
-		const normalizedExisting = existing.trim().replace(/;+\s*$/g, "");
-		const normalizedAppend = append.trim().replace(/;+\s*$/g, "");
-		if (!normalizedExisting) return `${normalizedAppend};`;
-		if (!normalizedAppend) return `${normalizedExisting};`;
-		return `${normalizedExisting};${normalizedAppend};`;
+	private parseLooseKeyValueCredential(rawToken: string): Record<string, unknown> | null {
+		if (!/[=:]/.test(rawToken)) return null;
+
+		const record: Record<string, unknown> = {};
+		const pairs = rawToken
+			.split(/[&\n;,]+/)
+			.map((item) => item.trim())
+			.filter(Boolean);
+
+		for (const pair of pairs) {
+			const equalIndex = pair.indexOf("=");
+			const colonIndex = pair.indexOf(":");
+			const splitIndex = equalIndex >= 0 ? equalIndex : colonIndex;
+			if (splitIndex <= 0) continue;
+			const key = pair.slice(0, splitIndex).trim();
+			const value = pair.slice(splitIndex + 1).trim();
+			if (!key || !value) continue;
+			record[key] = value;
+		}
+
+		return Object.keys(record).length > 0 ? record : null;
 	}
 
-	private injectStyleForTag(html: string, tagName: string, style: string): string {
-		const regex = new RegExp(`<${tagName}(\\s[^>]*)?>`, "gi");
-		return html.replace(regex, (_match, attrs: string | undefined) => {
-			const attrText = attrs ?? "";
-			const styleRegex = /style\s*=\s*(['"])(.*?)\1/i;
-			if (styleRegex.test(attrText)) {
-				const nextAttrs = attrText.replace(styleRegex, (_full, quote: string, existing: string) => {
-					return `style=${quote}${this.mergeCssStyle(existing, style)}${quote}`;
-				});
-				return `<${tagName}${nextAttrs}>`;
-			}
-			return `<${tagName}${attrText} style="${style}">`;
-		});
+	private parseCredential(rawToken: string): WechatApiCredential | null {
+		const trimmed = rawToken.trim();
+		if (!trimmed) return null;
+
+		const fromJson = this.pickCredentialFromRecord(this.toRecord(this.tryParseJson(trimmed)));
+		if (fromJson) return fromJson;
+
+		const looseRecord = this.parseLooseKeyValueCredential(trimmed);
+		const fromLooseRecord = this.pickCredentialFromRecord(looseRecord);
+		if (fromLooseRecord) return fromLooseRecord;
+
+		const lines = trimmed
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.filter(Boolean);
+		if (lines.length >= 2 && /^wx[a-zA-Z0-9_-]{8,}$/.test(lines[0])) {
+			return {
+				appId: lines[0],
+				appSecret: lines[1],
+			};
+		}
+
+		return null;
 	}
 
-	private normalizeImageUrl(rawUrl: string): string | null {
-		if (!rawUrl) return null;
-		const cleaned = rawUrl.trim().replace(/&amp;/g, "&");
-		if (!cleaned) return null;
-		if (cleaned.startsWith("data:")) return cleaned;
-
-		let candidate = cleaned;
-		if (candidate.startsWith("//")) {
-			candidate = `https:${candidate}`;
+	private getCredentialOrThrow(): WechatApiCredential {
+		if (!this.credential) {
+			throw new Error(
+				"微信公众号认证信息格式无效。请提供 appId + appSecret（可通过 JSON 或两行文本传入）。",
+			);
 		}
-
-		try {
-			const parsed = new URL(candidate);
-			if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-				return null;
-			}
-			if (parsed.protocol === "http:") parsed.protocol = "https:";
-			return parsed.toString();
-		} catch {
-			return null;
-		}
-	}
-
-	private normalizeAvatarUrl(rawUrl: string | undefined): string | undefined {
-		if (!rawUrl) return undefined;
-		const normalized = this.normalizeImageUrl(rawUrl);
-		return normalized ?? rawUrl;
-	}
-
-	private isWechatHostedImage(url: string): boolean {
-		try {
-			const hostname = new URL(url).hostname.toLowerCase();
-			return hostname.includes("mmbiz.qpic.cn")
-				|| hostname.includes("mmbiz.qlogo.cn")
-				|| hostname.includes("mp.weixin.qq.com")
-				|| hostname.includes("weixin.qq.com");
-		} catch {
-			return false;
-		}
-	}
-
-	private dataUriToBlob(dataUri: string): Blob {
-		const match = /^data:([^;]+);base64,(.+)$/i.exec(dataUri);
-		if (!match) {
-			throw new Error("Invalid data URI payload");
-		}
-		const mimeType = match[1] || "image/jpeg";
-		const binary = atob(match[2]);
-		const bytes = new Uint8Array(binary.length);
-		for (let i = 0; i < binary.length; i++) {
-			bytes[i] = binary.charCodeAt(i);
-		}
-		return new Blob([bytes], { type: mimeType });
-	}
-
-	private async downloadImageFromUrl(url: string): Promise<Blob> {
-		const response = await fetch(url, {
-			method: "GET",
-			headers: {
-				accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-				referer: WECHAT_REFERER,
-				"user-agent":
-					"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-			},
-		});
-		if (!response.ok) {
-			throw new Error(`Image download failed (${response.status}): ${url}`);
-		}
-		const blob = await response.blob();
-		if (!blob.type.startsWith("image/") && blob.type !== "application/octet-stream") {
-			throw new Error(`Resource is not an image: ${url}`);
-		}
-		return blob;
-	}
-
-	private guessImageSuffix(sourceUrl: string, mimeType: string): string {
-		const typeMap: Record<string, string> = {
-			"image/jpeg": "jpg",
-			"image/jpg": "jpg",
-			"image/png": "png",
-			"image/gif": "gif",
-			"image/webp": "webp",
-			"image/bmp": "bmp",
-			"image/svg+xml": "svg",
-		};
-
-		const normalizedMime = mimeType.toLowerCase();
-		if (typeMap[normalizedMime]) return typeMap[normalizedMime];
-
-		try {
-			const parsed = new URL(sourceUrl);
-			const suffix = parsed.pathname.split(".").pop()?.toLowerCase();
-			if (suffix && ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(suffix)) {
-				return suffix === "jpeg" ? "jpg" : suffix;
-			}
-		} catch {
-			// ignore
-		}
-
-		return "jpg";
+		return this.credential;
 	}
 
 	private isRetryableNetworkError(error: unknown): boolean {
@@ -332,71 +323,351 @@ export default class WechatAccountService extends AbstractAccountService {
 		throw (lastError instanceof Error ? lastError : new Error(String(lastError)));
 	}
 
-	private parseSessionMetaFromHomeHtml(html: string): WechatSessionMeta | null {
-		if (!html) return null;
+	private formatWechatApiError(payload: Record<string, unknown>, path: string): string {
+		const errCode = this.toNumber(payload.errcode);
+		const errMsg = this.pickString(payload, "errmsg") ?? "unknown error";
 
-		const tokenMatch = html.match(/[?&]token=(\d{5,})/i)
-			?? html.match(/data:\s*\{[\s\S]*?t:\s*["']([^"']+)["']/i)
-			?? html.match(/["']token["']\s*:\s*["']?(\d{5,})["']?/i)
-			?? html.match(/token:\s*["']?(\d{5,})["']?/i);
-		const token = tokenMatch?.[1]?.trim();
-		if (!token) {
-			return null;
+		if (errCode !== null && WECHAT_ERROR_MESSAGE_MAP[errCode]) {
+			return `${WECHAT_ERROR_MESSAGE_MAP[errCode]} (errcode: ${errCode})`;
 		}
 
-		const ticket = html.match(/ticket:\s*["']([^"']+)["']/i)?.[1]?.trim() ?? "";
-		const userName = html.match(/user_name:\s*["']([^"']+)["']/i)?.[1]?.trim() ?? "";
-		const nickName = html.match(/nick_name:\s*["']([^"']+)["']/i)?.[1]?.trim() ?? "";
-		const svrTime = Number.parseInt(
-			html.match(/(?:svr_time|time):\s*["']?(\d{10})["']?/i)?.[1] ?? "",
-			10,
-		);
-
-		const avatarRaw = html.match(/class="weui-desktop-account__thumb"[^>]*src="([^"]+)"/i)?.[1]
-			?? html.match(/head_img:\s*['"]([^'"]+)['"]/i)?.[1]
-			?? "";
-
-		return {
-			token,
-			ticket,
-			userName,
-			nickName,
-			svrTime: Number.isFinite(svrTime) && svrTime > 0 ? svrTime : Math.floor(Date.now() / 1000),
-			avatar: this.normalizeAvatarUrl(avatarRaw),
-		};
+		if (errCode !== null) {
+			return `微信公众号接口调用失败 [${path}]：${errMsg} (errcode: ${errCode})`;
+		}
+		return `微信公众号接口调用失败 [${path}]：${errMsg}`;
 	}
 
-	private async resolveSessionMeta(): Promise<WechatSessionMeta | null> {
-		if (!this.cookieHeader) return null;
+	private isAccessTokenExpiredError(errCode: number): boolean {
+		return errCode === 40001 || errCode === 40014 || errCode === 42001;
+	}
 
-		const html = await this.withNetworkRetry(
-			"wechat_fetch_home_retry",
-			async () => await this.request<string>(WECHAT_MP_HOME_URL, {
+	private async getAccessToken(forceRefresh = false): Promise<string> {
+		const now = Date.now();
+		if (!forceRefresh && this.accessTokenCache && now < this.accessTokenCache.expiresAt) {
+			return this.accessTokenCache.token;
+		}
+
+		const credential = this.getCredentialOrThrow();
+		const tokenUrl = new URL(`${WECHAT_API_BASE_URL}/cgi-bin/token`);
+		tokenUrl.searchParams.set("grant_type", "client_credential");
+		tokenUrl.searchParams.set("appid", credential.appId);
+		tokenUrl.searchParams.set("secret", credential.appSecret);
+
+		const payload = await this.withNetworkRetry(
+			"wechat_get_access_token_retry",
+			async () => await this.request<WechatTokenResponse>(tokenUrl.toString(), {
 				method: "GET",
-				headers: {
-					cookie: this.cookieHeader,
-					accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-				},
 			}),
 			2,
 		);
-		if (typeof html !== "string") return null;
 
-		return this.parseSessionMetaFromHomeHtml(html);
-	}
-
-	private async ensureSessionMeta(): Promise<WechatSessionMeta> {
-		if (this.sessionMetaCache) return this.sessionMetaCache;
-
-		const meta = await this.resolveSessionMeta();
-		if (!meta) {
-			throw new Error(
-				"微信公众号登录态无效，请提供 mp.weixin.qq.com 的完整 Cookie（包含 token 对应会话）。",
-			);
+		const token = payload.access_token?.trim();
+		if (!token) {
+			const record = this.toRecord(payload as unknown) ?? {};
+			throw new Error(this.formatWechatApiError(record, "/cgi-bin/token"));
 		}
 
-		this.sessionMetaCache = meta;
-		return meta;
+		const expiresIn = Math.max(300, this.toNumber(payload.expires_in) ?? 7200);
+		const expiresAt = Date.now() + Math.max(300, expiresIn - 120) * 1000;
+		this.accessTokenCache = { token, expiresAt };
+		return token;
+	}
+
+	private buildWechatApiUrl(
+		path: string,
+		accessToken: string,
+		query?: Record<string, string | number | boolean | null | undefined>,
+	): string {
+		const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+		const url = new URL(`${WECHAT_API_BASE_URL}${normalizedPath}`);
+		url.searchParams.set("access_token", accessToken);
+		if (query) {
+			for (const [key, value] of Object.entries(query)) {
+				if (value === undefined || value === null) continue;
+				url.searchParams.set(key, String(value));
+			}
+		}
+		return url.toString();
+	}
+
+	private async requestWechatApi(
+		path: string,
+		options: {
+			method?: "GET" | "POST";
+			query?: Record<string, string | number | boolean | null | undefined>;
+			body?: Record<string, unknown> | FormData | null;
+			retryOnAuthError?: boolean;
+		} = {},
+		): Promise<Record<string, unknown>> {
+		const method = options.method ?? "GET";
+		const retryOnAuthError = options.retryOnAuthError ?? true;
+
+		const accessToken = await this.getAccessToken();
+		const url = this.buildWechatApiUrl(path, accessToken, options.query);
+
+		const headers: Record<string, string> = {};
+		let body: BodyInit | undefined;
+		if (options.body instanceof FormData) {
+			body = options.body;
+		} else if (options.body !== undefined && options.body !== null) {
+			headers["Content-Type"] = "application/json";
+			body = JSON.stringify(options.body);
+		}
+
+		const rawPayload = await this.withNetworkRetry(
+			"wechat_api_request_retry",
+			async () => await this.request<unknown>(url, {
+				method,
+				headers,
+				body,
+			}),
+			2,
+		);
+
+		let payload: unknown = rawPayload;
+		if (typeof rawPayload === "string") {
+			const normalized = rawPayload.replace(/^\uFEFF/, "").trim();
+			const parsed = this.tryParseJson(normalized);
+			if (parsed !== null) {
+				payload = parsed;
+			}
+		}
+
+		const record = this.toRecord(payload);
+		if (!record) {
+			const preview = typeof rawPayload === "string"
+				? rawPayload.slice(0, 240)
+				: JSON.stringify(rawPayload).slice(0, 240);
+			await this.tracePublish({
+				stage: "wechat_api_invalid_payload",
+				level: "error",
+				message: "WeChat API returned non-object payload",
+				metadata: {
+					path,
+					payloadType: typeof rawPayload,
+					payloadPreview: preview,
+				},
+			});
+			throw new Error(`微信公众号接口返回无效数据: ${path}`);
+		}
+
+		const errCode = this.toNumber(record.errcode);
+		if (errCode !== null && errCode !== 0) {
+			if (retryOnAuthError && this.isAccessTokenExpiredError(errCode)) {
+				this.accessTokenCache = null;
+				await this.tracePublish({
+					stage: "wechat_access_token_refresh",
+					level: "warn",
+					message: "Access token expired, refreshing and retrying API request",
+					metadata: {
+						path,
+						errCode,
+					},
+				});
+				await this.getAccessToken(true);
+				return this.requestWechatApi(path, {
+					...options,
+					retryOnAuthError: false,
+				});
+			}
+
+			throw new Error(this.formatWechatApiError(record, path));
+		}
+
+		return record;
+	}
+
+	private normalizeImageUrl(rawUrl: string): string | null {
+		if (!rawUrl) return null;
+		const cleaned = rawUrl.trim().replace(/&amp;/g, "&");
+		if (!cleaned) return null;
+		if (cleaned.startsWith("data:")) return cleaned;
+
+		let candidate = cleaned;
+		if (candidate.startsWith("//")) {
+			candidate = `https:${candidate}`;
+		}
+
+		try {
+			const parsed = new URL(candidate);
+			if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+				return null;
+			}
+			if (parsed.protocol === "http:") parsed.protocol = "https:";
+			return parsed.toString();
+		} catch {
+			return null;
+		}
+	}
+
+	private isWechatHostedImage(url: string): boolean {
+		try {
+			const hostname = new URL(url).hostname.toLowerCase();
+			return hostname.includes("mmbiz.qpic.cn")
+				|| hostname.includes("mmbiz.qlogo.cn")
+				|| hostname.includes("mp.weixin.qq.com")
+				|| hostname.includes("weixin.qq.com");
+		} catch {
+			return false;
+		}
+	}
+
+	private dataUriToBlob(dataUri: string): Blob {
+		const match = /^data:([^;]+);base64,(.+)$/i.exec(dataUri);
+		if (!match) {
+			throw new Error("Invalid data URI payload");
+		}
+		const mimeType = match[1] || "image/jpeg";
+		const binary = atob(match[2]);
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) {
+			bytes[i] = binary.charCodeAt(i);
+		}
+		return new Blob([bytes], { type: mimeType });
+	}
+
+	private async downloadImageFromUrl(url: string): Promise<Blob> {
+		const response = await fetch(url, {
+			method: "GET",
+			headers: {
+				// Prefer JPEG/PNG for downstream WeChat media endpoints.
+				accept: "image/jpeg,image/png,image/*;q=0.9,*/*;q=0.8",
+				"user-agent": WECHAT_DEFAULT_USER_AGENT,
+			},
+		});
+		if (!response.ok) {
+			throw new Error(`Image download failed (${response.status}): ${url}`);
+		}
+		const blob = await response.blob();
+		if (!blob.type.startsWith("image/") && blob.type !== "application/octet-stream") {
+			throw new Error(`Resource is not an image: ${url}`);
+		}
+		return blob;
+	}
+
+	private guessImageSuffix(sourceUrl: string, mimeType: string): string {
+		const typeMap: Record<string, string> = {
+			"image/jpeg": "jpg",
+			"image/jpg": "jpg",
+			"image/png": "png",
+			"image/gif": "gif",
+			"image/webp": "webp",
+			"image/bmp": "bmp",
+			"image/svg+xml": "svg",
+		};
+
+		const normalizedMime = mimeType.toLowerCase();
+		if (typeMap[normalizedMime]) return typeMap[normalizedMime];
+
+		try {
+			const parsed = new URL(sourceUrl);
+			const suffix = parsed.pathname.split(".").pop()?.toLowerCase();
+			if (suffix && ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(suffix)) {
+				return suffix === "jpeg" ? "jpg" : suffix;
+			}
+		} catch {
+			// ignore
+		}
+
+		return "jpg";
+	}
+
+	private async uploadContentImageBySourceUrl(sourceUrl: string): Promise<string> {
+		const normalized = this.normalizeImageUrl(sourceUrl);
+		if (!normalized) {
+			throw new Error(`Invalid image URL: ${sourceUrl}`);
+		}
+		if (!normalized.startsWith("data:") && this.isWechatHostedImage(normalized)) {
+			return normalized;
+		}
+
+		await this.tracePublish({
+			stage: "wechat_content_image_upload_start",
+			message: "Start uploading WeChat content image",
+			metadata: {
+				source: normalized.startsWith("data:") ? "data-uri" : normalized,
+			},
+		});
+
+		const blob = normalized.startsWith("data:")
+			? this.dataUriToBlob(normalized)
+			: await this.downloadImageFromUrl(normalized);
+		const suffix = this.guessImageSuffix(normalized, blob.type || "image/jpeg");
+
+		const formData = new FormData();
+		formData.append("media", blob, `content.${suffix}`);
+
+		const uploadPayload = await this.requestWechatApi("/cgi-bin/media/uploadimg", {
+			method: "POST",
+			body: formData,
+		});
+		const uploadedUrl = this.normalizeImageUrl(this.pickString(uploadPayload, "url") ?? "");
+		if (!uploadedUrl) {
+			throw new Error(`微信公众号正文图片上传失败: ${JSON.stringify(uploadPayload)}`);
+		}
+
+		await this.tracePublish({
+			stage: "wechat_content_image_upload_done",
+			message: "WeChat content image uploaded",
+			metadata: {
+				source: normalized.startsWith("data:") ? "data-uri" : normalized,
+				uploadedUrl,
+			},
+		});
+
+		return uploadedUrl;
+	}
+
+	private async uploadThumbMediaBySourceUrl(sourceUrl: string): Promise<WechatThumbMedia> {
+		const normalized = this.normalizeImageUrl(sourceUrl);
+		if (!normalized) {
+			throw new Error(`Invalid cover image URL: ${sourceUrl}`);
+		}
+
+		await this.tracePublish({
+			stage: "wechat_cover_image_upload_start",
+			message: "Start uploading WeChat cover image",
+			metadata: {
+				source: normalized.startsWith("data:") ? "data-uri" : normalized,
+			},
+		});
+
+		const blob = normalized.startsWith("data:")
+			? this.dataUriToBlob(normalized)
+			: await this.downloadImageFromUrl(normalized);
+		const suffix = this.guessImageSuffix(normalized, blob.type || "image/jpeg");
+
+		const formData = new FormData();
+		formData.append("media", blob, `thumb.${suffix}`);
+
+		const uploadPayload = await this.requestWechatApi("/cgi-bin/material/add_material", {
+			method: "POST",
+			query: {
+				type: "thumb",
+			},
+			body: formData,
+		});
+
+		const mediaId = this.pickString(uploadPayload, "media_id");
+		if (!mediaId) {
+			throw new Error(`微信公众号封面图上传失败: ${JSON.stringify(uploadPayload)}`);
+		}
+
+		const uploadedUrl = this.normalizeImageUrl(this.pickString(uploadPayload, "url") ?? "") ?? undefined;
+		await this.tracePublish({
+			stage: "wechat_cover_image_upload_done",
+			message: "WeChat cover image uploaded",
+			metadata: {
+				source: normalized.startsWith("data:") ? "data-uri" : normalized,
+				mediaId,
+				uploadedUrl: uploadedUrl ?? null,
+			},
+		});
+
+		return {
+			mediaId,
+			url: uploadedUrl,
+		};
 	}
 
 	private toPlainTextFromHtml(html: string): string {
@@ -408,66 +679,76 @@ export default class WechatAccountService extends AbstractAccountService {
 			.trim();
 	}
 
+	private parseInlineStyle(styleText: string): Array<{ prop: string; value: string }> {
+		const result: Array<{ prop: string; value: string }> = [];
+		for (const rawDeclaration of styleText.split(";")) {
+			const declaration = rawDeclaration.trim();
+			if (!declaration) continue;
+			const splitIndex = declaration.indexOf(":");
+			if (splitIndex <= 0) continue;
+			const prop = declaration.slice(0, splitIndex).trim().toLowerCase();
+			const value = declaration.slice(splitIndex + 1).trim();
+			if (!prop || !value) continue;
+			result.push({ prop, value });
+		}
+		return result;
+	}
+
+	private mergeInlineStyle(existingStyle: string, incomingStyle: string): string {
+		const merged = new Map<string, string>();
+		const order: string[] = [];
+
+		for (const declaration of this.parseInlineStyle(existingStyle)) {
+			merged.set(declaration.prop, declaration.value);
+			order.push(declaration.prop);
+		}
+
+		for (const declaration of this.parseInlineStyle(incomingStyle)) {
+			if (!merged.has(declaration.prop)) {
+				merged.set(declaration.prop, declaration.value);
+				order.push(declaration.prop);
+			}
+		}
+
+		return order.map((prop) => `${prop}:${merged.get(prop)}`).join(";");
+	}
+
+	private applyInlineStyleToTag(htmlContent: string, tagName: string, inlineStyle: string): string {
+		const regex = new RegExp(`<(${tagName})(\\s[^>]*?)?(\\s*\\/?)>`, "gi");
+		return htmlContent.replace(regex, (fullMatch, matchedTagName: string, rawAttrs: string | undefined, tail: string | undefined) => {
+			const attrs = rawAttrs ?? "";
+			const styleMatch = /\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(attrs);
+			let nextAttrs = attrs;
+			if (styleMatch) {
+				const currentStyle = styleMatch[1] ?? styleMatch[2] ?? "";
+				const mergedStyle = this.mergeInlineStyle(currentStyle, inlineStyle);
+				nextAttrs = attrs.replace(styleMatch[0], ` style="${mergedStyle}"`);
+			} else {
+				nextAttrs = `${attrs} style="${inlineStyle}"`;
+			}
+
+			const closing = tail ?? "";
+			return `<${matchedTagName}${nextAttrs}${closing}>`;
+		});
+	}
+
 	private resolveDigest(article: SharedArticle, htmlContent: string): string {
 		const summary = article.summary?.trim();
 		if (summary) return summary.slice(0, 120);
-
 		const plain = this.toPlainTextFromHtml(htmlContent);
 		if (!plain) return "";
 		return plain.slice(0, 120);
 	}
 
-	private isLatexFormula(text: string): boolean {
-		if (/[\\^_{}]/.test(text)) return true;
-		if (/[α-ωΑ-Ω]/.test(text)) return true;
-		if (/[∑∏∫∂∇∞≠≤≥±×÷√]/.test(text)) return true;
-		return false;
-	}
+	private injectWechatStyleSheet(htmlContent: string): string {
+		if (!htmlContent.trim()) return htmlContent;
 
-	private processLatex(content: string): string {
-		const latexApi = "https://latex.codecogs.com/png.latex";
-
-		let next = content.replace(/\$\$([^$]+)\$\$/g, (match, latex) => {
-			if (!this.isLatexFormula(latex)) return match;
-			const encoded = encodeURIComponent(latex.trim());
-			return `<p style="text-align:center;"><img src="${latexApi}?\\dpi{150}${encoded}" alt="formula" style="vertical-align:middle;max-width:100%;"></p>`;
-		});
-
-		next = next.replace(/\$([^$]+)\$/g, (match, latex) => {
-			if (!this.isLatexFormula(latex)) return match;
-			const encoded = encodeURIComponent(latex.trim());
-			return `<img src="${latexApi}?\\dpi{120}${encoded}" alt="formula" style="vertical-align:middle;">`;
-		});
-
-		return next;
-	}
-
-	private stripExternalLinks(content: string): string {
-		return content.replace(
-			/<a\s+[^>]*href=["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi,
-			(match, href: string, text: string) => {
-				if (
-					href
-					&& (
-						href.includes("mp.weixin.qq.com")
-						|| href.includes("weixin.qq.com")
-						|| href.startsWith("#")
-						|| href.startsWith("javascript:")
-					)
-				) {
-					return match;
-				}
-				return text;
-			},
-		);
-	}
-
-	private processHtmlForWechat(content: string): string {
-		let html = `<section style="margin-left:6px;margin-right:6px;line-height:1.75em;">${content}</section>`;
-		for (const [tagName, style] of Object.entries(WECHAT_INLINE_CSS)) {
-			html = this.injectStyleForTag(html, tagName, style);
+		let styledHtml = htmlContent;
+		for (const rule of WECHAT_ARTICLE_INLINE_STYLE_MAP) {
+			styledHtml = this.applyInlineStyleToTag(styledHtml, rule.tagName, rule.style);
 		}
-		return html.replace(/>\s+</g, "><").trim();
+
+		return styledHtml;
 	}
 
 	private async resolveArticleHtml(article: SharedArticle): Promise<string> {
@@ -482,16 +763,13 @@ export default class WechatAccountService extends AbstractAccountService {
 			throw new Error("Article content is empty, cannot publish to WeChat");
 		}
 
-		let processedHtml = this.processLatex(htmlContent);
-		processedHtml = this.stripExternalLinks(processedHtml);
-
 		const imageSources = this.collectImageUrlsFromMarkdownAndHtml(
 			article.content ?? "",
-			processedHtml,
+			htmlContent,
 		);
 		await this.tracePublish({
 			stage: "wechat_content_images_scan",
-			message: "Scan content images for WeChat hosting",
+			message: "Scan content images for WeChat image host",
 			metadata: {
 				totalImages: imageSources.length,
 				hasHtmlContent: Boolean(article.htmlContent?.trim()),
@@ -506,11 +784,10 @@ export default class WechatAccountService extends AbstractAccountService {
 			if (this.imageUrlCache.has(normalized)) continue;
 
 			try {
-				const uploaded = await this.uploadImageBySourceUrlDetailed(normalized);
-				this.imageUrlCache.set(normalized, uploaded.url);
-				this.uploadedImageCache.set(normalized, uploaded);
+				const uploadedUrl = await this.uploadContentImageBySourceUrl(normalized);
+				this.imageUrlCache.set(normalized, uploadedUrl);
 				uploadedCount += 1;
-				await randomDelay(120, 300);
+				await randomDelay(120, 320);
 			} catch (error) {
 				await this.tracePublish({
 					stage: "wechat_resolve_single_image_failed",
@@ -525,400 +802,297 @@ export default class WechatAccountService extends AbstractAccountService {
 		}
 
 		const replacedHtml = this.replaceHtmlImageUrlsByMap(
-			processedHtml,
+			htmlContent,
 			(rawUrl) => this.normalizeImageUrl(rawUrl),
 			this.imageUrlCache,
 		);
 
-		const finalHtml = this.processHtmlForWechat(replacedHtml);
 		await this.tracePublish({
-			stage: "wechat_content_css_inlined",
-			message: "Apply WeChat inline styles",
+			stage: "wechat_content_images_resolved",
+			message: "Resolve WeChat content image URLs",
 			metadata: {
 				imageCandidates: imageSources.length,
 				uploadedImages: uploadedCount,
-				finalHtmlLength: finalHtml.length,
+				finalHtmlLength: replacedHtml.length,
 			},
 		});
-		return finalHtml;
+
+		return replacedHtml;
 	}
 
-	private buildCoverAsset(uploaded: WechatUploadedImage): WechatCoverAsset {
-		return {
-			fileId: uploaded.fileId,
-			cdnUrl: uploaded.url,
-			cdnUrl235: uploaded.cdnUrl235 ?? uploaded.url,
-			cdnUrl11: uploaded.cdnUrl11 ?? uploaded.url,
-			cdnUrlBack: uploaded.cdnUrlBack ?? uploaded.url,
-		};
-	}
-
-	private extractUploadContentRecord(record: Record<string, unknown> | null): Record<string, unknown> | null {
-		if (!record) return null;
-		const contentValue = record.content;
-		if (typeof contentValue === "string") {
-			return this.toRecord(this.tryParseJson(contentValue));
+	private collectCoverCandidates(article: SharedArticle, htmlContent: string): string[] {
+		const candidates = new Set<string>();
+		if (article.coverImage?.trim()) {
+			candidates.add(article.coverImage.trim());
 		}
-		return this.toRecord(contentValue);
+
+		const htmlForScan = article.htmlContent?.trim() || htmlContent;
+		for (const source of this.collectImageUrlsFromMarkdownAndHtml(article.content ?? "", htmlForScan)) {
+			candidates.add(source);
+		}
+
+		const normalizedCandidates: string[] = [];
+		for (const candidate of candidates) {
+			const normalized = this.normalizeImageUrl(candidate);
+			if (!normalized) continue;
+			if (normalizedCandidates.includes(normalized)) continue;
+			normalizedCandidates.push(normalized);
+		}
+		return normalizedCandidates;
 	}
 
-	private extractUploadFileId(record: Record<string, unknown> | null): string | null {
-		const direct = this.pickId(record, "fileid")
-			?? this.pickId(record, "file_id")
-			?? this.pickId(record, "fileId");
-		if (direct) return direct;
-
-		const contentRecord = this.extractUploadContentRecord(record);
-		const fileInfoRecord = this.toRecord(contentRecord?.file_info);
-		const dataRecord = this.toRecord(contentRecord?.data);
-		return this.pickId(contentRecord, "fileid")
-			?? this.pickId(contentRecord, "file_id")
-			?? this.pickId(contentRecord, "fileId")
-			?? this.pickId(fileInfoRecord, "fileid")
-			?? this.pickId(fileInfoRecord, "file_id")
-			?? this.pickId(fileInfoRecord, "fileId")
-			?? this.pickId(dataRecord, "fileid")
-			?? this.pickId(dataRecord, "file_id")
-			?? this.pickId(dataRecord, "fileId")
-			?? null;
-
-	}
-
-	private pickUploadedImageField(
-		record: Record<string, unknown> | null,
-		contentRecord: Record<string, unknown> | null,
-		key: string,
-	): string | null {
-		return this.normalizeImageUrl(
-			this.pickString(record, key)
-			?? this.pickString(contentRecord, key)
-			?? "",
-		);
-	}
-
-	private async resolveCoverImage(article: SharedArticle): Promise<WechatCoverAsset | null> {
-		const rawCover = article.coverImage?.trim();
-		if (!rawCover) {
+	private async resolveThumbMedia(article: SharedArticle, htmlContent: string): Promise<WechatThumbMedia | null> {
+		const candidates = this.collectCoverCandidates(article, htmlContent);
+		if (candidates.length === 0) {
 			await this.tracePublish({
 				stage: "wechat_cover_missing",
-				message: "No cover image configured, skip cover setup",
+				level: "warn",
+				message: "No cover candidate found in article cover or content images",
 			});
 			return null;
 		}
 
-		const normalized = this.normalizeImageUrl(rawCover);
-		if (!normalized) {
-			throw new Error("Invalid cover image URL for WeChat");
+		for (const candidate of candidates) {
+			const cached = this.thumbMediaCache.get(candidate);
+			if (cached) {
+				return cached;
+			}
+
+			try {
+				const uploaded = await this.uploadThumbMediaBySourceUrl(candidate);
+				this.thumbMediaCache.set(candidate, uploaded);
+				return uploaded;
+			} catch (error) {
+				await this.tracePublish({
+					stage: "wechat_cover_upload_candidate_failed",
+					level: "warn",
+					message: "One cover candidate upload failed, trying next candidate",
+					metadata: {
+						candidate,
+						error: error instanceof Error ? error.message : "unknown",
+					},
+				});
+			}
 		}
 
 		await this.tracePublish({
-			stage: "wechat_cover_resolve_start",
-			message: "Start resolving WeChat cover image",
-			metadata: {
-				source: normalized.startsWith("data:") ? "data-uri" : normalized,
-			},
+			stage: "wechat_cover_fallback_start",
+			level: "warn",
+			message: "All cover candidates failed, fallback to built-in JPEG thumb",
 		});
 
-		const cached = this.uploadedImageCache.get(normalized);
-		if (cached) {
-			const cover = this.buildCoverAsset(cached);
+		try {
+			const fallbackThumb = await this.uploadThumbMediaBySourceUrl(WECHAT_FALLBACK_THUMB_DATA_URI);
 			await this.tracePublish({
-				stage: "wechat_cover_resolve_reused",
-				message: "Reuse uploaded image as WeChat cover",
+				stage: "wechat_cover_fallback_done",
+				message: "Fallback WeChat thumb uploaded",
 				metadata: {
-					cdnUrl: cover.cdnUrl,
-					fileId: cover.fileId,
+					mediaId: fallbackThumb.mediaId,
 				},
 			});
-			return cover;
+			return fallbackThumb;
+		} catch (error) {
+			await this.tracePublish({
+				stage: "wechat_cover_fallback_failed",
+				level: "error",
+				message: "Fallback WeChat thumb upload failed",
+				metadata: {
+					error: error instanceof Error ? error.message : "unknown",
+				},
+			});
+			return null;
+		}
+	}
+
+	private buildDraftArticlePayload(params: {
+		article: SharedArticle;
+		htmlContent: string;
+		digest: string;
+		thumbMediaId: string | null;
+	}): Record<string, unknown> {
+		if (!params.thumbMediaId) {
+			throw new Error("微信公众号草稿发布必须提供可用的 thumb_media_id");
 		}
 
-		const uploaded = await this.uploadImageBySourceUrlDetailed(normalized);
-		this.uploadedImageCache.set(normalized, uploaded);
-		this.imageUrlCache.set(normalized, uploaded.url);
-		const cover = this.buildCoverAsset(uploaded);
-		await this.tracePublish({
-			stage: "wechat_cover_resolve_done",
-			message: "WeChat cover image resolved",
-			metadata: {
-				cdnUrl: cover.cdnUrl,
-				fileId: cover.fileId,
-			},
-		});
-		return cover;
-	}
-
-	private buildDraftFormData(payload: WechatDraftRequest, token: string): URLSearchParams {
-		const hasDigest = payload.digest.trim().length > 0;
-		const cover = payload.cover ?? null;
-		const hasCover = Boolean(cover?.cdnUrl);
-		return new URLSearchParams({
-			token,
-			lang: "zh_CN",
-			f: "json",
-			ajax: "1",
-			random: String(Math.random()),
-			AppMsgId: payload.appMsgId ?? "",
-			count: "1",
-			data_seq: "0",
-			operate_from: "Chrome",
-			isnew: "0",
-			ad_video_transition0: "",
-			can_reward0: "0",
-			related_video0: "",
-			is_video_recommend0: "-1",
-			title0: payload.title,
-			author0: "ErpanOmer",
-			writerid0: "0",
-			fileid0: cover?.fileId ?? "",
-			digest0: hasDigest ? payload.digest : "",
-			auto_gen_digest0: hasDigest ? "0" : "1",
-			content0: payload.htmlContent,
-			sourceurl0: "",
-			need_open_comment0: "1",
-			only_fans_can_comment0: "0",
-			cdn_url0: cover?.cdnUrl ?? "",
-			cdn_235_1_url0: cover?.cdnUrl235 ?? "",
-			cdn_1_1_url0: cover?.cdnUrl11 ?? "",
-			cdn_url_back0: cover?.cdnUrlBack ?? "",
-			crop_list0: hasCover ? "[]" : "",
-			music_id0: "",
-			video_id0: "",
-			voteid0: "",
-			voteismlt0: "0",
-			supervoteid0: "",
-			cardid0: "",
-			cardquantity0: "",
-			cardlimit0: "",
-			vid_type0: "",
-			show_cover_pic0: hasCover ? "1" : "0",
-			shortvideofileid0: "",
-			copyright_type0: "0",
-			releasefirst0: "",
-			platform0: "",
-			reprint_permit_type0: "",
-			allow_reprint0: "",
-			allow_reprint_modify0: "",
-			original_article_type0: "",
-			ori_white_list0: "",
-			free_content0: "",
-			fee0: "0",
-			ad_id0: "",
-			guide_words0: "",
-			is_share_copyright0: "0",
-			share_copyright_url0: "",
-			source_article_type0: "",
-			reprint_recommend_title0: "",
-			reprint_recommend_content0: "",
-			share_page_type0: "0",
-			share_imageinfo0: "{\"list\":[]}",
-			share_video_id0: "",
-			dot0: "{}",
-			share_voice_id0: "",
-			insert_ad_mode0: "",
-			categories_list0: "[]",
-		});
-	}
-
-	private extractDraftIdFromResponse(payload: unknown): string | null {
-		const record = this.toRecord(payload);
-		return this.toStringId(record?.appMsgId)
-			?? this.toStringId(record?.app_msgid)
-			?? this.toStringId(record?.AppMsgId)
-			?? null;
-	}
-
-	private formatError(payload: unknown): string {
-		const record = this.toRecord(payload);
-		const baseResp = this.toRecord(record?.base_resp);
-		const ret = this.toNumber(record?.ret) ?? this.toNumber(baseResp?.ret) ?? -1;
-		const errMsg = this.pickString(baseResp, "err_msg")
-			?? this.pickString(record, "errmsg")
-			?? this.pickString(record, "msg")
-			?? "";
-
-		const errorMap: Record<number, string> = {
-			[-6]: "请输入验证码",
-			[-8]: "请输入验证码",
-			[-1]: "系统错误，请稍后重试",
-			[-2]: "参数错误，请检查内容后重试",
-			[-5]: "服务错误，请稍后重试",
-			[-99]: "内容超出字数，请调整",
-			[-206]: "服务负荷过大，请稍后重试",
-			[200002]: "参数错误，请检查内容后重试",
-			[200003]: "登录态超时，请重新获取 Cookie",
-			[412]: "图文中含非法外链",
-			[62752]: "可能含有具备安全风险的链接，请检查",
-			[64506]: "保存失败，链接不合法",
-			[64507]: "内容不能包含外部链接",
-			[64562]: "请勿插入非微信域名的链接",
-			[64509]: "正文中不能包含超过 3 个视频",
-			[64702]: "标题超出 64 字长度限制",
-			[64703]: "摘要超出 120 字长度限制",
-			[64705]: "内容超出字数，请调整",
-			[10806]: "正文包含违规内容，请重新编辑",
-			[10807]: "内容不能违反公众平台协议",
-			[220001]: "素材管理中的存储数量已达上限",
-			[220002]: "图片库已达到存储上限",
+		const payload: Record<string, unknown> = {
+			title: params.article.title,
+			author: "",
+			digest: params.digest,
+			content: params.htmlContent,
+			content_source_url: "",
+			need_open_comment: 0,
+			only_fans_can_comment: 0,
+			thumb_media_id: params.thumbMediaId,
+			show_cover_pic: 1,
 		};
 
-		if (errorMap[ret]) return errorMap[ret];
-		if (errMsg) return `${errMsg} (错误码: ${ret})`;
-		return `同步失败 (错误码: ${ret})`;
+		return payload;
 	}
 
-	private buildDraftUrl(draftId: string, token: string): string {
-		return `${WECHAT_MP_BASE_URL}/cgi-bin/appmsg?t=media/appmsg_edit&action=edit&type=77&appmsgid=${encodeURIComponent(draftId)}&token=${encodeURIComponent(token)}&lang=zh_CN`;
+	private classifyPublishState(
+		statusCode: number | null,
+		payload: Record<string, unknown>,
+	): PublishStatusSnapshot["state"] {
+		if (statusCode === null) {
+			return this.extractFirstArticleUrl(payload) ? "success" : "unknown";
+		}
+
+		if (statusCode === 0 || statusCode === 4) return "success";
+		if (statusCode === 1 || statusCode === 6) {
+			return this.extractFirstArticleUrl(payload) ? "success" : "processing";
+		}
+		if ([2, 3, 5, 7, 8].includes(statusCode)) return "failed";
+
+		if (this.extractFirstArticleUrl(payload)) return "success";
+		return "unknown";
 	}
 
-	private async requestDraftSave(requestPayload: WechatDraftRequest): Promise<{ draftId: string; token: string }> {
-		const meta = await this.ensureSessionMeta();
-		const formData = this.buildDraftFormData(requestPayload, meta.token);
-		const cover = requestPayload.cover ?? null;
-		await this.tracePublish({
-			stage: "wechat_draft_payload_ready",
-			message: "Prepared WeChat draft payload",
-			metadata: {
-				hasCover: Boolean(cover?.cdnUrl),
-				hasCoverFileId: Boolean(cover?.fileId),
-				showCoverPic: cover?.cdnUrl ? "1" : "0",
-				coverCdnUrl: cover?.cdnUrl ?? null,
-			},
-		});
-
-		const raw = await this.withNetworkRetry(
-			"wechat_save_draft_retry",
-			async () => await this.request<unknown>(
-				`${WECHAT_MP_OPERATE_APPMSG_URL}?t=ajax-response&sub=create&type=77&token=${encodeURIComponent(meta.token)}&lang=zh_CN`,
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-						cookie: this.cookieHeader,
-						origin: WECHAT_MP_BASE_URL,
-						referer: WECHAT_REFERER,
-					},
-					body: formData.toString(),
-				},
-			),
-			2,
-		);
-
-		const draftId = this.extractDraftIdFromResponse(raw);
-		if (!draftId) {
-			throw new Error(this.formatError(raw));
-		}
-		return { draftId, token: meta.token };
+	private statusLabelForCode(statusCode: number | null): string {
+		if (statusCode === null) return "unknown";
+		return WECHAT_PUBLISH_STATUS_LABEL[statusCode] ?? `unknown_${statusCode}`;
 	}
 
-	private async uploadImageBySourceUrlDetailed(sourceUrl: string): Promise<WechatUploadedImage> {
-		const normalized = this.normalizeImageUrl(sourceUrl);
-		if (!normalized) {
-			throw new Error(`Invalid image URL: ${sourceUrl}`);
-		}
-		if (!normalized.startsWith("data:") && this.isWechatHostedImage(normalized)) {
-			return {
-				url: normalized,
-				fileId: null,
-				cdnUrl235: normalized,
-				cdnUrl11: normalized,
-				cdnUrlBack: normalized,
-			};
-		}
-
-		const meta = await this.ensureSessionMeta();
-
-		await this.tracePublish({
-			stage: "wechat_image_upload_start",
-			message: "Start uploading WeChat image",
-			metadata: {
-				source: normalized.startsWith("data:") ? "data-uri" : normalized,
-			},
-		});
-
-		const blob = normalized.startsWith("data:")
-			? this.dataUriToBlob(normalized)
-			: await this.downloadImageFromUrl(normalized);
-		const suffix = this.guessImageSuffix(normalized, blob.type || "image/jpeg");
-
-		const timestamp = Date.now();
-		const fileName = `${timestamp}.${suffix}`;
-		const formData = new FormData();
-		formData.append("type", blob.type || "image/jpeg");
-		formData.append("id", String(timestamp));
-		formData.append("name", fileName);
-		formData.append("lastModifiedDate", new Date().toString());
-		formData.append("size", String(blob.size));
-		formData.append("file", blob, fileName);
-
-		const seq = Date.now();
-		const raw = await this.withNetworkRetry(
-			"wechat_image_upload_retry",
-			async () => await this.request<unknown>(
-				`${WECHAT_MP_FILETRANSFER_URL}?action=upload_material&f=json&scene=8&writetype=doublewrite&groupid=1&ticket_id=${encodeURIComponent(meta.userName)}&ticket=${encodeURIComponent(meta.ticket)}&svr_time=${encodeURIComponent(String(meta.svrTime))}&token=${encodeURIComponent(meta.token)}&lang=zh_CN&seq=${seq}&t=${Math.random()}`,
-				{
-					method: "POST",
-					headers: {
-						cookie: this.cookieHeader,
-						origin: WECHAT_MP_BASE_URL,
-						referer: WECHAT_REFERER,
-					},
-					body: formData,
-				},
-			),
-			2,
-		);
-
-		const record = this.toRecord(raw);
-		const contentRecord = this.extractUploadContentRecord(record);
-		const baseResp = this.toRecord(record?.base_resp) ?? this.toRecord(contentRecord?.base_resp);
-		const errMsg = this.pickString(baseResp, "err_msg")
-			?? this.pickString(record, "errmsg")
-			?? this.pickString(contentRecord, "errmsg");
-		const ret = this.toNumber(baseResp?.ret)
-			?? this.toNumber(record?.ret)
-			?? this.toNumber(contentRecord?.ret)
-			?? 0;
-		const uploadedUrl = this.pickUploadedImageField(record, contentRecord, "cdn_url");
-		const cdnUrl235 = this.pickUploadedImageField(record, contentRecord, "cdn_235_1_url");
-		const cdnUrl11 = this.pickUploadedImageField(record, contentRecord, "cdn_1_1_url");
-		const cdnUrlBack = this.pickUploadedImageField(record, contentRecord, "cdn_url_back");
-		const fileId = this.extractUploadFileId(record);
-
-		if (!fileId) {
-			await this.tracePublish({
-				stage: "wechat_image_upload_fileid_missing",
-				level: "warn",
-				message: "WeChat upload response has no fileId, fallback to cdn_url cover fields",
-			});
-		}
-
-		if (!uploadedUrl || ((errMsg && errMsg !== "ok") || ret !== 0)) {
-			throw new Error(`微信公众号图片上传失败: ${this.formatError(raw)}`);
-		}
-
-		await this.tracePublish({
-				stage: "wechat_image_upload_done",
-				message: "WeChat image uploaded",
-				metadata: {
-					source: normalized.startsWith("data:") ? "data-uri" : normalized,
-					uploadedUrl,
-					fileId: fileId ?? null,
-				},
-			});
-
+	private toPublishStatusSnapshot(payload: Record<string, unknown>): PublishStatusSnapshot {
+		const statusCode = this.toNumber(payload.publish_status);
+		const state = this.classifyPublishState(statusCode, payload);
 		return {
-			url: uploadedUrl,
-			fileId,
-			cdnUrl235: cdnUrl235 ?? uploadedUrl,
-			cdnUrl11: cdnUrl11 ?? uploadedUrl,
-			cdnUrlBack: cdnUrlBack ?? uploadedUrl,
+			state,
+			statusCode,
+			statusLabel: this.statusLabelForCode(statusCode),
+			payload,
 		};
 	}
 
-	private async uploadImageBySourceUrl(sourceUrl: string): Promise<string> {
-		const uploaded = await this.uploadImageBySourceUrlDetailed(sourceUrl);
-		return uploaded.url;
+	private extractFirstArticleDetail(payload: Record<string, unknown>): Record<string, unknown> | null {
+		const detailRecord = this.toRecord(payload.article_detail);
+		if (!detailRecord) return null;
+		const items = detailRecord.item;
+		if (!Array.isArray(items) || items.length === 0) return null;
+		return this.toRecord(items[0]);
+	}
+
+	private extractFirstArticleUrl(payload: Record<string, unknown>): string | null {
+		const detailItem = this.extractFirstArticleDetail(payload);
+		const url = this.pickString(detailItem, "url");
+		if (!url) return null;
+		return this.normalizeImageUrl(url) ?? url;
+	}
+
+	private buildPublishedFallbackUrl(publishId: string): string {
+		return `https://mp.weixin.qq.com/s/${encodeURIComponent(publishId)}`;
+	}
+
+	private async getPublishStatus(publishId: string): Promise<PublishStatusSnapshot> {
+		const payload = await this.requestWechatApi("/cgi-bin/freepublish/get", {
+			method: "POST",
+			body: {
+				publish_id: publishId,
+			},
+		});
+		return this.toPublishStatusSnapshot(payload);
+	}
+
+	private async waitForPublishStatus(
+		publishId: string,
+		maxAttempts = 8,
+	): Promise<PublishStatusSnapshot> {
+		let latest: PublishStatusSnapshot | null = null;
+
+		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+			latest = await this.getPublishStatus(publishId);
+			await this.tracePublish({
+				stage: "wechat_publish_status_poll",
+				message: "Polled WeChat publish status",
+				metadata: {
+					publishId,
+					attempt,
+					statusCode: latest.statusCode,
+					statusLabel: latest.statusLabel,
+					state: latest.state,
+				},
+			});
+
+			if (latest.state === "success" || latest.state === "failed") {
+				return latest;
+			}
+
+			if (attempt < maxAttempts) {
+				await randomDelay(1800, 3200);
+			}
+		}
+
+		if (latest) return latest;
+		return {
+			state: "unknown",
+			statusCode: null,
+			statusLabel: "unknown",
+			payload: {},
+		};
+	}
+
+	private async resolveDraftOpenUrl(
+		mediaId: string,
+		title: string,
+	): Promise<{ url: string | null; matchedBy: "media_id" | "title" | "none" }> {
+		const normalizedTitle = title.trim();
+		const pageSize = 20;
+		const maxPages = 5;
+		let offset = 0;
+
+		let titleMatchedUrl: string | null = null;
+		let titleMatchedUpdateTime = -1;
+
+		for (let page = 0; page < maxPages; page++) {
+			const payload = await this.requestWechatApi("/cgi-bin/draft/batchget", {
+				method: "POST",
+				body: {
+					offset,
+					count: pageSize,
+					no_content: 0,
+				},
+			});
+
+			const rawItems = payload.item;
+			const items = Array.isArray(rawItems) ? rawItems : [];
+
+			for (const rawItem of items) {
+				const itemRecord = this.toRecord(rawItem);
+				if (!itemRecord) continue;
+
+				const itemMediaId = this.pickString(itemRecord, "media_id");
+				const updateTime = this.toNumber(itemRecord.update_time) ?? 0;
+				const contentRecord = this.toRecord(itemRecord.content);
+				const newsItemList = Array.isArray(contentRecord?.news_item) ? contentRecord.news_item : [];
+				const firstNewsItem = this.toRecord(newsItemList[0]);
+				const draftTitle = this.pickString(firstNewsItem, "title") ?? "";
+				const draftUrlRaw = this.pickString(firstNewsItem, "url");
+				const draftUrl = draftUrlRaw ? (this.normalizeImageUrl(draftUrlRaw) ?? draftUrlRaw) : null;
+
+				if (itemMediaId && itemMediaId === mediaId && draftUrl) {
+					return { url: draftUrl, matchedBy: "media_id" };
+				}
+
+				if (
+					draftUrl
+					&& normalizedTitle
+					&& draftTitle.trim() === normalizedTitle
+					&& updateTime >= titleMatchedUpdateTime
+				) {
+					titleMatchedUpdateTime = updateTime;
+					titleMatchedUrl = draftUrl;
+				}
+			}
+
+			const totalCount = this.toNumber(payload.total_count) ?? items.length;
+			offset += pageSize;
+			if (items.length === 0 || offset >= totalCount) break;
+		}
+
+		if (titleMatchedUrl) {
+			return { url: titleMatchedUrl, matchedBy: "title" };
+		}
+
+		return { url: null, matchedBy: "none" };
 	}
 
 	async verify(): Promise<VerifyResult> {
@@ -948,14 +1122,13 @@ export default class WechatAccountService extends AbstractAccountService {
 	}
 
 	async info(): Promise<AccountInfo> {
-		const meta = await this.ensureSessionMeta();
-		if (!meta.userName && !meta.nickName) {
-			throw new Error("无法解析公众号身份信息，请检查 Cookie 是否完整。");
-		}
+		const credential = this.getCredentialOrThrow();
+		await this.requestWechatApi("/cgi-bin/getcallbackip", {
+			method: "GET",
+		});
 		return {
-			id: meta.userName || meta.nickName,
-			name: meta.nickName || meta.userName,
-			avatar: meta.avatar,
+			id: credential.appId,
+			name: `微信公众号(${credential.appId})`,
 			isLogin: true,
 		};
 	}
@@ -964,32 +1137,74 @@ export default class WechatAccountService extends AbstractAccountService {
 		try {
 			await this.tracePublish({
 				stage: "wechat_article_draft_start",
-				message: "Start creating WeChat draft",
+				message: "Start creating WeChat draft via official API",
 				metadata: {
 					titleLength: article.title.length,
 					hasHtmlContent: Boolean(article.htmlContent?.trim()),
 				},
 			});
 
-			const htmlContent = await this.resolveArticleHtml(article);
-			const digest = this.resolveDigest(article, htmlContent);
-			const cover = await this.resolveCoverImage(article);
-			const { draftId, token } = await this.requestDraftSave({
-				title: article.title,
-				htmlContent,
-				digest,
-				cover,
+			const resolvedHtml = await this.resolveArticleHtml(article);
+			const htmlWithStyle = this.injectWechatStyleSheet(resolvedHtml);
+			const digest = this.resolveDigest(article, resolvedHtml);
+			const thumbMedia = await this.resolveThumbMedia(article, resolvedHtml);
+
+			const draftPayload = await this.requestWechatApi("/cgi-bin/draft/add", {
+				method: "POST",
+				body: {
+					articles: [
+						this.buildDraftArticlePayload({
+							article,
+							htmlContent: htmlWithStyle,
+							digest,
+							thumbMediaId: thumbMedia?.mediaId ?? null,
+						}),
+					],
+				},
 			});
-			const draftUrl = this.buildDraftUrl(draftId, token);
-			this.draftHtmlContentCache.set(draftId, htmlContent);
+
+			const draftId = this.pickString(draftPayload, "media_id");
+			if (!draftId) {
+				throw new Error(`创建微信公众号草稿失败: ${JSON.stringify(draftPayload)}`);
+			}
+
+			let draftUrl = WECHAT_MP_HOME_URL;
+			try {
+				const resolvedDraft = await this.resolveDraftOpenUrl(draftId, article.title);
+				if (resolvedDraft.url) {
+					draftUrl = resolvedDraft.url;
+				}
+				await this.tracePublish({
+					stage: "wechat_draft_open_url_resolved",
+					message: "Resolved WeChat draft open URL",
+					metadata: {
+						draftId,
+						matchedBy: resolvedDraft.matchedBy,
+						draftUrl,
+					},
+				});
+			} catch (error) {
+				await this.tracePublish({
+					stage: "wechat_draft_open_url_resolve_failed",
+					level: "warn",
+					message: "Failed to resolve WeChat draft open URL, fallback to MP home",
+					metadata: {
+						draftId,
+						error: error instanceof Error ? error.message : "unknown",
+						draftUrl,
+					},
+				});
+			}
+
+			this.draftHtmlContentCache.set(draftId, htmlWithStyle);
 
 			await this.tracePublish({
 				stage: "wechat_article_draft_done",
 				message: "WeChat draft created",
 				metadata: {
 					draftId,
-					draftUrl,
-					hasCover: Boolean(cover?.cdnUrl),
+					hasCover: Boolean(thumbMedia?.mediaId),
+					thumbMediaId: thumbMedia?.mediaId ?? null,
 				},
 			});
 
@@ -997,7 +1212,7 @@ export default class WechatAccountService extends AbstractAccountService {
 				id: draftId,
 				title: article.title,
 				content: article.content,
-				htmlContent,
+				htmlContent: htmlWithStyle,
 				createdAt: Date.now(),
 				url: draftUrl,
 			};
@@ -1023,64 +1238,69 @@ export default class WechatAccountService extends AbstractAccountService {
 		try {
 			await this.tracePublish({
 				stage: "wechat_article_publish_start",
-				message: "Start finalizing WeChat article",
+				message: "Start publishing WeChat draft",
 				metadata: {
 					draftId,
+					hasDraftCacheHtml: this.draftHtmlContentCache.has(draftId),
+					hasPayloadHtmlContent: Boolean(article.htmlContent?.trim()),
 				},
 			});
 
-			const htmlContent = article.htmlContent?.trim()
-				|| this.draftHtmlContentCache.get(draftId)
-				|| await this.resolveArticleHtml(article);
-			const digest = this.resolveDigest(article, htmlContent);
-			const cover = await this.resolveCoverImage(article);
-			const saveResult = await this.requestDraftSave({
-				title: article.title,
-				htmlContent,
-				digest,
-				appMsgId: draftId,
-				cover,
-			});
+			if (this.draftHtmlContentCache.has(draftId)) {
+				await this.tracePublish({
+					stage: "wechat_article_publish_reuse_draft_cache",
+					message: "Reuse draft-stage prepared HTML cache",
+					metadata: {
+						draftId,
+						htmlLength: this.draftHtmlContentCache.get(draftId)?.length ?? null,
+					},
+				});
+			}
 
-			const finalId = saveResult.draftId || draftId;
-			const finalUrl = this.buildDraftUrl(finalId, saveResult.token);
-
-			await this.tracePublish({
-				stage: "wechat_article_publish_done",
-				message: "WeChat draft finalized (manual mass-send required)",
-				metadata: {
-					draftId,
-					finalId,
-					finalUrl,
-					hasCover: Boolean(cover?.cdnUrl),
+			const submitPayload = await this.requestWechatApi("/cgi-bin/freepublish/submit", {
+				method: "POST",
+				body: {
+					media_id: draftId,
 				},
 			});
+
+			const publishId = this.pickString(submitPayload, "publish_id");
+			if (!publishId) {
+				throw new Error(`发布请求提交失败: ${JSON.stringify(submitPayload)}`);
+			}
+
+			const statusSnapshot = await this.waitForPublishStatus(publishId, 8);
+			const articleUrl = this.extractFirstArticleUrl(statusSnapshot.payload)
+				?? this.buildPublishedFallbackUrl(publishId);
+
+			if (statusSnapshot.state === "failed") {
+				return {
+					success: false,
+					articleId: publishId,
+					url: articleUrl,
+					message: `微信公众号发布失败，状态: ${statusSnapshot.statusLabel}`,
+				};
+			}
+
+			if (statusSnapshot.state === "processing" || statusSnapshot.state === "unknown") {
+				return {
+					success: true,
+					articleId: publishId,
+					url: articleUrl,
+					message: `微信公众号发布请求已提交，当前状态: ${statusSnapshot.statusLabel}`,
+				};
+			}
 
 			return {
 				success: true,
-				articleId: finalId,
-				url: finalUrl,
-				message: "公众号草稿已更新完成，请在公众号后台手动群发。",
+				articleId: publishId,
+				url: articleUrl,
+				message: "微信公众号发布成功",
 			};
 		} catch (error) {
-			const fallbackToken = this.sessionMetaCache?.token;
-			const fallbackUrl = fallbackToken ? this.buildDraftUrl(draftId, fallbackToken) : undefined;
-
-			await this.tracePublish({
-				stage: "wechat_article_publish_fallback",
-				level: "warn",
-				message: error instanceof Error ? error.message : "WeChat publish fallback to draft",
-				metadata: {
-					draftId,
-					fallbackUrl: fallbackUrl ?? null,
-				},
-			});
-
 			return {
-				success: true,
-				articleId: draftId,
-				url: fallbackUrl,
-				message: "公众号自动群发暂不支持，草稿已保留，请在公众号后台手动群发。",
+				success: false,
+				message: error instanceof Error ? error.message : "微信公众号发布失败",
 			};
 		} finally {
 			this.draftHtmlContentCache.delete(draftId);
@@ -1088,22 +1308,99 @@ export default class WechatAccountService extends AbstractAccountService {
 	}
 
 	async articleDelete(articleId: string): Promise<{ success: boolean; message: string }> {
-		void articleId;
-		return {
-			success: false,
-			message: "微信公众号网页接口删除草稿暂未实现。",
-		};
+		const draftId = articleId.trim();
+		if (!draftId) {
+			return {
+				success: false,
+				message: "Draft id is required",
+			};
+		}
+
+		try {
+			await this.requestWechatApi("/cgi-bin/draft/delete", {
+				method: "POST",
+				body: {
+					media_id: draftId,
+				},
+			});
+			return {
+				success: true,
+				message: "微信公众号草稿删除成功",
+			};
+		} catch (error) {
+			return {
+				success: false,
+				message: error instanceof Error ? error.message : "微信公众号草稿删除失败",
+			};
+		}
 	}
 
 	async articleList(page = 1, pageSize = 10): Promise<Article[]> {
-		void page;
-		void pageSize;
-		return [];
+		const offset = Math.max(0, (Math.max(1, page) - 1) * Math.max(1, pageSize));
+		const count = Math.max(1, Math.min(20, pageSize));
+
+		try {
+			const payload = await this.requestWechatApi("/cgi-bin/draft/batchget", {
+				method: "POST",
+				body: {
+					offset,
+					count,
+					no_content: 0,
+				},
+			});
+
+			const rawItems = payload.item;
+			if (!Array.isArray(rawItems)) return [];
+
+			const result: Article[] = [];
+			for (const rawItem of rawItems) {
+				const itemRecord = this.toRecord(rawItem);
+				if (!itemRecord) continue;
+				const mediaId = this.pickString(itemRecord, "media_id");
+				if (!mediaId) continue;
+
+				const contentRecord = this.toRecord(itemRecord.content);
+				const newsItemList = contentRecord?.news_item;
+				if (!Array.isArray(newsItemList) || newsItemList.length === 0) continue;
+				const firstNewsItem = this.toRecord(newsItemList[0]);
+				if (!firstNewsItem) continue;
+
+				const updateTime = this.toNumber(itemRecord.update_time);
+				result.push({
+					id: mediaId,
+					title: this.pickString(firstNewsItem, "title") ?? mediaId,
+					content: this.pickString(firstNewsItem, "content") ?? "",
+					status: "draft",
+					publishedAt: updateTime ? updateTime * 1000 : undefined,
+				});
+			}
+
+			return result;
+		} catch {
+			return [];
+		}
 	}
 
 	async articleDetail(articleId: string): Promise<Article | null> {
-		void articleId;
-		return null;
+		const publishId = articleId.trim();
+		if (!publishId) return null;
+
+		try {
+			const statusSnapshot = await this.getPublishStatus(publishId);
+			const detail = this.extractFirstArticleDetail(statusSnapshot.payload);
+			if (!detail) return null;
+
+			const publishTimeSeconds = this.toNumber(detail.publish_time);
+			return {
+				id: publishId,
+				title: this.pickString(detail, "title") ?? publishId,
+				content: this.pickString(detail, "content") ?? "",
+				status: statusSnapshot.state === "success" ? "published" : "draft",
+				publishedAt: publishTimeSeconds ? publishTimeSeconds * 1000 : undefined,
+			};
+		} catch {
+			return null;
+		}
 	}
 
 	async articleTags(articleId: string): Promise<string[]> {
@@ -1120,14 +1417,14 @@ export default class WechatAccountService extends AbstractAccountService {
 
 			const normalized = this.normalizeImageUrl(imageData);
 			if (normalized && !normalized.startsWith("data:")) {
-				const uploadedUrl = await this.uploadImageBySourceUrl(normalized);
+				const uploadedUrl = await this.uploadContentImageBySourceUrl(normalized);
 				return { success: true, url: uploadedUrl, message: "Image uploaded successfully" };
 			}
 
 			const source = normalized?.startsWith("data:")
 				? normalized
 				: `data:image/jpeg;base64,${imageData.trim()}`;
-			const uploadedUrl = await this.uploadImageBySourceUrl(source);
+			const uploadedUrl = await this.uploadContentImageBySourceUrl(source);
 			return { success: true, url: uploadedUrl, message: "Image uploaded successfully" };
 		} catch (error) {
 			return {

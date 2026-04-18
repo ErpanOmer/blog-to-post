@@ -235,7 +235,9 @@ export async function getPlatformAccount(id: string): Promise<PlatformAccount> {
 
 export async function createPlatformAccount(payload: {
 	platform: PlatformType;
-	authToken?: string;
+	authToken?: string | null;
+	appId?: string | null;
+	appSecret?: string | null;
 	description?: string;
 }): Promise<PlatformAccount> {
 	const response = await fetch("/api/accounts", {
@@ -248,7 +250,13 @@ export async function createPlatformAccount(payload: {
 
 export async function updatePlatformAccount(
 	id: string,
-	payload: Partial<Omit<PlatformAccount, "id" | "platform" | "createdAt" | "updatedAt">>,
+	payload: (
+		Partial<Omit<PlatformAccount, "id" | "platform" | "createdAt" | "updatedAt">>
+		& {
+			appId?: string | null;
+			appSecret?: string | null;
+		}
+	),
 ): Promise<PlatformAccount> {
 	return parseJson<PlatformAccount>(
 		await fetch(`/api/accounts/${id}`, {
@@ -368,6 +376,5 @@ export async function getAccountStatistics(platform?: PlatformType): Promise<Acc
 export async function getPlatformAccountStatistics(accountId: string): Promise<AccountStatistics> {
 	return parseJson<AccountStatistics>(await fetch(`/api/accounts/${accountId}/statistics`));
 }
-
 
 
