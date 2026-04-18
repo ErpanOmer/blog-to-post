@@ -13,6 +13,23 @@ import type {
 } from "@/worker/types/publications";
 import type { PlatformType } from "@/worker/types";
 
+let publishIdColumnEnsured = false;
+
+async function ensureArticlePublicationsPublishIdColumn(db: D1Database): Promise<void> {
+	if (publishIdColumnEnsured) return;
+	try {
+		await db.prepare("ALTER TABLE article_publications ADD COLUMN publishId TEXT").run();
+	} catch (error) {
+		const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+		const alreadyExists = message.includes("duplicate column name")
+			|| message.includes("already exists");
+		if (!alreadyExists) {
+			throw error;
+		}
+	}
+	publishIdColumnEnsured = true;
+}
+
 // ==================== Article Publication Operations ====================
 
 export async function createArticlePublication(
@@ -27,6 +44,7 @@ export async function createArticlePublication(
     startedAt?: number;
   }
 ): Promise<ArticlePublication> {
+  await ensureArticlePublicationsPublishIdColumn(db);
   const now = Date.now();
   const publication: ArticlePublication = {
     ...payload,
@@ -70,6 +88,7 @@ export async function updateArticlePublication(
   id: string,
   updates: Partial<Pick<ArticlePublication, "status" | "draftId" | "publishId" | "publishedUrl" | "errorMessage" | "completedAt">>
 ): Promise<ArticlePublication | null> {
+  await ensureArticlePublicationsPublishIdColumn(db);
   const current = await getArticlePublication(db, id);
   if (!current) return null;
 

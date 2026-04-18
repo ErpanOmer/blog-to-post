@@ -14,7 +14,6 @@ import { randomDelay } from "@/worker/utils/helpers";
 
 interface SegmentFaultResolvedContent {
 	markdownContent: string;
-	tagIds: number[];
 	coverUrl: string | null;
 }
 
@@ -31,7 +30,6 @@ const SEGMENTFAULT_GATEWAY_ME_PATH = "/user/@me";
 const SEGMENTFAULT_GATEWAY_DRAFT_PATH = "/draft";
 const SEGMENTFAULT_GATEWAY_ARTICLE_PATH = "/article";
 const SEGMENTFAULT_GATEWAY_IMAGE_PATH = "/image";
-const SEGMENTFAULT_GATEWAY_TAGS_PATH = "/tags";
 const SEGMENTFAULT_REFERER = "https://segmentfault.com/";
 const SEGMENTFAULT_DEFAULT_TAG_ID = 1040000000089899;
 
@@ -545,91 +543,8 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 		return uploadedImage;
 	}
 
-	private resolveRawTagNames(article: SharedArticle): string[] {
-		const rawTags = article.tags as unknown;
-		if (Array.isArray(rawTags)) {
-			return [...new Set(
-				rawTags
-					.map((tag) => (typeof tag === "string" ? tag.trim() : ""))
-					.filter((tag) => tag.length > 0),
-			)];
-		}
-		if (typeof rawTags === "string") {
-			return [...new Set(
-				rawTags
-					.split(/[,\uFF0C\u3001|]/)
-					.map((tag) => tag.trim())
-					.filter((tag) => tag.length > 0),
-			)];
-		}
-		return [];
-	}
-
-	private async resolveTagIds(tagNames: string[]): Promise<number[]> {
-		return [];
-		if (tagNames.length === 0) return [];
-		const ids: number[] = [];
-
-		for (const tagName of tagNames) {
-			try {
-				const raw = await this.requestGateway<unknown>(
-					SEGMENTFAULT_GATEWAY_TAGS_PATH,
-					"GET",
-					undefined,
-					{
-						query: "search",
-						q: tagName,
-					},
-				);
-				const unwrapped = this.unwrapGatewayPayload(raw);
-				const record = this.toRecord(unwrapped);
-				const rows = Array.isArray(record?.rows) ? record.rows : [];
-
-				let matchedId: number | null = null;
-				for (const row of rows) {
-					const rowRecord = this.toRecord(row);
-					const name = this.pickString(rowRecord, "name");
-					if (!name) continue;
-					if (name.toLowerCase() === tagName.toLowerCase()) {
-						matchedId = this.toNumber(rowRecord?.id);
-						break;
-					}
-				}
-
-				if (matchedId === null && rows.length > 0) {
-					const firstRow = this.toRecord(rows[0]);
-					matchedId = this.toNumber(firstRow?.id);
-				}
-
-				if (matchedId !== null) {
-					ids.push(matchedId);
-				} else {
-					await this.tracePublish({
-						stage: "segmentfault_tag_not_found",
-						level: "warn",
-						message: "SegmentFault tag id not found, skip tag",
-						metadata: { tagName },
-					});
-				}
-			} catch (error) {
-				await this.tracePublish({
-					stage: "segmentfault_tag_resolve_failed",
-					level: "warn",
-					message: "SegmentFault tag resolve failed, skip tag",
-					metadata: {
-						tagName,
-						error: error instanceof Error ? error.message : "unknown",
-					},
-				});
-			}
-		}
-
-		return [...new Set(ids)];
-	}
-
-	private ensureTagIds(tagIds: number[]): number[] {
-		const unique = [...new Set(tagIds.filter((id) => Number.isFinite(id) && id > 0))];
-		return unique.length > 0 ? unique : [SEGMENTFAULT_DEFAULT_TAG_ID];
+	private getFixedTagIds(): number[] {
+		return [SEGMENTFAULT_DEFAULT_TAG_ID];
 	}
 
 	private async resolveCoverImage(article: SharedArticle): Promise<string | null> {
@@ -695,15 +610,10 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 			this.imageUrlCache,
 		);
 
-		const tagNames = this.resolveRawTagNames(article);
-		const [tagIds, coverUrl] = await Promise.all([
-			this.resolveTagIds(tagNames),
-			this.resolveCoverImage(article),
-		]);
+		const coverUrl = await this.resolveCoverImage(article);
 
 		return {
 			markdownContent: replacedMarkdown,
-			tagIds: this.ensureTagIds(tagIds),
 			coverUrl,
 		};
 	}
@@ -711,8 +621,7 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 	private buildDraftPayload(article: SharedArticle, content: SegmentFaultResolvedContent): Record<string, unknown> {
 		return {
 			title: article.title,
-			// tags: this.ensureTagIds(content.tagIds),
-			tags: [],
+			tags: this.getFixedTagIds(),
 			text: content.markdownContent,
 			object_id: "",
 			type: "article",
@@ -728,8 +637,7 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 	): Record<string, unknown> {
 		const parsedDraftId = this.toNumber(draftId) ?? draftId;
 		return {
-			// tags: this.ensureTagIds(content.tagIds),
-			tags: [],
+			tags: this.getFixedTagIds(),
 			title: article.title,
 			text: content.markdownContent,
 			draft_id: parsedDraftId,

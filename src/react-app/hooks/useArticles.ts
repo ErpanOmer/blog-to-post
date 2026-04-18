@@ -6,7 +6,7 @@ import {
   updateArticle as apiUpdateArticle,
   deleteArticle as apiDeleteArticle,
 } from "@/react-app/api";
-import { notify } from "@/react-app/components/NotificationSystem";
+import { notify } from "@/react-app/services/notification-service";
 
 export function useArticles() {
   const [articles, setArticles] = useState<Article[]>([]);

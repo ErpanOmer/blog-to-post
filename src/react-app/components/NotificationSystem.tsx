@@ -1,24 +1,18 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { CheckCircle2, AlertCircle, Info, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-export type NotificationType = "success" | "error" | "info" | "loading";
-
-export interface Notification {
-  id: string;
-  type: NotificationType;
-  title: string;
-  message?: string;
-  duration?: number;
-  showSystemNotification?: boolean;
-}
+import {
+	notificationManager,
+	type Notification,
+	type NotificationType,
+} from "@/react-app/services/notification-service";
 
 interface NotificationItemProps {
   notification: Notification;
   onRemove: (id: string) => void;
 }
 
-const notificationConfig: Record<NotificationType, { icon: React.ReactNode; bgColor: string; borderColor: string; textColor: string }> = {
+const notificationConfig: Record<NotificationType, { icon: ReactNode; bgColor: string; borderColor: string; textColor: string }> = {
   success: {
     icon: <CheckCircle2 className="h-4 w-4" />,
     bgColor: "bg-emerald-50",
@@ -83,128 +77,6 @@ function NotificationItem({ notification, onRemove }: NotificationItemProps) {
     </div>
   );
 }
-
-// 全局通知管理
-class NotificationManager {
-  private listeners: ((notifications: Notification[]) => void)[] = [];
-  private notifications: Notification[] = [];
-
-  subscribe(listener: (notifications: Notification[]) => void) {
-    this.listeners.push(listener);
-    return () => {
-      this.listeners = this.listeners.filter((l) => l !== listener);
-    };
-  }
-
-  private notify() {
-    this.listeners.forEach((listener) => listener([...this.notifications]));
-  }
-
-  add(notification: Omit<Notification, "id">) {
-    const id = Math.random().toString(36).substring(2, 9);
-    const newNotification = { ...notification, id };
-    this.notifications = [...this.notifications, newNotification];
-    this.notify();
-
-    // 显示系统通知
-    if (notification.showSystemNotification && "Notification" in window) {
-      if (Notification.permission === "granted") {
-        new Notification(notification.title, {
-          body: notification.message,
-          icon: "/favicon.ico",
-        });
-      } else if (Notification.permission !== "denied") {
-        Notification.requestPermission().then((permission) => {
-          if (permission === "granted") {
-            new Notification(notification.title, {
-              body: notification.message,
-              icon: "/favicon.ico",
-            });
-          }
-        });
-      }
-    }
-
-    return id;
-  }
-
-  remove(id: string) {
-    this.notifications = this.notifications.filter((n) => n.id !== id);
-    this.notify();
-  }
-
-  update(id: string, updates: Partial<Notification>) {
-    this.notifications = this.notifications.map((n) =>
-      n.id === id ? { ...n, ...updates } : n
-    );
-    this.notify();
-  }
-}
-
-export const notificationManager = new NotificationManager();
-
-export async function requestNotificationPermission() {
-  if (!("Notification" in window)) {
-    console.warn("此浏览器不支持桌面通知");
-    return false;
-  }
-
-  if (Notification.permission === "granted") {
-    return true;
-  }
-
-  if (Notification.permission !== "denied") {
-    const permission = await Notification.requestPermission();
-    return permission === "granted";
-  }
-
-  return false;
-}
-
-// 便捷方法
-export const notify = {
-  success: (title: string, message?: string, options?: { duration?: number; showSystemNotification?: boolean }) => {
-    return notificationManager.add({
-      type: "success",
-      title,
-      message,
-      duration: options?.duration ?? 5000,
-      showSystemNotification: options?.showSystemNotification ?? false,
-    });
-  },
-  error: (title: string, message?: string, options?: { duration?: number; showSystemNotification?: boolean }) => {
-    return notificationManager.add({
-      type: "error",
-      title,
-      message,
-      duration: options?.duration ?? 8000,
-      showSystemNotification: options?.showSystemNotification ?? false,
-    });
-  },
-  info: (title: string, message?: string, options?: { duration?: number; showSystemNotification?: boolean }) => {
-    return notificationManager.add({
-      type: "info",
-      title,
-      message,
-      duration: options?.duration ?? 5000,
-      showSystemNotification: options?.showSystemNotification ?? false,
-    });
-  },
-  loading: (title: string, message?: string) => {
-    return notificationManager.add({
-      type: "loading",
-      title,
-      message,
-      duration: 0, // 不会自动关闭
-    });
-  },
-  remove: (id: string) => {
-    notificationManager.remove(id);
-  },
-  update: (id: string, updates: Partial<Notification>) => {
-    notificationManager.update(id, updates);
-  },
-};
 
 // 通知容器组件
 export function NotificationContainer() {

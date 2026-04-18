@@ -8,7 +8,7 @@ import gemoji from "@bytemd/plugin-gemoji";
 import math from "@bytemd/plugin-math";
 import { useArticles } from "./useArticles";
 import { createEmptyArticle } from "@/react-app/utils/articleDefaults";
-import { notify, requestNotificationPermission } from "@/react-app/components/NotificationSystem";
+import { notify, requestNotificationPermission } from "@/react-app/services/notification-service";
 import { createPublishTask, getProviderStatus } from "@/react-app/api";
 import type { Article } from "@/react-app/types";
 import type { AccountConfig } from "@/react-app/types/publications";

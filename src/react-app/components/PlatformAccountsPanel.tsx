@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
@@ -46,7 +46,7 @@ export function PlatformAccountsPanel() {
     onConfirm: () => {},
   });
 
-  const fetchAccounts = async () => {
+  const fetchAccounts = useCallback(async () => {
     setLoading(true);
     try {
       const platform = filter === "all" ? undefined : filter;
@@ -57,25 +57,27 @@ export function PlatformAccountsPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
 
   useEffect(() => {
     void fetchAccounts();
-  }, [filter]);
+  }, [fetchAccounts]);
 
   const handleCreate = async (data: { platform: PlatformType; authToken?: string; description?: string }) => {
     try {
       await createPlatformAccount(data);
       toast.success("账号添加成功");
       await fetchAccounts();
+      return true;
     } catch (error) {
       console.error("创建账号失败", error);
       toast.error("创建失败，请稍后重试");
+      return false;
     }
   };
 
   const handleUpdate = async (data: { platform: PlatformType; authToken?: string; description?: string }) => {
-    if (!editingAccount) return;
+    if (!editingAccount) return false;
     try {
       await updatePlatformAccount(editingAccount.id, {
         authToken: data.authToken,
@@ -83,9 +85,11 @@ export function PlatformAccountsPanel() {
       });
       toast.success("账号更新成功");
       await fetchAccounts();
+      return true;
     } catch (error) {
       console.error("更新账号失败", error);
       toast.error("保存失败，请稍后重试");
+      return false;
     }
   };
 
