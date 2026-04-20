@@ -12,21 +12,7 @@ import type {
 import type { Article as SharedArticle } from "@/shared/types";
 import { marked } from "marked";
 import { randomDelay } from "@/worker/utils/helpers";
-import hljs from "highlight.js/lib/core";
-import bashLanguage from "highlight.js/lib/languages/bash";
-import cssLanguage from "highlight.js/lib/languages/css";
-import javascriptLanguage from "highlight.js/lib/languages/javascript";
-import jsonLanguage from "highlight.js/lib/languages/json";
-import lessLanguage from "highlight.js/lib/languages/less";
-import markdownLanguage from "highlight.js/lib/languages/markdown";
-import plaintextLanguage from "highlight.js/lib/languages/plaintext";
-import scssLanguage from "highlight.js/lib/languages/scss";
-import shellLanguage from "highlight.js/lib/languages/shell";
-import sqlLanguage from "highlight.js/lib/languages/sql";
-import typescriptLanguage from "highlight.js/lib/languages/typescript";
-import handlebarsLanguage from "highlight.js/lib/languages/handlebars";
-import xmlLanguage from "highlight.js/lib/languages/xml";
-import yamlLanguage from "highlight.js/lib/languages/yaml";
+import { highlightHtmlCodeBlocks } from "@/worker/utils/html-code-highlight";
 
 interface WechatApiCredential {
 	appId: string;
@@ -118,7 +104,7 @@ const WECHAT_ARTICLE_INLINE_STYLE_MAP: ReadonlyArray<{
   },
   {
     tagName: "code",
-    style: "font-size:14px;padding:2px 4px;border-radius:4px;background:rgba(27,31,35,.05);font-family:monospace;color:#35b378;"
+    style: "font-size:15px;padding:2px 4px;border-radius:4px;background:rgba(27,31,35,.05);font-family:monospace;color:#35b378;"
   },
   {
     tagName: "pre",
@@ -166,13 +152,6 @@ const WECHAT_ARTICLE_INLINE_STYLE_MAP: ReadonlyArray<{
   }
 ];
 
-const WECHAT_CODE_BLOCK_REGEX = /<pre\b([^>]*)>\s*<code\b([^>]*)>([\s\S]*?)<\/code>\s*<\/pre>/gi;
-const WECHAT_CLASS_ATTR_REGEX = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
-const WECHAT_STYLE_ATTR_REGEX = /\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
-const WECHAT_DATA_LANG_ATTR_REGEX = /\bdata-(?:lang|language)\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
-const WECHAT_LANG_ATTR_REGEX = /\blang(?:uage)?\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
-const WECHAT_LANGUAGE_CLASS_REGEX = /^(?:language|lang)-(.+)$/i;
-
 const WECHAT_CODE_WRAPPER_STYLE =
 	"margin:16px 0;border:1px solid #30363d;border-radius:10px;background:#0d1117;overflow:hidden;";
 const WECHAT_CODE_HEADER_STYLE =
@@ -184,149 +163,19 @@ const WECHAT_CODE_PRE_STYLE =
 const WECHAT_CODE_TAG_STYLE =
 	"display:block;margin:0;padding:0;background:transparent;color:inherit;white-space:inherit;word-break:normal;line-height:inherit;font-size:inherit;font-family:inherit;";
 
-const WECHAT_CODE_LANGUAGE_ALIAS_MAP: Record<string, string> = {
-	js: "javascript",
-	javascript: "javascript",
-	node: "javascript",
-	nodejs: "javascript",
-	cjs: "javascript",
-	mjs: "javascript",
-	jsx: "javascript",
-	ts: "typescript",
-	typescript: "typescript",
-	tsx: "typescript",
-	html: "xml",
-	htm: "xml",
-	xml: "xml",
-	svg: "xml",
-	vue: "xml",
-	css: "css",
-	scss: "scss",
-	less: "less",
-	shell: "shell",
-	sh: "shell",
-	bash: "bash",
-	zsh: "bash",
-	fish: "bash",
-	json: "json",
-	yaml: "yaml",
-	yml: "yaml",
-	sql: "sql",
-	mysql: "sql",
-	postgresql: "sql",
-	pgsql: "sql",
-	postgres: "sql",
-	liquid: "handlebars",
-	hbs: "handlebars",
-	handlebars: "handlebars",
-	md: "markdown",
-	markdown: "markdown",
-	text: "plaintext",
-	txt: "plaintext",
-	plain: "plaintext",
-	plaintext: "plaintext",
-};
-
-const WECHAT_CODE_LANGUAGE_DISPLAY_MAP: Record<string, string> = {
-	javascript: "JavaScript",
-	typescript: "TypeScript",
-	xml: "HTML/XML",
-	css: "CSS",
-	scss: "SCSS",
-	less: "Less",
-	shell: "Shell",
-	bash: "Bash",
-	json: "JSON",
-	yaml: "YAML",
-	sql: "SQL",
-	handlebars: "Liquid/Handlebars",
-	markdown: "Markdown",
-	plaintext: "Plain Text",
-};
-
-const WECHAT_CODE_AUTO_DETECT_LANGUAGES = [
-	"javascript",
-	"typescript",
-	"xml",
-	"css",
-	"scss",
-	"less",
-	"shell",
-	"bash",
-	"sql",
-	"handlebars",
-	"json",
-	"yaml",
-	"markdown",
-	"plaintext",
-];
-
-const WECHAT_GITHUB_DARK_TOKEN_STYLE_MAP: Record<string, string> = {
-	comment: "color:#8b949e;font-style:italic;",
-	quote: "color:#8b949e;font-style:italic;",
-	doctag: "color:#8b949e;font-style:italic;",
-	keyword: "color:#ff7b72;",
-	"selector-tag": "color:#7ee787;",
-	"selector-id": "color:#d2a8ff;",
-	"selector-class": "color:#d2a8ff;",
-	"selector-attr": "color:#79c0ff;",
-	"selector-pseudo": "color:#d2a8ff;",
-	attr: "color:#79c0ff;",
-	name: "color:#79c0ff;",
-	tag: "color:#7ee787;",
-	type: "color:#ff7b72;",
-	title: "color:#d2a8ff;",
-	function: "color:#d2a8ff;",
-	"function_": "color:#d2a8ff;",
-	class_: "color:#ffa657;",
-	params: "color:#c9d1d9;",
-	built_in: "color:#79c0ff;",
-	literal: "color:#79c0ff;",
-	number: "color:#79c0ff;",
-	symbol: "color:#79c0ff;",
-	variable: "color:#ffa657;",
-	"template-variable": "color:#ffa657;",
-	string: "color:#a5d6ff;",
-	regexp: "color:#a5d6ff;",
-	subst: "color:#c9d1d9;",
-	meta: "color:#8b949e;",
-	"meta-keyword": "color:#ff7b72;",
-	"meta-string": "color:#a5d6ff;",
-	section: "color:#d2a8ff;font-weight:700;",
-	bullet: "color:#f2cc60;",
-	emphasis: "font-style:italic;",
-	strong: "font-weight:700;",
-	addition: "color:#3fb950;",
-	deletion: "color:#f85149;",
-	link: "color:#79c0ff;text-decoration:underline;",
-};
-
-let wechatCodeHighlightRegistered = false;
-
-const ensureWechatHighlightLanguagesRegistered = (): void => {
-	if (wechatCodeHighlightRegistered) return;
-	hljs.registerLanguage("bash", bashLanguage);
-	hljs.registerLanguage("css", cssLanguage);
-	hljs.registerLanguage("javascript", javascriptLanguage);
-	hljs.registerLanguage("json", jsonLanguage);
-	hljs.registerLanguage("less", lessLanguage);
-	hljs.registerLanguage("markdown", markdownLanguage);
-	hljs.registerLanguage("plaintext", plaintextLanguage);
-	hljs.registerLanguage("scss", scssLanguage);
-	hljs.registerLanguage("shell", shellLanguage);
-	hljs.registerLanguage("sql", sqlLanguage);
-	hljs.registerLanguage("typescript", typescriptLanguage);
-	hljs.registerLanguage("handlebars", handlebarsLanguage);
-	hljs.registerLanguage("xml", xmlLanguage);
-	hljs.registerLanguage("yaml", yamlLanguage);
-	wechatCodeHighlightRegistered = true;
-};
+const WECHAT_HEADER_SLOT_PLACEHOLDER = "{{WECHAT_HEADER_SLOT}}";
+const WECHAT_FOOTER_SLOT_PLACEHOLDER = "{{WECHAT_FOOTER_SLOT}}";
+const WECHAT_HEADER_COVER_IMAGE_STYLE =
+	"display:block;width:100%;max-width:100%;height:auto;border-radius:8px;";
 
 // 640x360 white JPEG generated by ffmpeg, validated against WeChat `material/add_material?type=thumb`.
 const WECHAT_FALLBACK_THUMB_DATA_URI =
 	"data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xABLAAEBAAAAAAAAAAAAAAAAAAAABwEBAAAAAAAAAAAAAAAAAAAAABABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIAWgCgAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AL+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/2Q==";
 
 export default class WechatAccountService extends AbstractAccountService {
+	static readonly HEADER_SLOT_PLACEHOLDER = WECHAT_HEADER_SLOT_PLACEHOLDER;
+	static readonly FOOTER_SLOT_PLACEHOLDER = WECHAT_FOOTER_SLOT_PLACEHOLDER;
+
 	private credential: WechatApiCredential | null;
 	private accessTokenCache: { token: string; expiresAt: number } | null = null;
 	private imageUrlCache = new Map<string, string>();
@@ -903,184 +752,66 @@ export default class WechatAccountService extends AbstractAccountService {
 		});
 	}
 
-	private extractAttributeValue(attrs: string, regex: RegExp): string | null {
-		const match = regex.exec(attrs);
-		if (!match) return null;
-		const raw = match[1] ?? match[2] ?? "";
-		const value = raw.trim();
-		return value || null;
-	}
-
-	private extractClassNames(attrs: string): string[] {
-		const classValue = this.extractAttributeValue(attrs, WECHAT_CLASS_ATTR_REGEX);
-		if (!classValue) return [];
-		return classValue
-			.split(/\s+/)
-			.map((item) => item.trim())
-			.filter(Boolean);
-	}
-
-	private normalizeCodeLanguage(rawLanguage: string | null): string | null {
-		if (!rawLanguage) return null;
-
-		let normalized = rawLanguage.trim().toLowerCase();
-		normalized = normalized
-			.replace(/^language[-:_]/, "")
-			.replace(/^lang[-:_]/, "")
-			.split(/[\s,;|]+/)[0]
-			.trim();
-		if (!normalized) return null;
-
-		const aliased = WECHAT_CODE_LANGUAGE_ALIAS_MAP[normalized] ?? normalized;
-		if (!hljs.getLanguage(aliased)) return null;
-		return aliased;
-	}
-
-	private resolveCodeLanguageFromAttributes(preAttrs: string, codeAttrs: string): string | null {
-		const attrSources = [codeAttrs, preAttrs];
-		for (const attrs of attrSources) {
-			const fromDataLang = this.extractAttributeValue(attrs, WECHAT_DATA_LANG_ATTR_REGEX);
-			const normalizedFromDataLang = this.normalizeCodeLanguage(fromDataLang);
-			if (normalizedFromDataLang) return normalizedFromDataLang;
-
-			const fromLang = this.extractAttributeValue(attrs, WECHAT_LANG_ATTR_REGEX);
-			const normalizedFromLang = this.normalizeCodeLanguage(fromLang);
-			if (normalizedFromLang) return normalizedFromLang;
-
-			for (const className of this.extractClassNames(attrs)) {
-				const languageClassMatch = WECHAT_LANGUAGE_CLASS_REGEX.exec(className);
-				const languageCandidate = languageClassMatch ? languageClassMatch[1] : className;
-				const normalized = this.normalizeCodeLanguage(languageCandidate);
-				if (normalized) return normalized;
-			}
-		}
-
-		return null;
-	}
-
-	private decodeHtmlEntities(value: string): string {
-		return value
-			.replace(/&lt;/g, "<")
-			.replace(/&gt;/g, ">")
-			.replace(/&quot;/g, "\"")
-			.replace(/&#39;/g, "'")
-			.replace(/&amp;/g, "&")
-			.replace(/&nbsp;/g, " ")
-			.replace(/&#x([0-9a-fA-F]+);/g, (_full, hex: string) => {
-				const codePoint = Number.parseInt(hex, 16);
-				return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : _full;
-			})
-			.replace(/&#(\d+);/g, (_full, numeric: string) => {
-				const codePoint = Number.parseInt(numeric, 10);
-				return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : _full;
-			});
-	}
-
-	private stripHtmlTags(value: string): string {
-		return value
-			.replace(/<br\s*\/?>/gi, "\n")
-			.replace(/<\/?[^>]+>/g, "");
-	}
-
-	private escapeHtml(value: string): string {
+	private escapeHtmlAttribute(value: string): string {
 		return value
 			.replace(/&/g, "&amp;")
-			.replace(/</g, "&lt;")
-			.replace(/>/g, "&gt;")
 			.replace(/"/g, "&quot;")
-			.replace(/'/g, "&#39;");
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;");
 	}
 
-	private resolveCodeLanguageLabel(language: string): string {
-		const normalized = language.trim().toLowerCase();
-		if (WECHAT_CODE_LANGUAGE_DISPLAY_MAP[normalized]) {
-			return WECHAT_CODE_LANGUAGE_DISPLAY_MAP[normalized];
+	private buildWechatDefaultHeaderHtml(article: SharedArticle): string {
+		const rawCover = article.coverImage?.trim() ?? "";
+		const normalizedCover = this.normalizeImageUrl(rawCover);
+		if (!normalizedCover) return "";
+
+		const safeAlt = this.escapeHtmlAttribute(article.title || "cover");
+		return `<figure data-wechat-slot="header" style="margin:0 0 18px;"><img src="${normalizedCover}" alt="${safeAlt}" style="${WECHAT_HEADER_COVER_IMAGE_STYLE}" /></figure>`;
+	}
+
+	private buildWechatDefaultFooterHtml(): string {
+		return "";
+	}
+
+	private fillWechatSlotPlaceholder(template: string, placeholder: string, value: string): string {
+		return template.split(placeholder).join(value);
+	}
+
+	private injectWechatHeaderFooterSlots(article: SharedArticle, htmlContent: string): string {
+		if (!htmlContent.trim()) return htmlContent;
+
+		let templatedContent = htmlContent;
+		if (!templatedContent.includes(WECHAT_HEADER_SLOT_PLACEHOLDER)) {
+			templatedContent = `${WECHAT_HEADER_SLOT_PLACEHOLDER}\n${templatedContent}`;
 		}
-		if (normalized.length <= 4) return normalized.toUpperCase();
-		return normalized.charAt(0).toUpperCase() + normalized.slice(1);
-	}
-
-	private inlineHighlightTokenStyles(highlightedHtml: string): string {
-		return highlightedHtml.replace(/<span\b([^>]*?)>/gi, (fullMatch, rawAttrs: string) => {
-			const classNames = this.extractClassNames(rawAttrs);
-			if (classNames.length === 0) return fullMatch;
-
-			let tokenStyle = "";
-			for (const className of classNames) {
-				const normalizedClass = className.startsWith("hljs-")
-					? className.slice(5)
-					: className;
-				const style = WECHAT_GITHUB_DARK_TOKEN_STYLE_MAP[normalizedClass];
-				if (!style) continue;
-				tokenStyle = this.mergeInlineStyle(tokenStyle, style);
-			}
-
-			if (!tokenStyle) return fullMatch;
-
-			const styleMatch = WECHAT_STYLE_ATTR_REGEX.exec(rawAttrs);
-			let nextAttrs = rawAttrs;
-			if (styleMatch) {
-				const currentStyle = styleMatch[1] ?? styleMatch[2] ?? "";
-				const mergedStyle = this.mergeInlineStyle(currentStyle, tokenStyle);
-				nextAttrs = rawAttrs.replace(styleMatch[0], ` style="${mergedStyle}"`);
-			} else {
-				nextAttrs = `${rawAttrs} style="${tokenStyle}"`;
-			}
-
-			return `<span${nextAttrs}>`;
-		});
-	}
-
-	private highlightCodeToGithubHtml(rawCode: string, explicitLanguage: string | null): {
-		html: string;
-		language: string;
-	} {
-		try {
-			if (explicitLanguage) {
-				const highlighted = hljs.highlight(rawCode, {
-					language: explicitLanguage,
-					ignoreIllegals: true,
-				});
-				return {
-					html: highlighted.value,
-					language: explicitLanguage,
-				};
-			}
-
-			const autoHighlighted = hljs.highlightAuto(rawCode, WECHAT_CODE_AUTO_DETECT_LANGUAGES);
-			const normalizedAutoLanguage = this.normalizeCodeLanguage(autoHighlighted.language ?? null) ?? "plaintext";
-			return {
-				html: autoHighlighted.value,
-				language: normalizedAutoLanguage,
-			};
-		} catch {
-			return {
-				html: this.escapeHtml(rawCode),
-				language: explicitLanguage ?? "plaintext",
-			};
+		if (!templatedContent.includes(WECHAT_FOOTER_SLOT_PLACEHOLDER)) {
+			templatedContent = `${templatedContent}\n${WECHAT_FOOTER_SLOT_PLACEHOLDER}`;
 		}
+
+		const defaultHeader = this.buildWechatDefaultHeaderHtml(article);
+		const defaultFooter = this.buildWechatDefaultFooterHtml();
+		let resolvedContent = this.fillWechatSlotPlaceholder(
+			templatedContent,
+			WECHAT_HEADER_SLOT_PLACEHOLDER,
+			defaultHeader,
+		);
+		resolvedContent = this.fillWechatSlotPlaceholder(
+			resolvedContent,
+			WECHAT_FOOTER_SLOT_PLACEHOLDER,
+			defaultFooter,
+		);
+
+		return resolvedContent.trim();
 	}
 
 	private applyGithubCodeHighlightToHtml(htmlContent: string): string {
-		if (!htmlContent.trim()) return htmlContent;
-		ensureWechatHighlightLanguagesRegistered();
-
-		return htmlContent.replace(
-			WECHAT_CODE_BLOCK_REGEX,
-			(_fullMatch, preAttrs: string | undefined, codeAttrs: string | undefined, codeInnerHtml: string | undefined) => {
-				const resolvedPreAttrs = preAttrs ?? "";
-				const resolvedCodeAttrs = codeAttrs ?? "";
-				const resolvedCodeHtml = codeInnerHtml ?? "";
-
-				const explicitLanguage = this.resolveCodeLanguageFromAttributes(resolvedPreAttrs, resolvedCodeAttrs);
-				const plainCode = this.decodeHtmlEntities(this.stripHtmlTags(resolvedCodeHtml));
-				const highlighted = this.highlightCodeToGithubHtml(plainCode, explicitLanguage);
-				const highlightedWithTokenStyle = this.inlineHighlightTokenStyles(highlighted.html);
-				const languageLabel = this.resolveCodeLanguageLabel(explicitLanguage ?? highlighted.language);
-
-				return `<div style="${WECHAT_CODE_WRAPPER_STYLE}"><div style="${WECHAT_CODE_HEADER_STYLE}"><span style="${WECHAT_CODE_LANGUAGE_LABEL_STYLE}">${this.escapeHtml(languageLabel)}</span></div><pre style="${WECHAT_CODE_PRE_STYLE}"><code style="${WECHAT_CODE_TAG_STYLE}">${highlightedWithTokenStyle}</code></pre></div>`;
-			},
-		);
+		return highlightHtmlCodeBlocks(htmlContent, {
+			wrapperStyle: WECHAT_CODE_WRAPPER_STYLE,
+			headerStyle: WECHAT_CODE_HEADER_STYLE,
+			languageLabelStyle: WECHAT_CODE_LANGUAGE_LABEL_STYLE,
+			preStyle: WECHAT_CODE_PRE_STYLE,
+			codeStyle: WECHAT_CODE_TAG_STYLE,
+		});
 	}
 
 	private resolveDigest(article: SharedArticle, htmlContent: string): string {
@@ -1113,6 +844,7 @@ export default class WechatAccountService extends AbstractAccountService {
 		if (!htmlContent) {
 			throw new Error("Article content is empty, cannot publish to WeChat");
 		}
+		htmlContent = this.injectWechatHeaderFooterSlots(article, htmlContent);
 
 		const imageSources = this.collectImageUrlsFromMarkdownAndHtml(
 			article.content ?? "",
