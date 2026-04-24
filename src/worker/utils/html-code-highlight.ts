@@ -1,4 +1,5 @@
 import hljs from "highlight.js/lib/core";
+import hljsFull from "highlight.js";
 import bashLanguage from "highlight.js/lib/languages/bash";
 import cssLanguage from "highlight.js/lib/languages/css";
 import handlebarsLanguage from "highlight.js/lib/languages/handlebars";
@@ -13,6 +14,45 @@ import sqlLanguage from "highlight.js/lib/languages/sql";
 import typescriptLanguage from "highlight.js/lib/languages/typescript";
 import xmlLanguage from "highlight.js/lib/languages/xml";
 import yamlLanguage from "highlight.js/lib/languages/yaml";
+import Prism from "prismjs";
+import "prismjs/components/prism-markup.js";
+import "prismjs/components/prism-markup-templating.js";
+import "prismjs/components/prism-css.js";
+import "prismjs/components/prism-clike.js";
+import "prismjs/components/prism-javascript.js";
+import "prismjs/components/prism-jsx.js";
+import "prismjs/components/prism-typescript.js";
+import "prismjs/components/prism-tsx.js";
+import "prismjs/components/prism-json.js";
+import "prismjs/components/prism-json5.js";
+import "prismjs/components/prism-bash.js";
+import "prismjs/components/prism-shell-session.js";
+import "prismjs/components/prism-sql.js";
+import "prismjs/components/prism-python.js";
+import "prismjs/components/prism-java.js";
+import "prismjs/components/prism-c.js";
+import "prismjs/components/prism-cpp.js";
+import "prismjs/components/prism-csharp.js";
+import "prismjs/components/prism-go.js";
+import "prismjs/components/prism-rust.js";
+import "prismjs/components/prism-kotlin.js";
+import "prismjs/components/prism-swift.js";
+import "prismjs/components/prism-php.js";
+import "prismjs/components/prism-ruby.js";
+import "prismjs/components/prism-scala.js";
+import "prismjs/components/prism-dart.js";
+import "prismjs/components/prism-yaml.js";
+import "prismjs/components/prism-markdown.js";
+import "prismjs/components/prism-toml.js";
+import "prismjs/components/prism-docker.js";
+import "prismjs/components/prism-nginx.js";
+import "prismjs/components/prism-graphql.js";
+import "prismjs/components/prism-lua.js";
+import "prismjs/components/prism-powershell.js";
+import "prismjs/components/prism-less.js";
+import "prismjs/components/prism-scss.js";
+import "prismjs/components/prism-sass.js";
+import "prismjs/components/prism-liquid.js";
 
 const CODE_BLOCK_REGEX = /<pre\b([^>]*)>\s*<code\b([^>]*)>([\s\S]*?)<\/code>\s*<\/pre>/gi;
 const CLASS_ATTR_REGEX = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
@@ -62,6 +102,33 @@ export const FRONTEND_LANGUAGE_ALIAS_MAP: Record<string, string> = {
 	txt: "plaintext",
 	plain: "plaintext",
 	plaintext: "plaintext",
+};
+
+export const PRISM_LANGUAGE_ALIAS_MAP: Record<string, string> = {
+	plain: "none",
+	text: "none",
+	txt: "none",
+	plaintext: "none",
+	js: "javascript",
+	mjs: "javascript",
+	cjs: "javascript",
+	node: "javascript",
+	nodejs: "javascript",
+	ts: "typescript",
+	tsx: "tsx",
+	jsx: "jsx",
+	html: "markup",
+	htm: "markup",
+	xml: "markup",
+	svg: "markup",
+	vue: "markup",
+	yml: "yaml",
+	sh: "bash",
+	shell: "bash",
+	zsh: "bash",
+	ps1: "powershell",
+	md: "markdown",
+	dockerfile: "docker",
 };
 
 export const FRONTEND_LANGUAGE_DISPLAY_MAP: Record<string, string> = {
@@ -138,6 +205,48 @@ export const GITHUB_DARK_TOKEN_STYLE_MAP: Record<string, string> = {
 	link: "color:#79c0ff;text-decoration:underline;",
 };
 
+export const ATOM_ONE_DARK_TOKEN_STYLE_MAP: Record<string, string> = {
+	comment: "color:#5c6370;font-style:italic;",
+	quote: "color:#5c6370;font-style:italic;",
+	doctag: "color:#c678dd;",
+	keyword: "color:#c678dd;",
+	"selector-tag": "color:#e06c75;",
+	"selector-id": "color:#e06c75;",
+	"selector-class": "color:#e06c75;",
+	"selector-attr": "color:#d19a66;",
+	"selector-pseudo": "color:#56b6c2;",
+	attr: "color:#d19a66;",
+	name: "color:#e06c75;",
+	tag: "color:#e06c75;",
+	type: "color:#e5c07b;",
+	title: "color:#61afef;",
+	function: "color:#61afef;",
+	"function_": "color:#61afef;",
+	class_: "color:#e5c07b;",
+	params: "color:#abb2bf;",
+	built_in: "color:#e5c07b;",
+	literal: "color:#56b6c2;",
+	number: "color:#d19a66;",
+	symbol: "color:#56b6c2;",
+	variable: "color:#e06c75;",
+	"template-variable": "color:#e06c75;",
+	string: "color:#98c379;",
+	regexp: "color:#98c379;",
+	subst: "color:#abb2bf;",
+	meta: "color:#61afef;",
+	"meta-keyword": "color:#c678dd;",
+	"meta-string": "color:#98c379;",
+	section: "color:#61afef;font-weight:700;",
+	bullet: "color:#d19a66;",
+	emphasis: "font-style:italic;",
+	strong: "font-weight:700;",
+	addition: "color:#98c379;",
+	deletion: "color:#e06c75;",
+	link: "color:#61afef;text-decoration:underline;",
+	operator: "color:#56b6c2;",
+	punctuation: "color:#abb2bf;",
+};
+
 export interface HtmlCodeHighlightOptions {
 	wrapperStyle: string;
 	headerStyle: string;
@@ -148,6 +257,25 @@ export interface HtmlCodeHighlightOptions {
 	languageAliasMap?: Record<string, string>;
 	languageDisplayMap?: Record<string, string>;
 	autoDetectLanguages?: string[];
+}
+
+export interface HtmlPreCodeHighlightOptions {
+	languageAliasMap?: Record<string, string>;
+	autoDetectLanguages?: string[];
+	addHljsClass?: boolean;
+	preserveExistingCodeClasses?: boolean;
+	inlineTokenStyles?: boolean;
+	tokenStyleMap?: Record<string, string>;
+	preStyle?: string;
+	codeStyle?: string;
+}
+
+export interface HtmlPreCodePrismOptions {
+	languageAliasMap?: Record<string, string>;
+	preserveExistingCodeClasses?: boolean;
+	addPrismClass?: boolean;
+	preStyle?: string;
+	codeStyle?: string;
 }
 
 let highlightLanguagesRegistered = false;
@@ -261,6 +389,29 @@ const normalizeCodeLanguage = (
 	rawLanguage: string | null,
 	languageAliasMap: Record<string, string>,
 ): string | null => {
+	return normalizeCodeLanguageWithChecker(
+		rawLanguage,
+		languageAliasMap,
+		(language) => Boolean(hljs.getLanguage(language)),
+	);
+};
+
+const normalizePrismLanguage = (
+	rawLanguage: string | null,
+	languageAliasMap: Record<string, string>,
+): string | null => {
+	return normalizeCodeLanguageWithChecker(
+		rawLanguage,
+		languageAliasMap,
+		(language) => language === "none" || Boolean(Prism.languages[language]),
+	);
+};
+
+const normalizeCodeLanguageWithChecker = (
+	rawLanguage: string | null,
+	languageAliasMap: Record<string, string>,
+	isLanguageAvailable: (language: string) => boolean,
+): string | null => {
 	if (!rawLanguage) return null;
 
 	let normalized = rawLanguage.trim().toLowerCase();
@@ -272,7 +423,7 @@ const normalizeCodeLanguage = (
 	if (!normalized) return null;
 
 	const aliased = languageAliasMap[normalized] ?? normalized;
-	if (!hljs.getLanguage(aliased)) return null;
+	if (!isLanguageAvailable(aliased)) return null;
 	return aliased;
 };
 
@@ -380,6 +531,280 @@ const highlightCodeToGithubHtml = (
 			language: explicitLanguage ?? "plaintext",
 		};
 	}
+};
+
+const highlightCodeToPrismHtml = (
+	rawCode: string,
+	explicitLanguage: string | null,
+): {
+	html: string;
+	language: string;
+} => {
+	const normalizedLanguage = explicitLanguage ?? "none";
+	try {
+		if (normalizedLanguage === "none") {
+			return {
+				html: escapeHtml(rawCode),
+				language: "none",
+			};
+		}
+
+		const grammar = Prism.languages[normalizedLanguage];
+		if (!grammar) {
+			return {
+				html: escapeHtml(rawCode),
+				language: normalizedLanguage,
+			};
+		}
+
+		return {
+			html: Prism.highlight(rawCode, grammar, normalizedLanguage),
+			language: normalizedLanguage,
+		};
+	} catch {
+		return {
+			html: escapeHtml(rawCode),
+			language: normalizedLanguage,
+		};
+	}
+};
+
+const resolveCodeLanguageFromAttributesWithChecker = (
+	preAttrs: string,
+	codeAttrs: string,
+	languageAliasMap: Record<string, string>,
+	isLanguageAvailable: (language: string) => boolean,
+): string | null => {
+	const attrSources = [codeAttrs, preAttrs];
+	for (const attrs of attrSources) {
+		const fromDataLang = extractAttributeValue(attrs, DATA_LANG_ATTR_REGEX);
+		const normalizedFromDataLang = normalizeCodeLanguageWithChecker(
+			fromDataLang,
+			languageAliasMap,
+			isLanguageAvailable,
+		);
+		if (normalizedFromDataLang) return normalizedFromDataLang;
+
+		const fromLang = extractAttributeValue(attrs, LANG_ATTR_REGEX);
+		const normalizedFromLang = normalizeCodeLanguageWithChecker(
+			fromLang,
+			languageAliasMap,
+			isLanguageAvailable,
+		);
+		if (normalizedFromLang) return normalizedFromLang;
+
+		for (const className of extractClassNames(attrs)) {
+			const languageClassMatch = LANGUAGE_CLASS_REGEX.exec(className);
+			const languageCandidate = languageClassMatch ? languageClassMatch[1] : className;
+			const normalized = normalizeCodeLanguageWithChecker(
+				languageCandidate,
+				languageAliasMap,
+				isLanguageAvailable,
+			);
+			if (normalized) return normalized;
+		}
+	}
+
+	return null;
+};
+
+const upsertClassAttribute = (attrs: string, classNames: string[]): string => {
+	const uniqueClassNames = Array.from(
+		new Set(
+			classNames
+				.map((item) => item.trim())
+				.filter(Boolean),
+		),
+	);
+	const classValue = uniqueClassNames.join(" ");
+	const normalizedAttrs = attrs.trim();
+
+	if (!classValue) {
+		return normalizedAttrs ? ` ${normalizedAttrs}` : "";
+	}
+
+	if (!normalizedAttrs) {
+		return ` class="${classValue}"`;
+	}
+
+	const classPattern = /\bclass\s*=\s*(?:"[^"]*"|'[^']*')/i;
+	const nextAttrs = classPattern.test(normalizedAttrs)
+		? normalizedAttrs.replace(classPattern, `class="${classValue}"`)
+		: `${normalizedAttrs} class="${classValue}"`;
+
+	return ` ${nextAttrs.trim()}`;
+};
+
+const removeClassNamesByPredicate = (
+	classNames: string[],
+	shouldRemove: (className: string) => boolean,
+): string[] => {
+	return classNames.filter((className) => !shouldRemove(className));
+};
+
+const upsertStyleAttribute = (attrs: string, incomingStyle: string): string => {
+	const normalizedIncomingStyle = incomingStyle.trim();
+	const normalizedAttrs = attrs.trim();
+	if (!normalizedIncomingStyle) {
+		return normalizedAttrs ? ` ${normalizedAttrs}` : "";
+	}
+
+	if (!normalizedAttrs) {
+		return ` style="${normalizedIncomingStyle}"`;
+	}
+
+	const styleMatch = STYLE_ATTR_REGEX.exec(normalizedAttrs);
+	const nextAttrs = styleMatch
+		? normalizedAttrs.replace(
+			styleMatch[0],
+			` style="${mergeInlineStyle(styleMatch[1] ?? styleMatch[2] ?? "", normalizedIncomingStyle)}"`,
+		)
+		: `${normalizedAttrs} style="${normalizedIncomingStyle}"`;
+
+	return ` ${nextAttrs.trim()}`;
+};
+
+export const highlightHtmlPreCodeBlocksWithHighlightJs = (
+	htmlContent: string,
+	options: HtmlPreCodeHighlightOptions = {},
+): string => {
+	if (!htmlContent.trim()) return htmlContent;
+
+	const languageAliasMap = options.languageAliasMap ?? FRONTEND_LANGUAGE_ALIAS_MAP;
+	const addHljsClass = options.addHljsClass ?? true;
+	const preserveExistingCodeClasses = options.preserveExistingCodeClasses ?? true;
+	const inlineTokenStyles = options.inlineTokenStyles ?? false;
+	const tokenStyleMap = options.tokenStyleMap ?? ATOM_ONE_DARK_TOKEN_STYLE_MAP;
+	const preStyle = options.preStyle ?? "";
+	const codeStyle = options.codeStyle ?? "";
+	const isLanguageAvailable = (language: string): boolean => Boolean(hljsFull.getLanguage(language));
+	const normalizedAutoDetectLanguages = (options.autoDetectLanguages ?? [])
+		.map((language) =>
+			normalizeCodeLanguageWithChecker(language, languageAliasMap, isLanguageAvailable))
+		.filter((language): language is string => Boolean(language));
+
+	return htmlContent.replace(
+		CODE_BLOCK_REGEX,
+		(_fullMatch, preAttrs: string | undefined, codeAttrs: string | undefined, codeInnerHtml: string | undefined) => {
+			const resolvedPreAttrs = preAttrs ?? "";
+			const resolvedCodeAttrs = codeAttrs ?? "";
+			const resolvedCodeHtml = codeInnerHtml ?? "";
+			const plainCode = decodeHtmlEntities(stripHtmlTags(resolvedCodeHtml));
+			const explicitLanguage = resolveCodeLanguageFromAttributesWithChecker(
+				resolvedPreAttrs,
+				resolvedCodeAttrs,
+				languageAliasMap,
+				isLanguageAvailable,
+			);
+
+			let highlightedHtml = escapeHtml(plainCode);
+			let detectedLanguage = explicitLanguage ?? "plaintext";
+			try {
+				if (explicitLanguage) {
+					const highlighted = hljsFull.highlight(plainCode, {
+						language: explicitLanguage,
+						ignoreIllegals: true,
+					});
+					highlightedHtml = highlighted.value;
+					detectedLanguage = explicitLanguage;
+				} else {
+					const autoHighlighted = normalizedAutoDetectLanguages.length > 0
+						? hljsFull.highlightAuto(plainCode, normalizedAutoDetectLanguages)
+						: hljsFull.highlightAuto(plainCode);
+					highlightedHtml = autoHighlighted.value;
+					detectedLanguage = autoHighlighted.language ?? "plaintext";
+				}
+			} catch {
+				highlightedHtml = escapeHtml(plainCode);
+				detectedLanguage = explicitLanguage ?? "plaintext";
+			}
+			const highlightedWithTokenStyle = inlineTokenStyles
+				? inlineHighlightTokenStyles(highlightedHtml, tokenStyleMap)
+				: highlightedHtml;
+
+			const normalizedLanguage = normalizeCodeLanguageWithChecker(
+				detectedLanguage,
+				languageAliasMap,
+				isLanguageAvailable,
+			) ?? "plaintext";
+
+			const codeClasses = preserveExistingCodeClasses
+				? extractClassNames(resolvedCodeAttrs)
+				: [];
+			if (addHljsClass) {
+				codeClasses.push("hljs");
+			}
+			codeClasses.push(`language-${normalizedLanguage}`);
+			const nextCodeClassAttrs = upsertClassAttribute(resolvedCodeAttrs, codeClasses).trim();
+			const nextCodeAttrs = upsertStyleAttribute(nextCodeClassAttrs, codeStyle);
+			const nextPreAttrs = upsertStyleAttribute(resolvedPreAttrs, preStyle);
+
+			return `<pre${nextPreAttrs}><code${nextCodeAttrs}>${highlightedWithTokenStyle}</code></pre>`;
+		},
+	);
+};
+
+export const highlightHtmlPreCodeBlocksWithPrism = (
+	htmlContent: string,
+	options: HtmlPreCodePrismOptions = {},
+): string => {
+	if (!htmlContent.trim()) return htmlContent;
+
+	const languageAliasMap = {
+		...FRONTEND_LANGUAGE_ALIAS_MAP,
+		...PRISM_LANGUAGE_ALIAS_MAP,
+		...(options.languageAliasMap ?? {}),
+	};
+	const preserveExistingCodeClasses = options.preserveExistingCodeClasses ?? true;
+	const addPrismClass = options.addPrismClass ?? true;
+	const preStyle = options.preStyle ?? "";
+	const codeStyle = options.codeStyle ?? "";
+	const isLanguageAvailable = (language: string): boolean =>
+		language === "none" || Boolean(Prism.languages[language]);
+
+	return htmlContent.replace(
+		CODE_BLOCK_REGEX,
+		(_fullMatch, preAttrs: string | undefined, codeAttrs: string | undefined, codeInnerHtml: string | undefined) => {
+			const resolvedPreAttrs = preAttrs ?? "";
+			const resolvedCodeAttrs = codeAttrs ?? "";
+			const resolvedCodeHtml = codeInnerHtml ?? "";
+			const plainCode = decodeHtmlEntities(stripHtmlTags(resolvedCodeHtml));
+			const explicitLanguage = resolveCodeLanguageFromAttributesWithChecker(
+				resolvedPreAttrs,
+				resolvedCodeAttrs,
+				languageAliasMap,
+				isLanguageAvailable,
+			);
+			const normalizedLanguage = normalizePrismLanguage(explicitLanguage, languageAliasMap) ?? "none";
+			const highlighted = highlightCodeToPrismHtml(plainCode, normalizedLanguage);
+
+			let codeClasses = preserveExistingCodeClasses
+				? extractClassNames(resolvedCodeAttrs)
+				: [];
+			codeClasses = removeClassNamesByPredicate(
+				codeClasses,
+				(className) =>
+					className === "hljs"
+					|| className.startsWith("hljs-")
+					|| className === "prism"
+					|| className === "token"
+					|| /^language-/i.test(className)
+					|| /^lang-/i.test(className),
+			);
+			if (addPrismClass) {
+				codeClasses.push("prism");
+			}
+			if (highlighted.language !== "none") {
+				codeClasses.push(`language-${highlighted.language}`);
+			}
+
+			const nextCodeClassAttrs = upsertClassAttribute(resolvedCodeAttrs, codeClasses).trim();
+			const nextCodeAttrs = upsertStyleAttribute(nextCodeClassAttrs, codeStyle);
+			const nextPreAttrs = upsertStyleAttribute(resolvedPreAttrs, preStyle);
+
+			return `<pre${nextPreAttrs}><code${nextCodeAttrs}>${highlighted.html}</code></pre>`;
+		},
+	);
 };
 
 export const highlightHtmlCodeBlocks = (

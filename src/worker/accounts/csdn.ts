@@ -12,6 +12,7 @@ import type {
 } from "@/worker/accounts/index";
 import { marked } from "marked";
 import { randomDelay } from "@/worker/utils/helpers";
+import { highlightHtmlPreCodeBlocksWithPrism } from "@/worker/utils/html-code-highlight";
 
 interface CSDNBaseInfoResponse {
 	code: number;
@@ -479,14 +480,12 @@ export default class CSDNAccountService extends AbstractAccountService {
 
 	private resolveHtmlContent(article: SharedArticle, markdownContent: string): string {
 		const existingHtml = article.htmlContent?.trim();
-		if (existingHtml) {
-			return existingHtml;
-		}
-		return marked.parse(markdownContent, {
+		const rawHtml = existingHtml || marked.parse(markdownContent, {
 			async: false,
 			gfm: true,
 			breaks: false,
 		}) as string;
+		return highlightHtmlPreCodeBlocksWithPrism(rawHtml);
 	}
 
 	private async resolveArticleContent(article: SharedArticle): Promise<CSDNResolvedContent> {
@@ -571,8 +570,9 @@ export default class CSDNAccountService extends AbstractAccountService {
 		draftId?: string;
 	}): Record<string, unknown> {
 		const isPublish = params.mode === "publish";
+		const sanitizedTitle = this.sanitizeTitleForCsdn(params.title);
 		const body: Record<string, unknown> = {
-			title: params.title,
+			title: sanitizedTitle,
 			markdowncontent: params.content.markdownContent,
 			content: params.content.htmlContent,
 			readType: "public",
@@ -625,6 +625,23 @@ export default class CSDNAccountService extends AbstractAccountService {
 		}
 
 		return "";
+	}
+
+	private sanitizeTitleForCsdn(rawTitle: string): string {
+		const input = rawTitle.trim();
+		if (!input) return "无标题";
+
+		// Remove emoji grapheme pieces (flags, keycaps, skin tones, pictographs, joiners).
+		const sanitized = input
+			.replace(/\p{Regional_Indicator}{2}/gu, "")
+			.replace(/[#*0-9]\uFE0F?\u20E3/gu, "")
+			.replace(/\p{Emoji_Modifier}/gu, "")
+			.replace(/\p{Extended_Pictographic}/gu, "")
+			.replace(/\u200D|\uFE0E|\uFE0F/g, "")
+			.replace(/\s{2,}/g, " ")
+			.trim();
+
+		return sanitized || "无标题";
 	}
 
 	private async saveArticle(
