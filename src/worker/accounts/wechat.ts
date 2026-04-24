@@ -13,6 +13,11 @@ import type { Article as SharedArticle } from "@/shared/types";
 import { marked } from "marked";
 import { randomDelay } from "@/worker/utils/helpers";
 import { highlightHtmlCodeBlocks } from "@/worker/utils/html-code-highlight";
+import {
+	buildCloudinaryImageFormatRewriteSources,
+	uploadImageWithCandidates,
+	type ResolvedImageUploadCandidate,
+} from "@/worker/utils/media";
 
 interface WechatApiCredential {
 	appId: string;
@@ -65,6 +70,14 @@ const WECHAT_ERROR_MESSAGE_MAP: Record<number, string> = {
 	45009: "调用频率超限，请稍后重试",
 	48001: "接口未授权，请确认公众号权限",
 };
+
+const WECHAT_UPLOAD_MIME_TO_SUFFIX = {
+	"image/jpeg": "jpg",
+	"image/jpg": "jpg",
+	"image/png": "png",
+	"image/gif": "gif",
+	"image/bmp": "bmp",
+} as const;
 
 const WECHAT_ARTICLE_INLINE_STYLE_MAP: ReadonlyArray<{
 	tagName: string;
@@ -565,31 +578,56 @@ export default class WechatAccountService extends AbstractAccountService {
 		return blob;
 	}
 
-	private guessImageSuffix(sourceUrl: string, mimeType: string): string {
-		const typeMap: Record<string, string> = {
-			"image/jpeg": "jpg",
-			"image/jpg": "jpg",
-			"image/png": "png",
-			"image/gif": "gif",
-			"image/webp": "webp",
-			"image/bmp": "bmp",
-			"image/svg+xml": "svg",
-		};
+	private isWechatInvalidImageTypeError(error: unknown): boolean {
+		if (!(error instanceof Error)) return false;
+		const message = error.message.toLowerCase();
+		return (
+			message.includes("errcode: 40005") ||
+			message.includes("errcode: 40113") ||
+			message.includes("invalid file type") ||
+			message.includes("invalid file type hint") ||
+			message.includes("unsupported file type hint")
+		);
+	}
 
-		const normalizedMime = mimeType.toLowerCase();
-		if (typeMap[normalizedMime]) return typeMap[normalizedMime];
-
-		try {
-			const parsed = new URL(sourceUrl);
-			const suffix = parsed.pathname.split(".").pop()?.toLowerCase();
-			if (suffix && ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(suffix)) {
-				return suffix === "jpeg" ? "jpg" : suffix;
-			}
-		} catch {
-			// ignore
-		}
-
-		return "jpg";
+	private async uploadWechatImageWithCandidates(params: {
+		sourceUrl: string;
+		endpoint: string;
+		filePrefix: string;
+		traceStagePrefix: "wechat_content_image" | "wechat_cover_image";
+		query?: Record<string, string | number | boolean | null | undefined>;
+	}): Promise<{ payload: Record<string, unknown>; candidate: ResolvedImageUploadCandidate }> {
+		const { payload, candidate } = await uploadImageWithCandidates({
+			sourceUrl: params.sourceUrl,
+			mimeToSuffix: WECHAT_UPLOAD_MIME_TO_SUFFIX,
+			downloadImageFromUrl: async (url) => await this.downloadImageFromUrl(url),
+			dataUriToBlob: (dataUri) => this.dataUriToBlob(dataUri),
+			buildRewriteSources: (sourceUrl) =>
+				buildCloudinaryImageFormatRewriteSources(sourceUrl, ["png", "jpg"]),
+			uploadCandidate: async (candidate) => {
+				const formData = new FormData();
+				formData.append("media", candidate.blob, `${params.filePrefix}.${candidate.suffix}`);
+				return this.requestWechatApi(params.endpoint, {
+					method: "POST",
+					query: params.query,
+					body: formData,
+				});
+			},
+			shouldRetryError: (error) => this.isWechatInvalidImageTypeError(error),
+			onUseRewriteCandidate: async (candidate) => {
+				await this.tracePublish({
+					stage: `${params.traceStagePrefix}_retry_${candidate.suffix}`,
+					message: "Retry WeChat image upload with converted source",
+					metadata: {
+						source: params.sourceUrl,
+						retrySource: candidate.source,
+						mimeType: candidate.mimeType,
+						suffix: candidate.suffix,
+					},
+				});
+			},
+		});
+		return { payload, candidate };
 	}
 
 	private async uploadContentImageBySourceUrl(sourceUrl: string): Promise<string> {
@@ -609,17 +647,11 @@ export default class WechatAccountService extends AbstractAccountService {
 			},
 		});
 
-		const blob = normalized.startsWith("data:")
-			? this.dataUriToBlob(normalized)
-			: await this.downloadImageFromUrl(normalized);
-		const suffix = this.guessImageSuffix(normalized, blob.type || "image/jpeg");
-
-		const formData = new FormData();
-		formData.append("media", blob, `content.${suffix}`);
-
-		const uploadPayload = await this.requestWechatApi("/cgi-bin/media/uploadimg", {
-			method: "POST",
-			body: formData,
+		const { payload: uploadPayload, candidate } = await this.uploadWechatImageWithCandidates({
+			sourceUrl: normalized,
+			endpoint: "/cgi-bin/media/uploadimg",
+			filePrefix: "content",
+			traceStagePrefix: "wechat_content_image",
 		});
 		const uploadedUrl = this.normalizeImageUrl(this.pickString(uploadPayload, "url") ?? "");
 		if (!uploadedUrl) {
@@ -631,6 +663,9 @@ export default class WechatAccountService extends AbstractAccountService {
 			message: "WeChat content image uploaded",
 			metadata: {
 				source: normalized.startsWith("data:") ? "data-uri" : normalized,
+				uploadSource: candidate.source,
+				mimeType: candidate.mimeType,
+				suffix: candidate.suffix,
 				uploadedUrl,
 			},
 		});
@@ -652,20 +687,14 @@ export default class WechatAccountService extends AbstractAccountService {
 			},
 		});
 
-		const blob = normalized.startsWith("data:")
-			? this.dataUriToBlob(normalized)
-			: await this.downloadImageFromUrl(normalized);
-		const suffix = this.guessImageSuffix(normalized, blob.type || "image/jpeg");
-
-		const formData = new FormData();
-		formData.append("media", blob, `thumb.${suffix}`);
-
-		const uploadPayload = await this.requestWechatApi("/cgi-bin/material/add_material", {
-			method: "POST",
+		const { payload: uploadPayload, candidate } = await this.uploadWechatImageWithCandidates({
+			sourceUrl: normalized,
+			endpoint: "/cgi-bin/material/add_material",
+			filePrefix: "thumb",
+			traceStagePrefix: "wechat_cover_image",
 			query: {
 				type: "thumb",
 			},
-			body: formData,
 		});
 
 		const mediaId = this.pickString(uploadPayload, "media_id");
@@ -679,6 +708,9 @@ export default class WechatAccountService extends AbstractAccountService {
 			message: "WeChat cover image uploaded",
 			metadata: {
 				source: normalized.startsWith("data:") ? "data-uri" : normalized,
+				uploadSource: candidate.source,
+				mimeType: candidate.mimeType,
+				suffix: candidate.suffix,
 				mediaId,
 				uploadedUrl: uploadedUrl ?? null,
 			},
