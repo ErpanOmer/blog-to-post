@@ -31,7 +31,13 @@ const SEGMENTFAULT_GATEWAY_DRAFT_PATH = "/draft";
 const SEGMENTFAULT_GATEWAY_ARTICLE_PATH = "/article";
 const SEGMENTFAULT_GATEWAY_IMAGE_PATH = "/image";
 const SEGMENTFAULT_REFERER = "https://segmentfault.com/";
-const SEGMENTFAULT_DEFAULT_TAG_ID = 1040000000089899;
+const SEGMENTFAULT_DEFAULT_TAG_ID = [
+  1040000000089899,
+  1040000000089436,
+  1040000000089556,
+  1040000000426368,
+  1040000004271102
+];
 
 export default class SegmentFaultAccountService extends AbstractAccountService {
 	private imageUrlCache = new Map<string, string>();
@@ -544,7 +550,7 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 	}
 
 	private getFixedTagIds(): number[] {
-		return [SEGMENTFAULT_DEFAULT_TAG_ID];
+		return SEGMENTFAULT_DEFAULT_TAG_ID;
 	}
 
 	private async resolveCoverImage(article: SharedArticle): Promise<string | null> {
@@ -641,11 +647,11 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 			title: article.title,
 			text: content.markdownContent,
 			draft_id: parsedDraftId,
-			blog_id: "0",
+			blog_id: "1200000047718562",
 			type: 1,
 			url: "",
 			cover: content.coverUrl ?? "",
-			license: 0,
+			license: 1,
 			log: "",
 		};
 	}
