@@ -964,7 +964,7 @@ export default class WechatAccountService extends AbstractAccountService {
 				level: "warn",
 				message: "No cover candidate found in article cover or content images",
 			});
-			return null;
+			return await this.uploadFallbackThumbMedia("No cover candidate found");
 		}
 
 		for (const candidate of candidates) {
@@ -990,13 +990,18 @@ export default class WechatAccountService extends AbstractAccountService {
 			}
 		}
 
-		await this.tracePublish({
-			stage: "wechat_cover_fallback_start",
-			level: "warn",
-			message: "All cover candidates failed, fallback to built-in JPEG thumb",
-		});
+		return await this.uploadFallbackThumbMedia("All cover candidates failed");
+	}
 
+	private async uploadFallbackThumbMedia(reason: string): Promise<WechatThumbMedia> {
 		try {
+			await this.tracePublish({
+				stage: "wechat_cover_fallback_start",
+				level: "warn",
+				message: "Fallback to built-in JPEG thumb",
+				metadata: { reason },
+			});
+
 			const fallbackThumb = await this.uploadThumbMediaBySourceUrl(WECHAT_FALLBACK_THUMB_DATA_URI);
 			await this.tracePublish({
 				stage: "wechat_cover_fallback_done",
@@ -1007,15 +1012,17 @@ export default class WechatAccountService extends AbstractAccountService {
 			});
 			return fallbackThumb;
 		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : "unknown";
 			await this.tracePublish({
 				stage: "wechat_cover_fallback_failed",
 				level: "error",
 				message: "Fallback WeChat thumb upload failed",
 				metadata: {
-					error: error instanceof Error ? error.message : "unknown",
+					reason,
+					error: errorMessage,
 				},
 			});
-			return null;
+			throw new Error(`微信公众号封面图 fallback 上传失败，无法生成 thumb_media_id：${errorMessage}`);
 		}
 	}
 
