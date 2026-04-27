@@ -46,11 +46,11 @@ export abstract class AbstractAccountService implements AccountService {
 		try {
 			const parsed = new URL(rawUrl);
 			const sensitiveKeys = new Set(["access_token", "token", "auth", "authorization", "cookie", "key", "secret"]);
-			for (const [key] of parsed.searchParams.entries()) {
+			parsed.searchParams.forEach((_value, key) => {
 				if (sensitiveKeys.has(key.toLowerCase())) {
 					parsed.searchParams.set(key, "***");
 				}
-			}
+			});
 			return parsed.toString();
 		} catch {
 			return rawUrl;

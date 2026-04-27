@@ -10,20 +10,41 @@ tags: [react, tailwindcss, bytemd, shadcn-ui, frontend]
 
 Use this skill when changing `src/react-app`, article editor UI, publish dialogs, account management, or dashboard views.
 
-Stack:
+## Stack
 
 - React 19.
 - TypeScript.
 - Tailwind CSS.
-- ByteMD.
+- ByteMD for markdown editing.
 - Radix primitives and shadcn-style local components.
-- `lucide-react` icons.
+- `lucide-react` for icons.
 
-Rules:
+## Boundaries
 
 - API calls belong in `src/react-app/api.ts`.
 - Shared data contracts should use `src/shared/types.ts`.
+- UI components live under `src/react-app/components`.
+- Do not put Worker-only code in frontend modules.
+
+## UI Rules
+
 - Keep operational screens dense, scannable, and calm.
+- Prefer clear controls over decorative layouts.
+- Use existing UI primitives and Tailwind tokens before adding new patterns.
+- Keep cards for repeated records or dialogs, not every page section.
 - Show loading and error states for async operations.
-- Ensure long article titles, URLs, tags, and error messages wrap cleanly.
-- Update frontend API calls, Worker routes, DB layer, and shared types together when article shape changes.
+- Publish progress and adapter traces should be easy to scan.
+
+## Article Workflow
+
+The editor supports:
+
+- markdown content
+- optional rendered HTML
+- summary
+- tags
+- cover image
+- publication status
+
+When changing article data shape, update frontend API calls, Worker routes, DB layer, and shared types together.
+

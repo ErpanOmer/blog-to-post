@@ -10,17 +10,29 @@ tags: [project-overview, architecture, cloudflare-workers, react, publishing]
 
 Use this skill before broad codebase work, onboarding, architecture changes, or any task that touches multiple modules.
 
-Blog-to-Post is an AI-assisted publishing dashboard. It generates, edits, and distributes technical articles to multiple platforms.
+## Product Shape
 
-Core runtime:
+Blog-to-Post is an AI-assisted publishing dashboard. It helps generate, edit, and distribute technical articles to multiple platforms.
+
+Core capabilities:
+
+- AI title/content/summary/tag/cover generation.
+- Article editing with markdown and optional rendered HTML.
+- Platform account management and verification.
+- Draft-only or full publish task orchestration.
+- Step-by-step publish traces in D1.
+- Platform-specific image upload and URL replacement.
+- Platform-specific code block formatting for WeChat and CSDN.
+
+## Runtime
 
 - Frontend: React 19, Vite, TypeScript, Tailwind CSS, ByteMD.
 - Worker API: Hono on Cloudflare Workers.
 - Database: Cloudflare D1 SQLite.
-- Storage: Cloudflare KV and R2.
+- Storage: Cloudflare KV for prompts/settings and R2 for drafts.
 - AI provider: Ollama-compatible `/api/generate`.
 
-Important directories:
+## Directory Map
 
 ```txt
 src/react-app/         Frontend SPA, UI components, API client.
@@ -35,13 +47,16 @@ src/worker/utils/      Media, highlighting, crypto, logging, parsing.
 migrations/            D1 migration files.
 ```
 
-Module rules:
+## Module Boundaries
 
 - Frontend code calls APIs through `src/react-app/api.ts`.
-- Routes stay thin and delegate to services/db modules.
-- Platform behavior belongs in `src/worker/accounts/*`.
-- Shared media/highlighting helpers belong in `src/worker/utils`.
+- Hono routes stay thin and delegate to `src/worker/services` or `src/worker/db`.
+- SQL belongs in `src/worker/db` or migrations, not deeply inside UI or adapter code.
+- Platform-specific publishing behavior belongs in `src/worker/accounts/*`.
+- Shared image/media/highlighting helpers belong in `src/worker/utils`.
 - Shared cross-runtime types belong in `src/shared/types.ts`.
+
+## Platform Adapters
 
 Registered adapters:
 
@@ -54,3 +69,14 @@ Registered adapters:
 - `segmentfault`
 
 Each adapter implements `AccountService` from `src/worker/accounts/types.ts`.
+
+## AI Agent Guidance
+
+Before changing behavior:
+
+- Read the target route/service/adapter first.
+- Preserve platform-specific behavior inside the adapter unless a utility is already shared by multiple adapters.
+- Prefer draft-only validation for publishing changes.
+- Keep adapter traces informative; silent fallback makes production debugging painful.
+- Do not expose cookies, access tokens, app secrets, or upload signatures in logs.
+
