@@ -80,6 +80,18 @@ function compactRecord(input: Record<string, unknown> | null | undefined): Recor
 	return output;
 }
 
+function normalizeAccountContentSlots(config: AccountConfig): NonNullable<AccountConfig["contentSlots"]> {
+	return {
+		useCoverImageAsHeader: config.contentSlots?.useCoverImageAsHeader ?? false,
+		headerSlot: config.contentSlots?.headerSlot ?? "",
+		footerSlot: config.contentSlots?.footerSlot ?? "",
+		headerMarkdown: config.contentSlots?.headerMarkdown ?? config.contentSlots?.headerSlot ?? "",
+		headerHtml: config.contentSlots?.headerHtml ?? config.contentSlots?.headerSlot ?? "",
+		footerMarkdown: config.contentSlots?.footerMarkdown ?? config.contentSlots?.footerSlot ?? "",
+		footerHtml: config.contentSlots?.footerHtml ?? config.contentSlots?.footerSlot ?? "",
+	};
+}
+
 function mapPublishErrorCodeFromMessage(message: string): PublishErrorCode {
 	const normalized = message.toLowerCase();
 	if (normalized.includes("not found")) {
@@ -627,12 +639,17 @@ export async function executePublishTask(
 									message: `Article not found: ${articleId}`,
 								});
 							}
+							const contentSlots = normalizeAccountContentSlots(accountConfig);
 							return {
-								value: loaded,
+								value: {
+									...loaded,
+									contentSlots,
+								},
 								outputData: {
 									title: loaded.title,
 									contentLength: loaded.content.length,
 									hasHtmlContent: Boolean(loaded.htmlContent?.trim()),
+									useCoverImageAsHeader: contentSlots.useCoverImageAsHeader,
 								},
 							};
 						},
@@ -1002,8 +1019,8 @@ export async function executePublishTask(
 			}
 		}
 
-		const successfulPublications = details.filter((detail) => detail.success).length;
-		const failedPublications = details.filter((detail) => !detail.success).length;
+		const successfulPublications = details.filter((detail) => detail.status === "published" || detail.status === "draft_created").length;
+		const failedPublications = details.filter((detail) => detail.status === "failed").length;
 		const draftOnlyPublications = details.filter((detail) => detail.status === "draft_created").length;
 
 		const result: PublishResult = {
@@ -1072,8 +1089,8 @@ export async function executePublishTask(
 		return {
 			success: false,
 			totalArticles: task.articleIds.length,
-			successfulPublications: details.filter((detail) => detail.success).length,
-			failedPublications: details.filter((detail) => !detail.success).length + 1,
+			successfulPublications: details.filter((detail) => detail.status === "published" || detail.status === "draft_created").length,
+			failedPublications: details.filter((detail) => detail.status === "failed").length + 1,
 			draftOnlyPublications: details.filter((detail) => detail.status === "draft_created").length,
 			details,
 		};
@@ -1130,6 +1147,7 @@ export async function quickPublish(
 	draftOnly = false,
 	ctx?: ExecutionContext,
 	options: TaskExecutionOptions = {},
+	contentSlots?: AccountConfig["contentSlots"],
 ): Promise<{ success: boolean; message: string; publicationId?: string }> {
 	const account = await getPlatformAccount(db, accountId, options.encryptionKey);
 	if (!account) {
@@ -1149,6 +1167,7 @@ export async function quickPublish(
 				accountId,
 				platform: account.platform,
 				draftOnly,
+				contentSlots: contentSlots ?? null,
 			}],
 		},
 		ctx,

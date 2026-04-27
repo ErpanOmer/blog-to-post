@@ -13,6 +13,11 @@ import type { Article as SharedArticle } from "@/shared/types";
 import type { ZhihuUserInfo } from "@/worker/accounts/abstract";
 import { marked } from "marked";
 import { randomDelay } from "@/worker/utils/helpers";
+import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
+import {
+	FRONTEND_AUTO_DETECT_LANGUAGES,
+	highlightHtmlPreCodeBlocksWithHighlightJs,
+} from "@/worker/utils/html-code-highlight";
 import md5Lib from "js-md5";
 
 interface ZhihuConvertResponse {
@@ -742,6 +747,15 @@ export default class ZhihuAccountService extends AbstractAccountService {
 		return replaced;
 	}
 
+	private highlightHtmlCodeBlocks(htmlContent: string): string {
+		return highlightHtmlPreCodeBlocksWithHighlightJs(htmlContent, {
+			addHljsClass: true,
+			preserveExistingCodeClasses: true,
+			inlineTokenStyles: false,
+			autoDetectLanguages: FRONTEND_AUTO_DETECT_LANGUAGES,
+		});
+	}
+
 	private async resolveArticleHtml(article: SharedArticle): Promise<string> {
 		await this.tracePublish({
 			stage: "zhihu_resolve_html_start",
@@ -753,13 +767,15 @@ export default class ZhihuAccountService extends AbstractAccountService {
 			},
 		});
 
-		const htmlContent = await this.convertMarkdownToHtmlViaAPI(article.content);
+		const markdownContent = applyMarkdownContentSlots(article.content ?? "", article);
+		const htmlContent = await this.convertMarkdownToHtmlViaAPI(markdownContent);
 
 		if (!htmlContent) {
 			throw new Error("无法生成知乎发布 HTML 内容");
 		}
 
-		const finalHtml = await this.replaceHtmlImageUrls(htmlContent);
+		const highlightedHtml = this.highlightHtmlCodeBlocks(htmlContent);
+		const finalHtml = await this.replaceHtmlImageUrls(highlightedHtml);
 		await this.tracePublish({
 			stage: "zhihu_resolve_html_done",
 			message: "Article HTML resolved",

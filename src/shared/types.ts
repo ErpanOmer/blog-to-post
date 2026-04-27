@@ -2,6 +2,29 @@ export type PlatformType = "juejin" | "zhihu" | "xiaohongshu" | "wechat" | "csdn
 export type ArticleStatus = "draft" | "reviewed" | "scheduled" | "published" | "failed";
 export type PromptKey = "title" | "content" | "summary" | "tags" | "cover";
 
+export interface PublishContentSlots {
+    useCoverImageAsHeader?: boolean;
+    headerSlot?: string | null;
+    footerSlot?: string | null;
+    headerMarkdown?: string | null;
+    headerHtml?: string | null;
+    footerMarkdown?: string | null;
+    footerHtml?: string | null;
+}
+
+export type PublishablePlatformType = Exclude<PlatformType, "">;
+
+export interface PlatformPublishSetting {
+    platform: PublishablePlatformType;
+    enabled: boolean;
+    draftOnly: boolean;
+    useCoverImageAsHeader: boolean;
+    headerSlot: string;
+    footerSlot: string;
+}
+
+export type PlatformPublishSettingsMap = Record<PublishablePlatformType, PlatformPublishSetting>;
+
 export interface Article {
     id: string;
     title: string;
@@ -16,6 +39,7 @@ export interface Article {
     createdAt: number;
     updatedAt: number;
     draftId?: string;
+    contentSlots?: PublishContentSlots | null;
 }
 
 export interface PlatformAccount {

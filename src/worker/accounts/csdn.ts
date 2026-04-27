@@ -13,6 +13,7 @@ import type {
 import { marked } from "marked";
 import { randomDelay } from "@/worker/utils/helpers";
 import { highlightHtmlPreCodeBlocksWithPrism } from "@/worker/utils/html-code-highlight";
+import { applyHtmlContentSlots, applyMarkdownContentSlots } from "@/worker/utils/content-slots";
 
 interface CSDNBaseInfoResponse {
 	code: number;
@@ -471,7 +472,7 @@ export default class CSDNAccountService extends AbstractAccountService {
 	}
 
 	private resolveMarkdownContent(article: SharedArticle): string {
-		const markdown = article.content?.trim() ?? "";
+		const markdown = applyMarkdownContentSlots(article.content?.trim() ?? "", article);
 		if (!markdown) {
 			throw new Error("Article markdown content is empty, cannot publish to CSDN");
 		}
@@ -480,11 +481,13 @@ export default class CSDNAccountService extends AbstractAccountService {
 
 	private resolveHtmlContent(article: SharedArticle, markdownContent: string): string {
 		const existingHtml = article.htmlContent?.trim();
-		const rawHtml = existingHtml || marked.parse(markdownContent, {
-			async: false,
-			gfm: true,
-			breaks: false,
-		}) as string;
+		const rawHtml = existingHtml
+			? applyHtmlContentSlots(existingHtml, article)
+			: (marked.parse(markdownContent, {
+				async: false,
+				gfm: true,
+				breaks: false,
+			}) as string);
 		return highlightHtmlPreCodeBlocksWithPrism(rawHtml);
 	}
 

@@ -1,21 +1,24 @@
-import { useEffect, useState, type FormEvent } from "react";
+﻿import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { PlatformAccount, PlatformType } from "@/react-app/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+	PLATFORM_DISPLAY_NAMES,
+	PLATFORM_SHORT_ICONS,
+	PUBLISHABLE_PLATFORMS,
+	isPublishablePlatform,
+} from "@/shared/platform-settings";
+import type { PlatformPublishSettingsMap, PublishablePlatformType } from "@/shared/types";
 import { Eye, EyeOff, Loader2, Shield, ShieldCheck, ShieldX } from "lucide-react";
 
-const platformOptions: { value: PlatformType; label: string; icon: string }[] = [
-	{ value: "juejin", label: "掘金", icon: "J" },
-	{ value: "zhihu", label: "知乎", icon: "Z" },
-	{ value: "xiaohongshu", label: "小红书", icon: "X" },
-	{ value: "wechat", label: "公众号", icon: "W" },
-	{ value: "csdn", label: "CSDN", icon: "C" },
-	{ value: "cnblogs", label: "博客园", icon: "B" },
-	{ value: "segmentfault", label: "SegmentFault", icon: "S" },
-];
+const platformOptions: { value: PublishablePlatformType; label: string; icon: string }[] = PUBLISHABLE_PLATFORMS.map((platform) => ({
+	value: platform,
+	label: PLATFORM_DISPLAY_NAMES[platform],
+	icon: PLATFORM_SHORT_ICONS[platform],
+}));
 
 interface PlatformAccountFormProps {
 	open: boolean;
@@ -29,6 +32,7 @@ interface PlatformAccountFormProps {
 		description?: string;
 	}) => Promise<boolean>;
 	onVerify?: (accountId: string) => Promise<void>;
+	platformSettings?: PlatformPublishSettingsMap;
 }
 
 function parseWechatCredentialFromToken(authToken?: string | null): { appId: string; appSecret: string } | null {
@@ -64,7 +68,18 @@ function parseWechatCredentialFromToken(authToken?: string | null): { appId: str
 	return null;
 }
 
-export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVerify }: PlatformAccountFormProps) {
+function isPlatformDisabled(platform: PlatformType, settings?: PlatformPublishSettingsMap): boolean {
+	return isPublishablePlatform(platform) && settings?.[platform]?.enabled === false;
+}
+
+export function PlatformAccountForm({
+	open,
+	onOpenChange,
+	account,
+	onSave,
+	onVerify,
+	platformSettings,
+}: PlatformAccountFormProps) {
 	const [formData, setFormData] = useState({
 		platform: "" as PlatformType,
 		authToken: "",
@@ -79,8 +94,13 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 	const [formError, setFormError] = useState("");
 
 	const isEditing = !!account;
-	const isPlatformDisabled = isEditing;
+	const readOnly = Boolean(account && isPlatformDisabled(account.platform, platformSettings));
+	const isPlatformLocked = isEditing || readOnly;
 	const isWechatPlatform = formData.platform === "wechat";
+	const enabledPlatformOptions = useMemo(
+		() => platformOptions.filter((option) => platformSettings?.[option.value]?.enabled !== false),
+		[platformSettings],
+	);
 
 	useEffect(() => {
 		if (!open) return;
@@ -112,7 +132,12 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 
 	const handleSubmit = async (event: FormEvent) => {
 		event.preventDefault();
-		if (!formData.platform || saving) return;
+		if (!formData.platform || saving || readOnly) return;
+
+		if (isPlatformDisabled(formData.platform, platformSettings)) {
+			setFormError("该平台已在设置中禁用，账号配置只能查看或删除。");
+			return;
+		}
 
 		setFormError("");
 		const payload: {
@@ -159,7 +184,7 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 	};
 
 	const handleVerify = async () => {
-		if (!account) return;
+		if (!account || readOnly) return;
 		setVerifying(true);
 		try {
 			await onVerify?.(account.id);
@@ -172,30 +197,39 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle>{isEditing ? "编辑账号配置" : "新增平台账号"}</DialogTitle>
+					<DialogTitle>{readOnly ? "查看账号配置" : isEditing ? "编辑账号配置" : "新增平台账号"}</DialogTitle>
+					{readOnly ? (
+						<DialogDescription>该平台已在全局设置中禁用，账号信息进入只读模式；你仍然可以删除这个账号。</DialogDescription>
+					) : null}
 				</DialogHeader>
 
 				<form onSubmit={handleSubmit} className="space-y-4">
 					<div className="space-y-2">
 						<Label>平台</Label>
 						<div className="grid grid-cols-5 gap-2">
-							{platformOptions.map((option) => (
+							{(account && isPublishablePlatform(account.platform)
+								? platformOptions.filter((option) => option.value === account.platform)
+								: enabledPlatformOptions
+							).map((option) => (
 								<button
 									key={option.value}
 									type="button"
-									disabled={isPlatformDisabled}
+									disabled={isPlatformLocked}
 									onClick={() => setFormData((prev) => ({ ...prev, platform: option.value }))}
 									className={`flex flex-col items-center gap-1 rounded-lg border p-3 transition-all ${
 										formData.platform === option.value
 											? "border-brand-500 bg-brand-50 text-brand-700"
 											: "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-									} ${isPlatformDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+									} ${isPlatformLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
 								>
 									<span className="text-base font-semibold">{option.icon}</span>
 									<span className="text-xs font-medium">{option.label}</span>
 								</button>
 							))}
 						</div>
+						{!isEditing && enabledPlatformOptions.length === 0 ? (
+							<p className="text-xs text-amber-600">所有平台都已禁用，请先到设置中启用至少一个平台。</p>
+						) : null}
 					</div>
 
 					{isWechatPlatform ? (
@@ -208,6 +242,7 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 									onChange={(event) => setFormData((prev) => ({ ...prev, appId: event.target.value }))}
 									placeholder="例如: wx17a5eee31cf8394c"
 									className="font-mono text-sm"
+									disabled={readOnly}
 								/>
 							</div>
 
@@ -230,6 +265,7 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 									onChange={(event) => setFormData((prev) => ({ ...prev, appSecret: event.target.value }))}
 									placeholder="输入公众号 appSecret"
 									className="font-mono text-sm"
+									disabled={readOnly}
 								/>
 								<p className="text-xs text-slate-500">推荐使用 appId + appSecret 接入微信官方 API。</p>
 							</div>
@@ -251,8 +287,9 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 										id="authToken"
 										value={formData.authToken}
 										onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
-										placeholder="可选：JSON 或旧凭证串"
+										placeholder="可选：JSON 或旧凭证内容"
 										className="min-h-[90px] font-mono text-sm"
+										disabled={readOnly}
 									/>
 								) : (
 									<Input
@@ -262,6 +299,7 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 										onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
 										placeholder="可选：兼容模式凭证"
 										className="font-mono text-sm"
+										disabled={readOnly}
 									/>
 								)}
 							</div>
@@ -287,6 +325,7 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 									onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
 									placeholder="输入平台认证凭证"
 									className="min-h-[100px] font-mono text-sm"
+									disabled={readOnly}
 								/>
 							) : (
 								<Input
@@ -296,6 +335,7 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 									onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
 									placeholder="输入平台认证凭证"
 									className="font-mono text-sm"
+									disabled={readOnly}
 								/>
 							)}
 
@@ -311,6 +351,7 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 							onChange={(event) => setFormData((prev) => ({ ...prev, description: event.target.value }))}
 							placeholder="例如：主账号、测试账号、备用账号"
 							className="min-h-[60px]"
+							disabled={readOnly}
 						/>
 					</div>
 
@@ -328,13 +369,15 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 									<div>
 										<p className="text-sm font-medium text-slate-900">{account.isVerified ? "已验证" : "未验证"}</p>
 										<p className="text-xs text-slate-500">
-											{account.lastVerifiedAt
-												? `上次验证: ${new Date(account.lastVerifiedAt).toLocaleString("zh-CN")}`
-												: "建议保存后执行一次账号验证"}
+											{readOnly
+												? "平台已禁用，暂不允许重新验证。"
+												: account.lastVerifiedAt
+													? `上次验证: ${new Date(account.lastVerifiedAt).toLocaleString("zh-CN")}`
+													: "建议保存后执行一次账号验证。"}
 										</p>
 									</div>
 								</div>
-								<Button type="button" variant="outline" size="sm" onClick={handleVerify} disabled={verifying} className="gap-1">
+								<Button type="button" variant="outline" size="sm" onClick={handleVerify} disabled={verifying || readOnly} className="gap-1">
 									{verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
 									{verifying ? "验证中..." : "立即验证"}
 								</Button>
@@ -344,12 +387,14 @@ export function PlatformAccountForm({ open, onOpenChange, account, onSave, onVer
 
 					<div className="flex justify-end gap-2 pt-2">
 						<Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-							取消
+							{readOnly ? "关闭" : "取消"}
 						</Button>
-						<Button type="submit" variant="gradient" disabled={!formData.platform || saving}>
-							{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-							{isEditing ? "保存修改" : "添加账号"}
-						</Button>
+						{!readOnly && (
+							<Button type="submit" variant="gradient" disabled={!formData.platform || saving || enabledPlatformOptions.length === 0}>
+								{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+								{isEditing ? "保存修改" : "添加账号"}
+							</Button>
+						)}
 					</div>
 				</form>
 			</DialogContent>

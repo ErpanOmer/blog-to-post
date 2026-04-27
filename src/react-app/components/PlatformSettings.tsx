@@ -6,6 +6,7 @@ import {
 	updateAIModelSettings,
 	updatePromptTemplate,
 } from "@/react-app/api";
+import { PlatformPublishSettingsPanel } from "@/react-app/components/PlatformPublishSettingsPanel";
 import type {
 	AIModelSettings,
 	PromptKey,
@@ -18,7 +19,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -223,10 +223,14 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 	return (
 		<div className="space-y-5 page-enter">
 			<Tabs defaultValue="ai" className="space-y-5">
-				<TabsList className="grid w-full grid-cols-3">
+				<TabsList className="grid w-full grid-cols-4">
 					<TabsTrigger value="ai" className="gap-1.5">
 						<Cpu className="h-3.5 w-3.5" />
 						智能设置
+					</TabsTrigger>
+					<TabsTrigger value="publish" className="gap-1.5">
+						<Globe className="h-3.5 w-3.5" />
+						发布设置
 					</TabsTrigger>
 					<TabsTrigger value="prompts" className="gap-1.5">
 						<FileText className="h-3.5 w-3.5" />
@@ -309,6 +313,10 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 					</Card>
 				</TabsContent>
 
+				<TabsContent value="publish" className="space-y-4">
+					<PlatformPublishSettingsPanel />
+				</TabsContent>
+
 				<TabsContent value="prompts" className="space-y-4">
 					{isLoadingPrompts ? (
 						<div className="flex items-center justify-center py-12">
@@ -368,27 +376,6 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 				</TabsContent>
 
 				<TabsContent value="system" className="space-y-4">
-					<Card>
-						<CardHeader className="pb-3">
-							<div className="flex items-center gap-2">
-								<Globe className="h-4 w-4 text-brand-500" />
-								<CardTitle className="text-sm">平台开关</CardTitle>
-							</div>
-							<CardDescription>控制哪些平台参与分发</CardDescription>
-						</CardHeader>
-						<CardContent className="space-y-2">
-							{["掘金", "知乎", "小红书", "公众号", "CSDN", "博客园", "SegmentFault"].map((platform) => (
-								<div key={platform} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3">
-									<span className="text-[13px] font-medium text-slate-700">{platform}</span>
-									<div className="flex items-center gap-2">
-										<Switch id={`${platform}-enabled`} defaultChecked />
-										<Label htmlFor={`${platform}-enabled`} className="text-[12px] text-slate-500">启用</Label>
-									</div>
-								</div>
-							))}
-						</CardContent>
-					</Card>
-
 					<Card>
 						<CardHeader className="pb-3">
 							<div className="flex items-center gap-2">

@@ -18,6 +18,7 @@ import type {
 	PublishTaskResponse,
 	PublishTaskStatusResponse
 } from "./types/publications";
+import type { PlatformPublishSettingsMap, PublishablePlatformType } from "@/shared/types";
 export type { PlatformType };
 
 const jsonHeaders = {
@@ -185,6 +186,35 @@ export async function updateAIModelSettings(
 	);
 }
 
+export async function getPlatformPublishSettings(): Promise<PlatformPublishSettingsMap> {
+	return parseJson<PlatformPublishSettingsMap>(await fetch("/api/settings/platform-publish"));
+}
+
+export async function updatePlatformPublishSettings(
+	payload: Partial<PlatformPublishSettingsMap>,
+): Promise<PlatformPublishSettingsMap> {
+	return parseJson<PlatformPublishSettingsMap>(
+		await fetch("/api/settings/platform-publish", {
+			method: "PUT",
+			headers: jsonHeaders,
+			body: JSON.stringify(payload),
+		}),
+	);
+}
+
+export async function updatePlatformPublishSetting(
+	platform: PublishablePlatformType,
+	payload: Partial<PlatformPublishSettingsMap[PublishablePlatformType]>,
+): Promise<PlatformPublishSettingsMap> {
+	return parseJson<PlatformPublishSettingsMap>(
+		await fetch(`/api/settings/platform-publish/${platform}`, {
+			method: "PUT",
+			headers: jsonHeaders,
+			body: JSON.stringify(payload),
+		}),
+	);
+}
+
 export async function getPromptTemplates(): Promise<PromptTemplate[]> {
 	return parseJson<PromptTemplate[]>(await fetch("/api/ai/prompts"));
 }
@@ -333,13 +363,14 @@ export async function cancelPublishTask(taskId: string): Promise<{ success: bool
 export async function quickPublish(
 	articleId: string,
 	accountId: string,
-	draftOnly: boolean = false
+	draftOnly: boolean = false,
+	contentSlots?: CreatePublishTaskRequest["accountConfigs"][number]["contentSlots"],
 ): Promise<{ success: boolean; message: string; publicationId?: string }> {
 	return parseJson<{ success: boolean; message: string; publicationId?: string }>(
 		await fetch("/api/publish/quick", {
 			method: "POST",
 			headers: jsonHeaders,
-			body: JSON.stringify({ articleId, accountId, draftOnly }),
+			body: JSON.stringify({ articleId, accountId, draftOnly, contentSlots }),
 		}),
 	);
 }
@@ -347,6 +378,16 @@ export async function quickPublish(
 // 获取文章发布记录
 export async function getArticlePublications(articleId: string): Promise<ArticlePublication[]> {
 	return parseJson<ArticlePublication[]>(await fetch(`/api/articles/${articleId}/publications`));
+}
+
+export async function validateArticlePublicationLinks(articleId: string): Promise<ArticlePublication[]> {
+	const result = await parseJson<{ publications: ArticlePublication[] }>(
+		await fetch(`/api/articles/${articleId}/publications/validate-links`, {
+			method: "POST",
+			headers: jsonHeaders,
+		}),
+	);
+	return result.publications;
 }
 
 // 获取全部发布记录

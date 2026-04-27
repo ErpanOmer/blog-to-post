@@ -1,4 +1,5 @@
 import type { PlatformType } from "@/react-app/types";
+import type { PublishContentSlots } from "@/shared/types";
 
 // 发布状态
 export type PublicationStatus =
@@ -68,6 +69,7 @@ export interface AccountConfig {
   accountId: string;
   platform: PlatformType;
   draftOnly: boolean; // 是否只发布到草稿
+  contentSlots?: PublishContentSlots | null;
 }
 
 // 发布任务

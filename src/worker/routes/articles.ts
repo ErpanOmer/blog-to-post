@@ -13,7 +13,11 @@ import { createTask } from "@/worker/db/tasks";
 import { createAIProvider } from "@/worker/ai/providers";
 import { getCachedJuejinTitles } from "@/worker/services/juejin-cache";
 import { transitionArticle } from "@/worker/services/distribution";
-import { getArticlePublicationsByArticleId } from "@/worker/db/publications";
+import {
+	getArticlePublicationsByArticleId,
+	updateArticlePublication,
+} from "@/worker/db/publications";
+import type { ArticlePublication } from "@/worker/types/publications";
 import { extractStringArray, safeParseJson } from "@/worker/utils/json-parser";
 import { pickFirstLine } from "@/worker/utils/text";
 import type { ArticleAISettings } from "@/worker/types";
@@ -395,6 +399,219 @@ app.post("/:id/transition", async (c) => {
 	return c.json(result);
 });
 
+const publicationLinkInvalidTextPatterns = [
+	"404 not found",
+	"error 404",
+	"404 -",
+	"page not found",
+	"文章不存在",
+	"内容不存在",
+	"页面不存在",
+	"该内容无法访问",
+	"已被删除",
+	"内容已删除",
+	"链接已失效",
+];
+const publicationLinkCheckIntervalMs = 7 * 24 * 60 * 60 * 1000;
+const publicationLinkCheckKeyPrefix = "article-publication-link-check:";
+
+interface PublicationLinkCheckState {
+	publishedUrl: string;
+	publishId?: string | null;
+	checkedAt: number;
+	status: "valid" | "invalid" | "unverified" | "skipped_initial";
+	reason?: string;
+}
+
+function getPublicationLinkCheckKey(publicationId: string): string {
+	return `${publicationLinkCheckKeyPrefix}${publicationId}`;
+}
+
+function normalizeComparableUrl(value: string): string {
+	return value.trim().replace(/\/+$/, "");
+}
+
+async function getPublicationLinkCheckState(
+	env: Env,
+	publicationId: string,
+): Promise<PublicationLinkCheckState | null> {
+	const raw = await env.PROMPTS.get(getPublicationLinkCheckKey(publicationId));
+	if (!raw) return null;
+
+	try {
+		const parsed = JSON.parse(raw) as Partial<PublicationLinkCheckState>;
+		if (!parsed.publishedUrl || typeof parsed.checkedAt !== "number") return null;
+		return {
+			publishedUrl: parsed.publishedUrl,
+			publishId: parsed.publishId ?? null,
+			checkedAt: parsed.checkedAt,
+			status: parsed.status ?? "unverified",
+			reason: parsed.reason,
+		};
+	} catch {
+		return null;
+	}
+}
+
+async function setPublicationLinkCheckState(
+	env: Env,
+	publication: ArticlePublication,
+	publishedUrl: string,
+	status: PublicationLinkCheckState["status"],
+	reason?: string,
+): Promise<void> {
+	await env.PROMPTS.put(
+		getPublicationLinkCheckKey(publication.id),
+		JSON.stringify({
+			publishedUrl,
+			publishId: publication.publishId ?? null,
+			checkedAt: Date.now(),
+			status,
+			reason,
+		} satisfies PublicationLinkCheckState),
+	);
+}
+
+function hasExpectedPublicationUrlShape(platform: PlatformType, rawUrl: string): boolean {
+	let parsed: URL;
+	try {
+		parsed = new URL(rawUrl);
+	} catch {
+		return false;
+	}
+
+	const host = parsed.hostname.toLowerCase();
+	const pathname = parsed.pathname.toLowerCase();
+
+	switch (platform) {
+		case "csdn":
+			return host.endsWith("csdn.net") && pathname.includes("/article/details/");
+		case "juejin":
+			return host.endsWith("juejin.cn") && /^\/post\/\d+/.test(pathname);
+		case "segmentfault":
+			return host.endsWith("segmentfault.com") && pathname.startsWith("/a/");
+		case "cnblogs":
+			return host.endsWith("cnblogs.com") && (
+				pathname.includes("/p/")
+				|| pathname.includes("/articles/")
+				|| pathname.includes("/archive/")
+			);
+		case "zhihu":
+			return host.endsWith("zhihu.com") && (
+				pathname.startsWith("/p/")
+				|| pathname.includes("/question/")
+			);
+		case "wechat":
+			return host.endsWith("mp.weixin.qq.com") && pathname.startsWith("/s");
+		case "xiaohongshu":
+			return host.endsWith("xiaohongshu.com") && (
+				pathname.includes("/explore/")
+				|| pathname.includes("/discovery/item/")
+			);
+		default:
+			return true;
+	}
+}
+
+async function isPublicationUrlStillValid(publication: ArticlePublication): Promise<{
+	valid: boolean;
+	reason?: string;
+}> {
+	const rawUrl = publication.publishedUrl?.trim();
+	if (!rawUrl) return { valid: false, reason: "empty_url" };
+	if (!/^https?:\/\//i.test(rawUrl)) return { valid: false, reason: "unsupported_url" };
+	if (!hasExpectedPublicationUrlShape(publication.platform, rawUrl)) {
+		return { valid: false, reason: "unexpected_article_detail_url" };
+	}
+
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+	try {
+		const response = await fetch(rawUrl, {
+			method: "GET",
+			redirect: "follow",
+			signal: controller.signal,
+			headers: {
+				accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+				"user-agent": "Mozilla/5.0 (compatible; BlogToPostLinkChecker/1.0)",
+			},
+		});
+
+		if (!response.ok) {
+			if (response.status === 404 || response.status === 410) {
+				return { valid: false, reason: `http_${response.status}` };
+			}
+			// Some platforms, especially Zhihu, block server-side link checks with
+			// 401/403/429 or transient edge errors while the browser URL is valid.
+			// Keep structurally valid article links unless the response is a hard
+			// not-found signal.
+			return { valid: true, reason: `http_${response.status}_unverified_keep` };
+		}
+
+		const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+		if (!contentType.includes("text/html")) {
+			return { valid: true };
+		}
+
+		const text = (await response.text()).slice(0, 200_000).toLowerCase();
+		const invalidPattern = publicationLinkInvalidTextPatterns.find((pattern) => text.includes(pattern.toLowerCase()));
+		if (invalidPattern) {
+			return { valid: false, reason: `matched_${invalidPattern}` };
+		}
+
+		return { valid: true };
+	} catch (error) {
+		return {
+			valid: true,
+			reason: error instanceof Error ? `${error.name}_unverified_keep` : "fetch_failed_unverified_keep",
+		};
+	} finally {
+		clearTimeout(timeoutId);
+	}
+}
+
+function restoreKnownPublishedUrl(publication: ArticlePublication): string | null {
+	const publishId = publication.publishId?.trim();
+	if (!publishId) return null;
+
+	switch (publication.platform) {
+		case "zhihu":
+			return `https://zhuanlan.zhihu.com/p/${publishId}`;
+		case "juejin":
+			return `https://juejin.cn/post/${publishId}`;
+		case "segmentfault":
+			return `https://segmentfault.com/a/${publishId}`;
+		default:
+			return null;
+	}
+}
+
+function isKnownStablePublishedUrl(publication: ArticlePublication, publishedUrl: string): boolean {
+	if (publication.status !== "published") return false;
+	const knownUrl = restoreKnownPublishedUrl(publication);
+	if (!knownUrl) return false;
+	return normalizeComparableUrl(knownUrl) === normalizeComparableUrl(publishedUrl);
+}
+
+function isPublicationLinkCheckFresh(
+	state: PublicationLinkCheckState | null,
+	publishedUrl: string,
+	now: number,
+): boolean {
+	if (!state) return false;
+	if (normalizeComparableUrl(state.publishedUrl) !== normalizeComparableUrl(publishedUrl)) return false;
+	return now - state.checkedAt < publicationLinkCheckIntervalMs;
+}
+
+function resolvePublicationLinkCheckStatus(
+	result: { valid: boolean; reason?: string },
+): PublicationLinkCheckState["status"] {
+	if (!result.valid) return "invalid";
+	if (result.reason?.includes("unverified_keep")) return "unverified";
+	return "valid";
+}
+
 // Get article publications
 app.get("/:id/publications", async (c) => {
 	try {
@@ -402,6 +619,92 @@ app.get("/:id/publications", async (c) => {
 		return c.json(publications);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "failed to get publications";
+		return c.json({ message }, 500);
+	}
+});
+
+app.post("/:id/publications/validate-links", async (c) => {
+	try {
+		const articleId = c.req.param("id");
+		const publications = await getArticlePublicationsByArticleId(c.env.DB, articleId);
+		const removed: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }> = [];
+		const restored: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }> = [];
+		const skipped: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }> = [];
+		const now = Date.now();
+
+		for (const publication of publications) {
+			let publishedUrl = publication.publishedUrl?.trim();
+			if (!publishedUrl) {
+				const restoredUrl = restoreKnownPublishedUrl(publication);
+				if (!restoredUrl) continue;
+				await updateArticlePublication(c.env.DB, publication.id, {
+					publishedUrl: restoredUrl,
+				});
+				publishedUrl = restoredUrl;
+				restored.push({
+					id: publication.id,
+					platform: publication.platform,
+					publishedUrl,
+					reason: "restored_from_publish_id",
+				});
+			}
+
+			const state = await getPublicationLinkCheckState(c.env, publication.id);
+			if (isPublicationLinkCheckFresh(state, publishedUrl, now)) {
+				skipped.push({
+					id: publication.id,
+					platform: publication.platform,
+					publishedUrl,
+					reason: "checked_within_one_week",
+				});
+				continue;
+			}
+
+			if (!state && isKnownStablePublishedUrl(publication, publishedUrl)) {
+				await setPublicationLinkCheckState(
+					c.env,
+					publication,
+					publishedUrl,
+					"skipped_initial",
+					"stable_publish_id_url_initial_skip",
+				);
+				skipped.push({
+					id: publication.id,
+					platform: publication.platform,
+					publishedUrl,
+					reason: "stable_publish_id_url_initial_skip",
+				});
+				continue;
+			}
+
+			const result = await isPublicationUrlStillValid({
+				...publication,
+				publishedUrl,
+			});
+			await setPublicationLinkCheckState(
+				c.env,
+				publication,
+				publishedUrl,
+				resolvePublicationLinkCheckStatus(result),
+				result.reason,
+			);
+			if (result.valid) continue;
+
+			await updateArticlePublication(c.env.DB, publication.id, {
+				publishedUrl: null,
+			});
+			removed.push({
+				id: publication.id,
+				platform: publication.platform,
+				publishedUrl,
+				reason: result.reason ?? "invalid",
+			});
+		}
+
+		const refreshed = await getArticlePublicationsByArticleId(c.env.DB, articleId);
+		return c.json({ publications: refreshed, removed, restored, skipped });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "failed to validate publication links";
 		return c.json({ message }, 500);
 	}
 });

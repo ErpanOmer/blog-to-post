@@ -9,6 +9,8 @@ import {
     verifyPlatformAccount
 } from "@/worker/db/platform-accounts";
 import { getAccountStatistics, listAccountStatistics } from "@/worker/db/publications";
+import { getPlatformPublishSettings } from "@/worker/services/platform-settings";
+import { isPublishablePlatform } from "@/shared/platform-settings";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -90,6 +92,13 @@ app.post("/", async (c) => {
     if (!payload.platform) {
         return c.json({ message: "platform is required" }, 400);
     }
+    const platformSettings = await getPlatformPublishSettings(c.env);
+    if (!isPublishablePlatform(payload.platform)) {
+        return c.json({ message: "unsupported platform" }, 400);
+    }
+    if (platformSettings[payload.platform]?.enabled === false) {
+        return c.json({ message: "platform is disabled in settings" }, 403);
+    }
 
     const resolvedAuthToken = resolveAuthTokenForCreate(payload);
 
@@ -133,6 +142,10 @@ app.put("/:id", async (c) => {
     if (!existingAccount) {
         return c.json({ message: "not found" }, 404);
     }
+    const platformSettings = await getPlatformPublishSettings(c.env);
+    if (isPublishablePlatform(existingAccount.platform) && platformSettings[existingAccount.platform]?.enabled === false) {
+        return c.json({ message: "platform is disabled in settings" }, 403);
+    }
 
     const shouldUpdateCredential = (
         Object.prototype.hasOwnProperty.call(payload, "authToken")
@@ -161,6 +174,14 @@ app.put("/:id", async (c) => {
 
 // Verify account
 app.post("/:id/verify", async (c) => {
+    const account = await getPlatformAccount(c.env.DB, c.req.param("id"), c.env.ENCRYPTION_KEY);
+    if (!account) {
+        return c.json({ message: "not found" }, 404);
+    }
+    const platformSettings = await getPlatformPublishSettings(c.env);
+    if (isPublishablePlatform(account.platform) && platformSettings[account.platform]?.enabled === false) {
+        return c.json({ message: "platform is disabled in settings" }, 403);
+    }
     const result = await verifyPlatformAccount(c.env.DB, c.req.param("id"), c.env.ENCRYPTION_KEY);
     return c.json(result);
 });

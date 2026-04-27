@@ -14,6 +14,12 @@ import { marked } from "marked";
 import { randomDelay } from "@/worker/utils/helpers";
 import { highlightHtmlCodeBlocks } from "@/worker/utils/html-code-highlight";
 import {
+	HEADER_SLOT_PLACEHOLDER,
+	FOOTER_SLOT_PLACEHOLDER,
+	applyHtmlContentSlots,
+	normalizePublishContentSlots,
+} from "@/worker/utils/content-slots";
+import {
 	buildCloudinaryImageFormatRewriteSources,
 	uploadImageWithCandidates,
 	type ResolvedImageUploadCandidate,
@@ -805,35 +811,17 @@ export default class WechatAccountService extends AbstractAccountService {
 		return "";
 	}
 
-	private fillWechatSlotPlaceholder(template: string, placeholder: string, value: string): string {
-		return template.split(placeholder).join(value);
-	}
-
 	private injectWechatHeaderFooterSlots(article: SharedArticle, htmlContent: string): string {
 		if (!htmlContent.trim()) return htmlContent;
 
-		let templatedContent = htmlContent;
-		if (!templatedContent.includes(WECHAT_HEADER_SLOT_PLACEHOLDER)) {
-			templatedContent = `${WECHAT_HEADER_SLOT_PLACEHOLDER}\n${templatedContent}`;
-		}
-		if (!templatedContent.includes(WECHAT_FOOTER_SLOT_PLACEHOLDER)) {
-			templatedContent = `${templatedContent}\n${WECHAT_FOOTER_SLOT_PLACEHOLDER}`;
-		}
-
-		const defaultHeader = this.buildWechatDefaultHeaderHtml(article);
-		const defaultFooter = this.buildWechatDefaultFooterHtml();
-		let resolvedContent = this.fillWechatSlotPlaceholder(
-			templatedContent,
-			WECHAT_HEADER_SLOT_PLACEHOLDER,
-			defaultHeader,
-		);
-		resolvedContent = this.fillWechatSlotPlaceholder(
-			resolvedContent,
-			WECHAT_FOOTER_SLOT_PLACEHOLDER,
-			defaultFooter,
-		);
-
-		return resolvedContent.trim();
+		const slots = normalizePublishContentSlots(article.contentSlots);
+		const defaultHeader = slots.useCoverImageAsHeader ? this.buildWechatDefaultHeaderHtml(article) : "";
+		return applyHtmlContentSlots(htmlContent, article, {
+			headerPlaceholders: [WECHAT_HEADER_SLOT_PLACEHOLDER, HEADER_SLOT_PLACEHOLDER],
+			footerPlaceholders: [WECHAT_FOOTER_SLOT_PLACEHOLDER, FOOTER_SLOT_PLACEHOLDER],
+			defaultHeaderHtml: defaultHeader,
+			defaultFooterHtml: this.buildWechatDefaultFooterHtml(),
+		});
 	}
 
 	private applyGithubCodeHighlightToHtml(htmlContent: string): string {

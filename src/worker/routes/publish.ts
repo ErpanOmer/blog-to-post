@@ -13,12 +13,15 @@ import {
 	listPublishTaskSteps,
 	listArticlePublications,
 } from "@/worker/db/publications";
+import { getPlatformAccount } from "@/worker/db/platform-accounts";
 import {
 	PublishErrorCodes,
 	type PublishErrorCode,
 	PublishServiceError,
 	toPublishServiceError,
 } from "@/worker/services/publish-errors";
+import { getPlatformPublishSettings } from "@/worker/services/platform-settings";
+import { isPublishablePlatform } from "@/shared/platform-settings";
 import { createRequestId, logger } from "@/worker/utils/logger";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -42,6 +45,41 @@ function parsePublicationStatus(value?: string): PublicationStatus | undefined {
 function parsePlatform(value?: string): PlatformType | undefined {
 	if (!value) return undefined;
 	return allowedPlatforms.includes(value as PlatformType) ? (value as PlatformType) : undefined;
+}
+
+async function applyGlobalPlatformPublishSettings(
+	env: Env,
+	accountConfigs: AccountConfig[],
+): Promise<AccountConfig[]> {
+	const settings = await getPlatformPublishSettings(env);
+	return accountConfigs.map((config) => {
+		if (!isPublishablePlatform(config.platform)) {
+			throw new PublishServiceError({
+				code: PublishErrorCodes.UNSUPPORTED_PLATFORM,
+				status: 400,
+				message: `Unsupported platform: ${config.platform}`,
+				details: { platform: config.platform },
+			});
+		}
+		const setting = settings[config.platform];
+		if (!setting?.enabled) {
+			throw new PublishServiceError({
+				code: PublishErrorCodes.INVALID_REQUEST,
+				status: 400,
+				message: `Platform is disabled in settings: ${config.platform}`,
+				details: { platform: config.platform },
+			});
+		}
+		return {
+			...config,
+			draftOnly: setting.draftOnly,
+			contentSlots: {
+				useCoverImageAsHeader: setting.useCoverImageAsHeader,
+				headerSlot: setting.headerSlot,
+				footerSlot: setting.footerSlot,
+			},
+		};
+	});
 }
 
 function normalizeRouteError(
@@ -115,11 +153,13 @@ app.post("/tasks", async (c) => {
 			});
 		}
 
+		const normalizedAccountConfigs = await applyGlobalPlatformPublishSettings(c.env, accountConfigs);
+
 		const result = await createPublishTaskService(
 			c.env.DB,
 			{
 				articleIds,
-				accountConfigs,
+				accountConfigs: normalizedAccountConfigs,
 				scheduleTime,
 				idempotencyKey,
 			},
@@ -210,10 +250,11 @@ app.get("/tasks/:id/steps", async (c) => {
 app.post("/quick", async (c) => {
 	const requestId = createRequestId();
 	try {
-		const { articleId, accountId, draftOnly = false } = (await c.req.json()) as {
+		const { articleId, accountId, draftOnly = false, contentSlots = null } = (await c.req.json()) as {
 			articleId: string;
 			accountId: string;
 			draftOnly?: boolean;
+			contentSlots?: AccountConfig["contentSlots"];
 		};
 
 		if (!articleId || !accountId) {
@@ -224,13 +265,29 @@ app.post("/quick", async (c) => {
 			});
 		}
 
+		const account = await getPlatformAccount(c.env.DB, accountId, c.env.ENCRYPTION_KEY);
+		if (!account) {
+			throw new PublishServiceError({
+				code: PublishErrorCodes.ACCOUNT_NOT_FOUND,
+				status: 404,
+				message: "Account not found",
+				details: { accountId },
+			});
+		}
+		const [normalizedConfig] = await applyGlobalPlatformPublishSettings(c.env, [{
+			accountId,
+			platform: account.platform,
+			draftOnly,
+		}]);
+
 		const result = await quickPublish(
 			c.env.DB,
 			articleId,
 			accountId,
-			draftOnly,
+			normalizedConfig.draftOnly,
 			c.executionCtx,
 			{ requestId, encryptionKey: c.env.ENCRYPTION_KEY },
+			normalizedConfig.contentSlots ?? contentSlots,
 		);
 		return c.json({ ...result, requestId });
 	} catch (error) {

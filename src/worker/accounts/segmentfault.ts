@@ -11,6 +11,7 @@ import type {
 } from "@/worker/accounts/index";
 import type { Article as SharedArticle } from "@/shared/types";
 import { randomDelay } from "@/worker/utils/helpers";
+import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
 
 interface SegmentFaultResolvedContent {
 	markdownContent: string;
@@ -581,7 +582,7 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 	}
 
 	private async resolveArticleContent(article: SharedArticle): Promise<SegmentFaultResolvedContent> {
-		const markdown = article.content?.trim() ?? "";
+		const markdown = applyMarkdownContentSlots(article.content?.trim() ?? "", article);
 		if (!markdown) {
 			throw new Error("Article markdown content is empty, cannot publish to SegmentFault");
 		}

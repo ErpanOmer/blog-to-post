@@ -1,35 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ArticlePublication } from "@/react-app/types/publications";
-import { getArticlePublications, getPlatformAccounts } from "@/react-app/api";
+import { getArticlePublications, getPlatformAccounts, validateArticlePublicationLinks } from "@/react-app/api";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, Clock, ExternalLink, FileEdit, Loader2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PLATFORM_DISPLAY_NAMES, PLATFORM_SHORT_ICONS, isPublishablePlatform } from "@/shared/platform-settings";
 
 interface ArticlePublicationStatusProps {
 	articleId: string;
 }
-
-const platformLabels: Record<string, string> = {
-	juejin: "掘金",
-	zhihu: "知乎",
-	xiaohongshu: "小红书",
-	wechat: "公众号",
-	csdn: "CSDN",
-	cnblogs: "博客园",
-	segmentfault: "SegmentFault",
-};
-
-const platformIcons: Record<string, string> = {
-	juejin: "J",
-	zhihu: "Z",
-	xiaohongshu: "X",
-	wechat: "W",
-	csdn: "C",
-	cnblogs: "B",
-	segmentfault: "S",
-};
 
 const statusConfig = {
 	pending: {
@@ -64,17 +45,30 @@ const statusConfig = {
 	},
 } as const;
 
+function getPlatformLabel(platform: string): string {
+	return isPublishablePlatform(platform) ? PLATFORM_DISPLAY_NAMES[platform] : platform;
+}
+
+function getPlatformIcon(platform: string): string {
+	return isPublishablePlatform(platform) ? PLATFORM_SHORT_ICONS[platform] : "?";
+}
+
 export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatusProps) {
 	const [publications, setPublications] = useState<ArticlePublication[]>([]);
 	const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
 	const [activePlatform, setActivePlatform] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
+	const [isCheckingLinks, setIsCheckingLinks] = useState(false);
 
 	const loadData = useCallback(async () => {
 		setIsLoading(true);
 		try {
+			setIsCheckingLinks(true);
 			const [pubs, accounts] = await Promise.all([
-				getArticlePublications(articleId),
+				validateArticlePublicationLinks(articleId).catch(async (error) => {
+					console.warn("Validate publication links failed, fallback to cached publications", error);
+					return getArticlePublications(articleId);
+				}),
 				getPlatformAccounts(),
 			]);
 			const sorted = [...pubs].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -88,6 +82,7 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
 		} catch (error) {
 			console.error("Load publication status failed", error);
 		} finally {
+			setIsCheckingLinks(false);
 			setIsLoading(false);
 		}
 	}, [articleId]);
@@ -190,6 +185,7 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
 				<div className="flex min-w-max items-center gap-1.5 whitespace-nowrap">
 					<span className="text-[11px] font-medium text-slate-500">分发链接</span>
 					<span className="mr-1 text-[11px] text-slate-400">{linkPublications.length} 条</span>
+					{isCheckingLinks ? <Loader2 className="h-3 w-3 animate-spin text-slate-300" /> : null}
 					{platformGroups.map(({ platform, entries }) => (
 						<button
 							key={platform}
@@ -197,8 +193,8 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
 							onClick={() => setActivePlatform(platform)}
 							className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 transition-colors hover:bg-slate-50"
 						>
-							<span className="text-slate-500">{platformIcons[platform]}</span>
-							<span>{platformLabels[platform] || platform}</span>
+							<span className="text-slate-500">{getPlatformIcon(platform)}</span>
+							<span>{getPlatformLabel(platform)}</span>
 							<span className="rounded bg-slate-100 px-1 py-0 text-[10px] text-slate-500">{entries.length}</span>
 						</button>
 					))}
@@ -213,7 +209,7 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
 								variant="outline"
 								className="rounded-md border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700"
 							>
-								{activeGroup ? `${platformIcons[activeGroup.platform]} ${platformLabels[activeGroup.platform] || activeGroup.platform}` : ""}
+								{activeGroup ? `${getPlatformIcon(activeGroup.platform)} ${getPlatformLabel(activeGroup.platform)}` : ""}
 							</Badge>
 							<span className="text-sm text-slate-500">{activeGroup?.entries.length ?? 0} 条发布记录</span>
 						</DialogTitle>

@@ -8,6 +8,7 @@ import { processScheduledTasks } from "@/worker/services/publish";
 import articlesApp from "@/worker/routes/articles";
 import accountsApp from "@/worker/routes/accounts";
 import publishApp from "@/worker/routes/publish";
+import settingsApp from "@/worker/routes/settings";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -88,6 +89,7 @@ import aiApp from "@/worker/routes/ai";
 app.route("/api/articles", articlesApp);
 app.route("/api/accounts", accountsApp);
 app.route("/api/publish", publishApp);
+app.route("/api/settings", settingsApp);
 app.route("/api/ai", aiApp);
 
 // 注意：原先的 /api/juejin/top 在 index.ts 中是根路径，

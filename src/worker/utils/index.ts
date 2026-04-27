@@ -1,4 +1,6 @@
 export * as cryptoUtils from "./crypto";
+export * as aws4Utils from "./aws4";
+export * as contentSlotUtils from "./content-slots";
 export * as helperUtils from "./helpers";
 export * as htmlCodeHighlightUtils from "./html-code-highlight";
 export * as jsonParserUtils from "./json-parser";

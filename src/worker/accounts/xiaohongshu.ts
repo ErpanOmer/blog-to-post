@@ -1,6 +1,7 @@
 import { AbstractAccountService } from "@/worker/accounts/abstract";
 import type { Article as SharedArticle } from "@/shared/types";
 import { registerAccountService } from "@/worker/accounts/index";
+import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
 import type {
 	VerifyResult,
 	AccountStatus,
@@ -32,7 +33,7 @@ export default class XiaohongshuAccountService extends AbstractAccountService {
 
 			return {
 				valid: true,
-				message: "验证成功",
+				message: "楠岃瘉鎴愬姛",
 				accountInfo: {
 					id: data.data.user_id,
 					name: data.data.nickname,
@@ -43,7 +44,7 @@ export default class XiaohongshuAccountService extends AbstractAccountService {
 		} catch (error) {
 			return {
 				valid: false,
-				message: error instanceof Error ? error.message : "验证失败",
+				message: error instanceof Error ? error.message : "楠岃瘉澶辫触",
 			};
 		}
 	}
@@ -84,7 +85,7 @@ export default class XiaohongshuAccountService extends AbstractAccountService {
 					method: "POST",
 					body: JSON.stringify({
 						title: article.title,
-						content: article.content,
+						content: applyMarkdownContentSlots(article.content ?? "", article),
 						cover: article.coverImage,
 					}),
 				},
@@ -93,20 +94,20 @@ export default class XiaohongshuAccountService extends AbstractAccountService {
 			return {
 				success: true,
 				articleId: data.data.note_id,
-				message: "发布成功",
+				message: "鍙戝竷鎴愬姛",
 				url: `https://www.xiaohongshu.com/explore/${data.data.note_id}`,
 			};
 		} catch (error) {
 			return {
 				success: false,
-				message: error instanceof Error ? error.message : "发布失败",
+				message: error instanceof Error ? error.message : "鍙戝竷澶辫触",
 			};
 		}
 	}
 
 	async articleDelete(articleId: string): Promise<{ success: boolean; message: string }> {
 		void articleId;
-		return { success: false, message: "暂不支持删除文章" };
+		return { success: false, message: "鏆備笉鏀寔鍒犻櫎鏂囩珷" };
 	}
 
 	async articleList(page = 1, pageSize = 10): Promise<Article[]> {
@@ -153,7 +154,7 @@ export default class XiaohongshuAccountService extends AbstractAccountService {
 	async imageUpload(imageData: string, filename?: string): Promise<ImageUploadResult> {
 		void imageData;
 		void filename;
-		return { success: false, message: "暂不支持图片上传" };
+		return { success: false, message: "鏆備笉鏀寔鍥剧墖涓婁紶" };
 	}
 }
 

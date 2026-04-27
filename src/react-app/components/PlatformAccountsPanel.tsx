@@ -7,6 +7,7 @@ import {
   deletePlatformAccount,
   getPlatformAccount,
   getPlatformAccounts,
+  getPlatformPublishSettings,
   updatePlatformAccount,
   verifyPlatformAccount,
   type PlatformAccount,
@@ -15,20 +16,25 @@ import {
 import { PlatformAccountForm } from "./PlatformAccountForm";
 import { PlatformAccountList } from "./PlatformAccountList";
 import { Loader2, Plus } from "lucide-react";
+import {
+  PLATFORM_DISPLAY_NAMES,
+  PUBLISHABLE_PLATFORMS,
+  isPublishablePlatform,
+  normalizePlatformPublishSettings,
+} from "@/shared/platform-settings";
+import type { PlatformPublishSettingsMap } from "@/shared/types";
 
 const platformFilters: { value: PlatformType | "all"; label: string }[] = [
   { value: "all", label: "全部" },
-  { value: "juejin", label: "掘金" },
-  { value: "zhihu", label: "知乎" },
-  { value: "xiaohongshu", label: "小红书" },
-  { value: "wechat", label: "公众号" },
-  { value: "csdn", label: "CSDN" },
-  { value: "cnblogs", label: "博客园" },
-  { value: "segmentfault", label: "SegmentFault" },
+  ...PUBLISHABLE_PLATFORMS.map((platform) => ({
+    value: platform,
+    label: PLATFORM_DISPLAY_NAMES[platform],
+  })),
 ];
 
 export function PlatformAccountsPanel() {
   const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
+  const [platformSettings, setPlatformSettings] = useState<PlatformPublishSettingsMap>(() => normalizePlatformPublishSettings());
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<PlatformType | "all">("all");
   const [formOpen, setFormOpen] = useState(false);
@@ -50,8 +56,12 @@ export function PlatformAccountsPanel() {
     setLoading(true);
     try {
       const platform = filter === "all" ? undefined : filter;
-      const data = await getPlatformAccounts(platform);
+      const [data, settings] = await Promise.all([
+        getPlatformAccounts(platform),
+        getPlatformPublishSettings(),
+      ]);
       setAccounts(data);
+      setPlatformSettings(normalizePlatformPublishSettings(settings));
     } catch (error) {
       console.error("获取平台账号失败", error);
     } finally {
@@ -63,6 +73,15 @@ export function PlatformAccountsPanel() {
     void fetchAccounts();
   }, [fetchAccounts]);
 
+  useEffect(() => {
+    const handleSettingsUpdated = (event: Event) => {
+      const custom = event as CustomEvent<PlatformPublishSettingsMap>;
+      setPlatformSettings(normalizePlatformPublishSettings(custom.detail));
+    };
+    window.addEventListener("platform-publish-settings-updated", handleSettingsUpdated);
+    return () => window.removeEventListener("platform-publish-settings-updated", handleSettingsUpdated);
+  }, []);
+
   const handleCreate = async (data: {
     platform: PlatformType;
     authToken?: string;
@@ -71,6 +90,10 @@ export function PlatformAccountsPanel() {
     description?: string;
   }) => {
     try {
+      if (!isPublishablePlatform(data.platform) || platformSettings[data.platform]?.enabled === false) {
+        toast.error("该平台已在设置中禁用，不能新增账号");
+        return false;
+      }
       await createPlatformAccount(data);
       toast.success("账号添加成功");
       await fetchAccounts();
@@ -187,6 +210,7 @@ export function PlatformAccountsPanel() {
             setFormOpen(true);
           }}
           onDelete={handleDelete}
+          platformSettings={platformSettings}
         />
       )}
 
@@ -199,6 +223,7 @@ export function PlatformAccountsPanel() {
         account={editingAccount}
         onSave={editingAccount ? handleUpdate : handleCreate}
         onVerify={handleVerify}
+        platformSettings={platformSettings}
       />
 
       <ConfirmDialog
