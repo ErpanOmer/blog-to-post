@@ -143,9 +143,9 @@ export function ArticleEditorPage({
       </div>
 
       {/* Editor layout */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[400px_minmax(0,1fr)] 2xl:grid-cols-[440px_minmax(0,1fr)]">
-        <aside className="border-r border-slate-200/60 bg-slate-50/50 p-5 overflow-y-auto custom-scrollbar">
-            <div className="space-y-4">
+      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[460px_minmax(0,1fr)] 2xl:grid-cols-[520px_minmax(0,1fr)]">
+        <aside className="border-r border-slate-200/60 bg-gradient-to-b from-slate-50 via-white to-slate-50 p-5 overflow-y-auto custom-scrollbar lg:p-6">
+            <div className="space-y-5">
             <TitleGenerator title={draft?.title ?? ""} onTitleChange={handleTitle} disabled={isGenerating} hideAIActions />
             </div>
             <GenerationPanel article={draft} onArticleUpdate={handleUpdate} disabled={isGenerating} />

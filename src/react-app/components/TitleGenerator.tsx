@@ -60,30 +60,32 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
   };
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+    <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card">
+      <div className="flex flex-col gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
             <Type className="h-4 w-4" />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900">文章标题</p>
-            {/* <p className="text-xs text-slate-500">标题决定后续内容生成和列表展示气质。</p> */}
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-slate-950">文章标题</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">标题决定文章的第一眼气质，支持手动打磨和 AI 参考。</p>
           </div>
         </div>
 
         {!hideAIActions && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleGenerateTitle}
-            disabled={disabled || loading}
-            type="button"
-            className="gap-2"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-            生成标题
-          </Button>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleGenerateTitle}
+              disabled={disabled || loading}
+              type="button"
+              className="w-full gap-2 rounded-full border-slate-200 bg-white shadow-soft sm:w-auto"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+              生成标题
+            </Button>
+          </div>
         )}
       </div>
 
@@ -92,8 +94,8 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
         disabled={disabled}
         onChange={(event) => onTitleChange(event.target.value)}
         placeholder="输入文章标题"
-        className="mt-4 min-h-[78px] resize-none font-medium"
-        rows={2}
+        className="mt-5 min-h-[96px] resize-none rounded-2xl border-slate-200 bg-white p-4 text-[15px] font-medium leading-7 shadow-inner-soft"
+        rows={3}
       />
 
       {!hideAIActions && (
@@ -111,7 +113,7 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
       )}
 
       {!hideAIActions && generatedTitles.length > 0 && (
-        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
           <p className="mb-3 text-xs text-slate-500">可以直接采用下面的建议标题，也可以继续手动调整。</p>
           <div className="space-y-2">
             {generatedTitles.map((generatedTitle, index) => {
@@ -123,7 +125,7 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
                   type="button"
                   onClick={() => handleSelectTitle(index)}
                   disabled={disabled}
-                  className={`flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors ${
+                  className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
                     selected
                       ? "border-brand-500 bg-brand-50 text-brand-900"
                       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"

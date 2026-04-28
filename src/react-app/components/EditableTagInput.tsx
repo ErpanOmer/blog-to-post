@@ -12,6 +12,15 @@ interface EditableTagInputProps {
 	onChange: (tags: string[]) => void;
 }
 
+const TAG_COLOR_STYLES = [
+	"border-sky-200 bg-sky-50 text-sky-700",
+	"border-emerald-200 bg-emerald-50 text-emerald-700",
+	"border-amber-200 bg-amber-50 text-amber-700",
+	"border-rose-200 bg-rose-50 text-rose-700",
+	"border-violet-200 bg-violet-50 text-violet-700",
+	"border-cyan-200 bg-cyan-50 text-cyan-700",
+] as const;
+
 function normalizeTags(tags: string[]): string[] {
 	const result: string[] = [];
 	for (const tag of tags) {
@@ -76,13 +85,15 @@ export function EditableTagInput({
 	return (
 		<div
 			className={cn(
-				"rounded-xl border border-slate-200 bg-slate-50/60 p-2 transition-colors",
-				disabled ? "opacity-60" : "focus-within:border-brand-300 focus-within:bg-white",
+				"rounded-2xl border border-brand-200 bg-white p-3 shadow-inner-soft transition-colors",
+				disabled ? "opacity-60" : "focus-within:border-brand-400 focus-within:shadow-glow",
 			)}
 		>
-			<div className="flex flex-wrap gap-2">
-				{value.map((tag, index) => (
-					editingIndex === index ? (
+			<div className="flex flex-wrap gap-2.5">
+				{value.map((tag, index) => {
+					const colorClass = TAG_COLOR_STYLES[index % TAG_COLOR_STYLES.length];
+
+					return editingIndex === index ? (
 						<Input
 							key={`editing-${tag}-${index}`}
 							autoFocus
@@ -100,19 +111,19 @@ export function EditableTagInput({
 									cancelEdit();
 								}
 							}}
-							className="h-7 w-28 bg-white px-2 text-xs"
+							className="h-8 w-32 rounded-full bg-white px-3 text-xs"
 						/>
 					) : (
 						<Badge
 							key={`${tag}-${index}`}
 							variant="secondary"
-							className="group gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
+							className={cn("group gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm", colorClass)}
 						>
 							<button
 								type="button"
 								disabled={disabled}
 								onClick={() => beginEdit(index)}
-								className="max-w-[160px] truncate text-left disabled:cursor-default"
+								className="max-w-[170px] truncate text-left disabled:cursor-default"
 								title="点击修改标签"
 							>
 								{tag}
@@ -121,16 +132,16 @@ export function EditableTagInput({
 								type="button"
 								disabled={disabled}
 								onClick={() => removeTag(index)}
-								className="rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:hidden"
+								className="rounded-full opacity-55 transition-opacity hover:opacity-100 disabled:hidden"
 								aria-label={`删除标签 ${tag}`}
 							>
 								<X className="h-3 w-3" />
 							</button>
 						</Badge>
-					)
-				))}
+					);
+				})}
 
-				<div className="flex min-w-[180px] flex-1 items-center gap-2">
+				<div className="flex min-w-0 basis-full flex-col gap-2 rounded-2xl bg-slate-50 p-2 sm:flex-row sm:items-center">
 					<Input
 						disabled={disabled}
 						value={draft}
@@ -152,7 +163,7 @@ export function EditableTagInput({
 							}
 						}}
 						placeholder={value.length ? "继续添加标签" : placeholder}
-						className="h-8 border-0 bg-transparent px-1 text-xs shadow-none focus-visible:ring-0"
+						className="h-9 min-w-0 flex-1 rounded-full border-0 bg-white px-3 text-xs shadow-sm focus-visible:ring-1 focus-visible:ring-brand-200"
 					/>
 					<Button
 						type="button"
@@ -160,14 +171,14 @@ export function EditableTagInput({
 						variant="ghost"
 						disabled={disabled || !draft.trim()}
 						onClick={commitDraft}
-						className="h-7 shrink-0 gap-1 px-2 text-xs"
+						className="h-9 shrink-0 gap-1 rounded-full px-3 text-xs text-slate-600 hover:bg-white"
 					>
 						<Plus className="h-3.5 w-3.5" />
 						添加
 					</Button>
 				</div>
 			</div>
-			<p className="mt-2 px-1 text-[11px] text-slate-400">
+			<p className="mt-3 px-1 text-[11px] leading-5 text-slate-400">
 				支持 Enter、逗号、粘贴多标签添加；点击已有标签可修改。
 			</p>
 		</div>
