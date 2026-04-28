@@ -18,7 +18,6 @@ interface PublishProgressProps {
 const platformLabels: Record<string, string> = {
   juejin: "掘金",
   zhihu: "知乎",
-  xiaohongshu: "小红书",
   wechat: "公众号",
   csdn: "CSDN",
   cnblogs: "博客园",

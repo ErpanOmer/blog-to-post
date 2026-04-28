@@ -28,7 +28,7 @@ const app = new Hono<{ Bindings: Env }>();
 
 const allowedTaskStatuses: PublishTaskStatus[] = ["pending", "processing", "completed", "failed", "cancelled"];
 const allowedPublicationStatuses: PublicationStatus[] = ["pending", "draft_created", "publishing", "published", "failed", "cancelled"];
-const allowedPlatforms: PlatformType[] = ["juejin", "zhihu", "xiaohongshu", "wechat", "csdn", "cnblogs", "segmentfault", ""];
+const allowedPlatforms: PlatformType[] = ["juejin", "zhihu", "wechat", "csdn", "cnblogs", "segmentfault", ""];
 
 function parseTaskStatus(value?: string): PublishTaskStatus | undefined {
 	if (!value) return undefined;
@@ -196,7 +196,9 @@ app.get("/tasks", async (c) => {
 	try {
 		const status = parseTaskStatus(c.req.query("status"));
 		const limitRaw = c.req.query("limit");
+		const offsetRaw = c.req.query("offset");
 		const parsedLimit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
+		const parsedOffset = offsetRaw ? Number.parseInt(offsetRaw, 10) : 0;
 		if (limitRaw && (!parsedLimit || parsedLimit <= 0)) {
 			throw new PublishServiceError({
 				code: PublishErrorCodes.INVALID_REQUEST,
@@ -204,8 +206,15 @@ app.get("/tasks", async (c) => {
 				message: "limit must be a positive integer",
 			});
 		}
+		if (offsetRaw && (!Number.isFinite(parsedOffset) || parsedOffset < 0)) {
+			throw new PublishServiceError({
+				code: PublishErrorCodes.INVALID_REQUEST,
+				status: 400,
+				message: "offset must be a non-negative integer",
+			});
+		}
 
-		const tasks = await listPublishTasks(c.env.DB, { status, limit: parsedLimit });
+		const tasks = await listPublishTasks(c.env.DB, { status, limit: parsedLimit, offset: parsedOffset });
 		return c.json(tasks);
 	} catch (error) {
 		return jsonError(c, requestId, error, PublishErrorCodes.INVALID_REQUEST);

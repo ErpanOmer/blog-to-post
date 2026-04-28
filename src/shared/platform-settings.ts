@@ -7,7 +7,6 @@ import type {
 export const PUBLISHABLE_PLATFORMS = [
 	"juejin",
 	"zhihu",
-	"xiaohongshu",
 	"wechat",
 	"csdn",
 	"cnblogs",
@@ -17,7 +16,6 @@ export const PUBLISHABLE_PLATFORMS = [
 export const PLATFORM_DISPLAY_NAMES: Record<PublishablePlatformType, string> = {
 	juejin: "掘金",
 	zhihu: "知乎",
-	xiaohongshu: "小红书",
 	wechat: "公众号",
 	csdn: "CSDN",
 	cnblogs: "博客园",
@@ -27,7 +25,6 @@ export const PLATFORM_DISPLAY_NAMES: Record<PublishablePlatformType, string> = {
 export const PLATFORM_SHORT_ICONS: Record<PublishablePlatformType, string> = {
 	juejin: "J",
 	zhihu: "Z",
-	xiaohongshu: "X",
 	wechat: "W",
 	csdn: "C",
 	cnblogs: "B",

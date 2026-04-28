@@ -220,7 +220,6 @@ export function useAppController() {
           setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
           deleteArticle(article.id)
             .then(() => {
-              notify.success("文章已删除");
               setConfirmDialog((prev) => ({ ...prev, open: false, isLoading: false }));
             })
             .catch((error: Error) => {

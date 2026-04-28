@@ -12,7 +12,7 @@ import fetchJuejinTopTitles from "@/worker/juejin";
 import { pickFirstLine } from "@/worker/utils/text";
 
 const CANDIDATE_KEY = "candidate_titles";
-const PLATFORMS: PlatformType[] = ["juejin", "zhihu", "xiaohongshu", "wechat"];
+const PLATFORMS: PlatformType[] = ["juejin", "zhihu", "wechat"];
 const fallbackTitle = "AI 驱动的多平台内容分发流程实践";
 
 export async function generateCandidateTitles(env: Env) {

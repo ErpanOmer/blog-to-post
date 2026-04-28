@@ -31,10 +31,9 @@ export {
 
 import "./juejin";
 import "./zhihu";
-import "./xiaohongshu";
 import "./wechat";
 import "./csdn";
 import "./cnblogs";
 import "./segmentfault";
 
-export type { JuejinUserInfo, ZhihuUserInfo, XiaohongshuUserInfo, WechatUserInfo, CSDNUserInfo } from "@/worker/accounts/abstract";
+export type { JuejinUserInfo, ZhihuUserInfo, WechatUserInfo, CSDNUserInfo } from "@/worker/accounts/abstract";

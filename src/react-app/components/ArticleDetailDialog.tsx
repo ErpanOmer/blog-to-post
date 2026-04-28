@@ -58,7 +58,6 @@ const plugins = [
 const platformLabels: Record<string, string> = {
 	juejin: "掘金",
 	zhihu: "知乎",
-	xiaohongshu: "小红书",
 	wechat: "公众号",
 	csdn: "CSDN",
 	cnblogs: "博客园",
@@ -68,7 +67,6 @@ const platformLabels: Record<string, string> = {
 const platformIcons: Record<string, string> = {
 	juejin: "🔟",
 	zhihu: "📕",
-	xiaohongshu: "📓",
 	wechat: "📰",
 	csdn: "C",
 	cnblogs: "B",

@@ -47,7 +47,6 @@ Registered adapters:
 
 - `juejin`
 - `zhihu`
-- `xiaohongshu`
 - `wechat`
 - `csdn`
 - `cnblogs`

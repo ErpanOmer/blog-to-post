@@ -508,11 +508,6 @@ function hasExpectedPublicationUrlShape(platform: PlatformType, rawUrl: string):
 			);
 		case "wechat":
 			return host.endsWith("mp.weixin.qq.com") && pathname.startsWith("/s");
-		case "xiaohongshu":
-			return host.endsWith("xiaohongshu.com") && (
-				pathname.includes("/explore/")
-				|| pathname.includes("/discovery/item/")
-			);
 		default:
 			return true;
 	}

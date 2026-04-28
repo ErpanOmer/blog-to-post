@@ -16,11 +16,6 @@ class ZhihuAdapter implements PlatformAdapter {
 	}
 }
 
-class XiaohongshuAdapter implements PlatformAdapter {
-	adapt(content: string) {
-		return `# 这篇技术干货你一定要看\n\n${content}\n\n#技术分享 #效率工具 #工程实践`;
-	}
-}
 
 class WechatAdapter implements PlatformAdapter {
 	adapt(content: string) {
@@ -52,8 +47,6 @@ export function getPlatformAdapter(platform: PlatformType): PlatformAdapter {
 			return new JuejinAdapter();
 		case "zhihu":
 			return new ZhihuAdapter();
-		case "xiaohongshu":
-			return new XiaohongshuAdapter();
 		case "wechat":
 			return new WechatAdapter();
 		case "csdn":

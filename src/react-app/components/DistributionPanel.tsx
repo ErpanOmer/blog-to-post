@@ -12,7 +12,6 @@ export function DistributionPanel({ article, selectedPlatforms, onToggle, onPubl
 	const options: { value: PlatformType; label: string }[] = [
 		{ value: "juejin", label: "掘金" },
 		{ value: "zhihu", label: "知乎" },
-		{ value: "xiaohongshu", label: "小红书" },
 		{ value: "wechat", label: "公众号" },
 		{ value: "csdn", label: "CSDN" },
 		{ value: "cnblogs", label: "博客园" },

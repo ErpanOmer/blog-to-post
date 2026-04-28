@@ -278,11 +278,6 @@ export interface ZhihuUserInfo {
 	is_realname: boolean;
 }
 
-export interface XiaohongshuUserInfo {
-	user_id: string;
-	nickname: string;
-	avatar: string;
-}
 
 export interface WechatUserInfo {
 	openid: string;

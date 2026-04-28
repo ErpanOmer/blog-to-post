@@ -34,7 +34,6 @@ interface PlatformPublishSettingsPanelProps {
 const platformDescriptions: Record<PublishablePlatformType, string> = {
 	juejin: "Markdown 草稿与发布，支持封面和内容图上传。",
 	zhihu: "知乎专栏 HTML 内容发布，适合保留图文结构。",
-	xiaohongshu: "小红书图文内容入口，目前以正文和封面为主。",
 	wechat: "微信公众号官方草稿发布流程，HTML 会做微信专属处理。",
 	csdn: "CSDN 同时提交 Markdown 和 HTML，代码块使用 Prism。",
 	cnblogs: "博客园 Markdown 编辑器投稿流程。",

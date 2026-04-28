@@ -57,7 +57,6 @@ http-docs/                    # API notes
 | --- | --- | --- | --- | --- | --- |
 | Zhihu | `src/worker/accounts/zhihu.ts` | cookie/session token | yes | yes | Includes image upload token flow and image URL replacement. |
 | Juejin | `src/worker/accounts/juejin.ts` | cookie/session token | yes | yes | Baseline official web API flow. |
-| Xiaohongshu | `src/worker/accounts/xiaohongshu.ts` | cookie/session token | limited | yes | Lightweight adapter; validate with real account state. |
 | WeChat Official Account | `src/worker/accounts/wechat.ts` | `appId` + `appSecret` | yes | yes | Requires official API access and IP whitelist. Uploads content images and `thumb_media_id`. |
 | CSDN | `src/worker/accounts/csdn.ts` | cookie/session token | yes | yes | Sends both markdown and HTML content; Prism code tokens; title emoji cleanup. |
 | CNBlogs | `src/worker/accounts/cnblogs.ts` | cookie/session token | yes | yes | Uses CNBlogs editor APIs and image replacement flow. |

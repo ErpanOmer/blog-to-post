@@ -330,10 +330,15 @@ export async function createPublishTask(request: CreatePublishTaskRequest): Prom
 }
 
 // 获取发布任务列表
-export async function getPublishTasks(status?: PublishTask['status'], limit?: number): Promise<PublishTask[]> {
+export async function getPublishTasks(
+	status?: PublishTask['status'],
+	limit?: number,
+	offset?: number,
+): Promise<PublishTask[]> {
 	const params = new URLSearchParams();
 	if (status) params.append("status", status);
 	if (limit) params.append("limit", limit.toString());
+	if (offset) params.append("offset", offset.toString());
 
 	const url = `/api/publish/tasks${params.toString() ? `?${params.toString()}` : ""}`;
 	return parseJson<PublishTask[]>(await fetch(url));

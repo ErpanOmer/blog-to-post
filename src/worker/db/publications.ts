@@ -336,7 +336,7 @@ export async function getPublishTaskByIdempotencyKey(
 
 export async function listPublishTasks(
   db: D1Database,
-  filters?: { status?: PublishTaskStatus; limit?: number }
+  filters?: { status?: PublishTaskStatus; limit?: number; offset?: number }
 ): Promise<PublishTask[]> {
   let query = "SELECT * FROM publish_tasks WHERE 1=1";
   const params: unknown[] = [];
@@ -351,6 +351,10 @@ export async function listPublishTasks(
   if (filters?.limit) {
     query += " LIMIT ?";
     params.push(filters.limit);
+    if (filters.offset && filters.offset > 0) {
+      query += " OFFSET ?";
+      params.push(filters.offset);
+    }
   }
 
   const result = await db.prepare(query).bind(...params).all<{

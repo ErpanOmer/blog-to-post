@@ -22,7 +22,6 @@ interface DashboardProps {
 const platformLabels: Record<string, string> = {
   juejin: "掘金",
   zhihu: "知乎",
-  xiaohongshu: "小红书",
   wechat: "公众号",
   csdn: "CSDN",
   cnblogs: "博客园",
@@ -64,6 +63,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
 
     const totalPublished = accountStats.reduce((sum, item) => sum + item.totalPublished, 0);
     const totalDrafts = accountStats.reduce((sum, item) => sum + item.totalDrafts, 0);
+    const totalSuccessful = totalPublished + totalDrafts;
     const totalFailed = accountStats.reduce((sum, item) => sum + item.totalFailed, 0);
     const totalPlatforms = new Set(accountStats.map((item) => item.platform)).size;
 
@@ -97,6 +97,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
       publishedArticles,
       totalPublished,
       totalDrafts,
+      totalSuccessful,
       totalFailed,
       totalPlatforms,
       platformRows,
@@ -106,7 +107,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
 
   const statCards = [
     { label: "文章总数", value: summary.totalArticles, detail: `草稿 ${summary.draftArticles} · 已发布 ${summary.publishedArticles}`, icon: FileText, color: "text-brand-500", bg: "bg-brand-50" },
-    { label: "分发动作", value: summary.totalPublished + summary.totalDrafts, detail: `成功 ${summary.totalPublished} · 草稿 ${summary.totalDrafts}`, icon: Send, color: "text-emerald-500", bg: "bg-emerald-50" },
+    { label: "分发动作", value: summary.totalSuccessful, detail: `成功 ${summary.totalSuccessful} · 正式 ${summary.totalPublished} · 草稿 ${summary.totalDrafts}`, icon: Send, color: "text-emerald-500", bg: "bg-emerald-50" },
     { label: "活跃平台", value: summary.totalPlatforms, detail: "已接入并产生统计", icon: Users, color: "text-violet-500", bg: "bg-violet-50" },
     { label: "失败记录", value: summary.totalFailed, detail: "需要回看与处理", icon: AlertCircle, color: "text-rose-500", bg: "bg-rose-50" },
   ];
@@ -129,7 +130,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
             <div className="flex items-center gap-3">
               {[
                 { label: "草稿", value: summary.draftArticles },
-                { label: "已发布", value: summary.totalPublished },
+                { label: "成功", value: summary.totalSuccessful },
                 { label: "平台", value: summary.totalPlatforms },
               ].map((item) => (
                 <div key={item.label} className="text-center">
@@ -188,8 +189,9 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
             ) : (
               <div className="space-y-2.5">
                 {summary.platformRows.map((row) => {
-                  const total = row.published + row.drafts + row.failed;
-                  const successRatio = total > 0 ? (row.published / total) * 100 : 0;
+                  const successful = row.published + row.drafts;
+                  const total = successful + row.failed;
+                  const successRatio = total > 0 ? (successful / total) * 100 : 0;
 
                   return (
                     <div key={row.platform} className="rounded-lg border border-slate-100 bg-slate-50/50 p-3.5 transition-colors hover:bg-slate-50">
@@ -204,7 +206,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">{row.published}</span>
+                          <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">{successful}</span>
                           <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">{row.drafts}</span>
                           <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600">{row.failed}</span>
                         </div>

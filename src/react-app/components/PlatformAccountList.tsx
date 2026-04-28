@@ -17,7 +17,6 @@ const platformStyles: Record<
 > = {
 	juejin: { textClass: "text-orange-600", badgeClass: "bg-orange-50 text-orange-600 border-orange-200/60" },
 	zhihu: { textClass: "text-blue-600", badgeClass: "bg-blue-50 text-blue-600 border-blue-200/60" },
-	xiaohongshu: { textClass: "text-rose-600", badgeClass: "bg-rose-50 text-rose-600 border-rose-200/60" },
 	wechat: { textClass: "text-emerald-600", badgeClass: "bg-emerald-50 text-emerald-600 border-emerald-200/60" },
 	csdn: { textClass: "text-sky-600", badgeClass: "bg-sky-50 text-sky-600 border-sky-200/60" },
 	cnblogs: { textClass: "text-indigo-600", badgeClass: "bg-indigo-50 text-indigo-600 border-indigo-200/60" },

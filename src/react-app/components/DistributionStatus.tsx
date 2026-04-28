@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   AlertTriangle,
@@ -11,6 +11,7 @@ import {
   PlayCircle,
   RefreshCw,
   SkipForward,
+  Timer,
   User,
   XCircle,
 } from "lucide-react";
@@ -23,7 +24,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { getArticles, getPublishTaskSteps, getPublishTasks } from "@/react-app/api";
 import type { Article } from "@/react-app/types";
-import type { PublishTask, PublishTaskStep } from "@/react-app/types/publications";
+import type { PublishTask, PublishTaskStatus, PublishTaskStep } from "@/react-app/types/publications";
 
 interface TaskWithDetails extends PublishTask {
   steps?: PublishTaskStep[];
@@ -35,10 +36,11 @@ interface DistributionStatusProps {
   onDeepLinkHandled?: () => void;
 }
 
+const PAGE_SIZE = 20;
+
 const platformLabels: Record<string, string> = {
   juejin: "掘金",
   zhihu: "知乎",
-  xiaohongshu: "小红书",
   wechat: "公众号",
   csdn: "CSDN",
   cnblogs: "博客园",
@@ -48,7 +50,6 @@ const platformLabels: Record<string, string> = {
 const platformIcons: Record<string, string> = {
   juejin: "J",
   zhihu: "Z",
-  xiaohongshu: "X",
   wechat: "W",
   csdn: "C",
   cnblogs: "B",
@@ -91,9 +92,19 @@ function formatDateTime(timestamp: number): string {
 }
 
 function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "0ms";
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${Math.floor(ms / 1000)}s`;
-  return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  if (minutes < 60) return `${minutes}m ${seconds}s`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+function formatTaskDuration(task: PublishTask): string {
+  if (!task.startedAt) return "未开始";
+  const end = task.completedAt ?? (task.status === "processing" ? Date.now() : task.updatedAt);
+  return formatDuration(Math.max(0, end - task.startedAt));
 }
 
 function formatProgressPair(current: number, total: number): string {
@@ -110,73 +121,126 @@ function safeStringify(value: unknown): string {
   }
 }
 
+function statusForFilter(filter: string): PublishTaskStatus | undefined {
+  if (filter === "running") return "processing";
+  if (filter === "scheduled") return "pending";
+  if (filter === "completed") return "completed";
+  if (filter === "failed") return "failed";
+  return undefined;
+}
+
 export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: DistributionStatusProps) {
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
+  const [taskSteps, setTaskSteps] = useState<Record<string, PublishTaskStep[]>>({});
+  const [articleMap, setArticleMap] = useState<Map<string, Article>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
+  const taskCountRef = useRef(0);
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
+  const hydrateTasks = useCallback((taskList: PublishTask[]) => {
+    return taskList.map((task) => {
+      const articleTitles = new Map<string, string>();
+      task.articleIds.forEach((id) => articleTitles.set(id, articleMap.get(id)?.title || "未命名文章"));
+      return {
+        ...task,
+        articleTitles,
+      };
+    });
+  }, [articleMap]);
+
+  const loadArticlesMap = useCallback(async () => {
+    const allArticles = await getArticles();
+    setArticleMap(new Map(allArticles.map((article) => [article.id, article])));
+  }, []);
+
+  const loadTasks = useCallback(async (mode: "reset" | "append" = "reset") => {
+    const isAppend = mode === "append";
+    if (isAppend) {
+      setIsLoadingMore(true);
+    } else {
+      setIsLoading(true);
+    }
 
     try {
-      const [taskList, allArticles] = await Promise.all([getPublishTasks(), getArticles()]);
-      const articleMap = new Map<string, Article>();
-      allArticles.forEach((article) => articleMap.set(article.id, article));
-
-      const tasksWithDetails = await Promise.all(
-        taskList.map(async (task) => {
-          const steps = await getPublishTaskSteps(task.id);
-          const articleTitles = new Map<string, string>();
-          task.articleIds.forEach((id) => articleTitles.set(id, articleMap.get(id)?.title || "未命名文章"));
-
-          return {
-            ...task,
-            steps: [...steps].sort((a, b) => a.stepNumber - b.stepNumber),
-            articleTitles,
-          };
-        }),
-      );
-
-      setTasks(tasksWithDetails);
+      const status = statusForFilter(activeFilter);
+      const offset = isAppend ? taskCountRef.current : 0;
+      const taskList = await getPublishTasks(status, PAGE_SIZE, offset);
+      setHasMore(taskList.length === PAGE_SIZE);
+      setTasks((prev) => {
+        const hydrated = hydrateTasks(taskList);
+        if (!isAppend) {
+          taskCountRef.current = hydrated.length;
+          return hydrated;
+        }
+        const seen = new Set(prev.map((task) => task.id));
+        const next = [...prev, ...hydrated.filter((task) => !seen.has(task.id))];
+        taskCountRef.current = next.length;
+        return next;
+      });
     } catch (error) {
       console.error("加载分发任务失败", error);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
-  }, []);
+  }, [activeFilter, hydrateTasks]);
+
+  const openTaskDetail = useCallback(async (taskId: string) => {
+    setSelectedTaskId(taskId);
+    setIsDetailOpen(true);
+    if (taskSteps[taskId]) return;
+
+    try {
+      const steps = await getPublishTaskSteps(taskId);
+      setTaskSteps((prev) => ({
+        ...prev,
+        [taskId]: [...steps].sort((a, b) => a.stepNumber - b.stepNumber),
+      }));
+    } catch (error) {
+      console.error("加载任务步骤失败", error);
+    }
+  }, [taskSteps]);
 
   useEffect(() => {
-    void loadData();
-    const timer = setInterval(() => void loadData(), 5000);
+    void loadArticlesMap();
+  }, [loadArticlesMap]);
+
+  useEffect(() => {
+    void loadTasks("reset");
+  }, [activeFilter, loadTasks]);
+
+  useEffect(() => {
+    const hasActiveTasks = tasks.some((task) => task.status === "pending" || task.status === "processing");
+    if (!hasActiveTasks) return;
+    const timer = setInterval(() => void loadTasks("reset"), 5000);
     return () => clearInterval(timer);
-  }, [loadData]);
+  }, [loadTasks, tasks]);
+
+  useEffect(() => {
+    setTasks((prev) => hydrateTasks(prev));
+  }, [hydrateTasks]);
 
   useEffect(() => {
     if (!initialTaskId || tasks.length === 0) return;
     const task = tasks.find((item) => item.id === initialTaskId);
     if (!task) return;
-    setSelectedTaskId(task.id);
-    setIsDetailOpen(true);
+    void openTaskDetail(task.id);
     onDeepLinkHandled?.();
-  }, [initialTaskId, onDeepLinkHandled, tasks]);
+  }, [initialTaskId, onDeepLinkHandled, openTaskDetail, tasks]);
 
-  const selectedTask = useMemo(
-    () => (selectedTaskId ? tasks.find((task) => task.id === selectedTaskId) || null : null),
-    [selectedTaskId, tasks],
-  );
-
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      if (activeFilter === "all") return true;
-      if (activeFilter === "running") return task.status === "processing";
-      if (activeFilter === "scheduled") return task.status === "pending";
-      if (activeFilter === "completed") return task.status === "completed";
-      if (activeFilter === "failed") return task.status === "failed" || task.status === "cancelled";
-      return true;
-    });
-  }, [activeFilter, tasks]);
+  const selectedTask = useMemo(() => {
+    if (!selectedTaskId) return null;
+    const task = tasks.find((item) => item.id === selectedTaskId);
+    if (!task) return null;
+    return {
+      ...task,
+      steps: taskSteps[selectedTaskId],
+    };
+  }, [selectedTaskId, taskSteps, tasks]);
 
   const summary = useMemo(
     () => ({
@@ -189,15 +253,14 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
   );
 
   const summaryCards = [
-    { label: "Tasks", value: summary.total, icon: Layers, color: "text-slate-400" },
-    { label: "Running", value: summary.running, icon: PlayCircle, color: "text-brand-400" },
-    { label: "Completed", value: summary.completed, icon: CheckCircle2, color: "text-emerald-400" },
-    { label: "Failed", value: summary.failed, icon: AlertTriangle, color: "text-red-400" },
+    { label: "已加载", value: summary.total, icon: Layers, color: "text-slate-400" },
+    { label: "执行中", value: summary.running, icon: PlayCircle, color: "text-brand-400" },
+    { label: "已完成", value: summary.completed, icon: CheckCircle2, color: "text-emerald-400" },
+    { label: "失败", value: summary.failed, icon: AlertTriangle, color: "text-red-400" },
   ];
 
   return (
     <div className="space-y-4 page-enter">
-      {/* Summary cards */}
       <div className="grid gap-3 grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((card) => {
           const Icon = card.icon;
@@ -217,7 +280,6 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
         })}
       </div>
 
-      {/* Task list */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -226,10 +288,10 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                 <Layers className="h-4 w-4 text-brand-500" />
                 分发任务看板
               </CardTitle>
-              <CardDescription className="mt-1">查看任务队列、执行进度和步骤日志</CardDescription>
+              <CardDescription className="mt-1">分页查看任务队列、执行进度、总耗时和步骤日志。</CardDescription>
             </div>
 
-            <Button variant="outline" size="xs" onClick={() => void loadData()} disabled={isLoading} className="gap-1.5 self-start">
+            <Button variant="outline" size="xs" onClick={() => void loadTasks("reset")} disabled={isLoading} className="gap-1.5 self-start">
               <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
               刷新
             </Button>
@@ -248,23 +310,23 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
           </Tabs>
 
           <div>
-            {isLoading && filteredTasks.length === 0 ? (
+            {isLoading && tasks.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-[13px] text-slate-400">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 正在加载任务...
               </div>
-            ) : filteredTasks.length === 0 ? (
+            ) : tasks.length === 0 ? (
               <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-16 text-center text-[13px] text-slate-400">
                 <Layers className="mx-auto mb-2 h-8 w-8 text-slate-200" />
                 当前筛选下暂无任务
               </div>
             ) : (
               <div className="space-y-2">
-                {filteredTasks.map((task) => {
+                {tasks.map((task) => {
                   const status = taskStatusConfig[task.status] || taskStatusConfig.pending;
-                  const completed = task.progressData?.completedSteps ?? task.steps?.filter((step) => step.status === "completed").length ?? 0;
-                  const failed = task.progressData?.failedSteps ?? task.steps?.filter((step) => step.status === "failed").length ?? 0;
-                  const skipped = task.progressData?.skippedSteps ?? task.steps?.filter((step) => step.status === "skipped").length ?? 0;
+                  const completed = task.progressData?.completedSteps ?? 0;
+                  const failed = task.progressData?.failedSteps ?? 0;
+                  const skipped = task.progressData?.skippedSteps ?? 0;
                   const done = Math.min(completed + failed + skipped, task.totalSteps || 0);
                   const progress = task.totalSteps > 0 ? Math.round((done / task.totalSteps) * 100) : 0;
                   const accountCount = new Set(task.accountConfigs.map((item) => item.accountId)).size;
@@ -275,16 +337,17 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                       key={task.id}
                       type="button"
                       className="w-full rounded-lg border border-slate-100 bg-white p-3.5 text-left transition-all duration-200 hover:border-slate-200 hover:bg-slate-50/50 hover:shadow-sm"
-                      onClick={() => {
-                        setSelectedTaskId(task.id);
-                        setIsDetailOpen(true);
-                      }}
+                      onClick={() => void openTaskDetail(task.id)}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="mb-2 flex flex-wrap items-center gap-1.5">
                             <Badge className={cn("border text-[10px]", status.badgeClass)}>{status.label}</Badge>
                             <span className="text-[11px] text-slate-400">{formatDateTime(task.createdAt)}</span>
+                            <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                              <Timer className="h-3 w-3" />
+                              总耗时 {formatTaskDuration(task)}
+                            </span>
                           </div>
 
                           <div className="flex flex-wrap items-center gap-3 text-[12px] text-slate-500">
@@ -322,13 +385,21 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                     </button>
                   );
                 })}
+
+                {hasMore && (
+                  <div className="flex justify-center pt-2">
+                    <Button variant="outline" size="sm" onClick={() => void loadTasks("append")} disabled={isLoadingMore} className="gap-1.5">
+                      {isLoadingMore ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                      加载更多
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Detail dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col overflow-hidden p-0">
           {selectedTask && (
@@ -345,7 +416,6 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
 
               <ScrollArea className="flex-1 px-5 py-4 overflow-y-scroll">
                 <div className="space-y-4">
-                  {/* Detail stat cards */}
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
                       <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Status</p>
@@ -362,8 +432,8 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                     </div>
 
                     <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Articles</p>
-                      <p className="mt-2 text-lg font-semibold tabular-nums text-slate-900">{selectedTask.articleIds.length}</p>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Duration</p>
+                      <p className="mt-2 text-lg font-semibold tabular-nums text-slate-900">{formatTaskDuration(selectedTask)}</p>
                     </div>
 
                     <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
@@ -372,36 +442,26 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                     </div>
                   </div>
 
-                  {/* Progress data */}
                   {selectedTask.progressData && (
                     <div className="rounded-lg border border-slate-100 bg-white p-3.5">
                       <h4 className="text-[13px] font-semibold text-slate-800">实时进度</h4>
                       <div className="mt-2.5 grid gap-1.5 text-[12px] text-slate-500 md:grid-cols-2">
                         <div>当前步骤: {selectedTask.progressData.currentStep}</div>
                         <div>
-                          步骤统计: 完成 {selectedTask.progressData.completedSteps} / 失败 {selectedTask.progressData.failedSteps} / 跳过{" "}
-                          {selectedTask.progressData.skippedSteps}
+                          步骤统计: 完成 {selectedTask.progressData.completedSteps} / 失败 {selectedTask.progressData.failedSteps} / 跳过 {selectedTask.progressData.skippedSteps}
                         </div>
-                        <div>
-                          文章进度:{" "}
-                          {formatProgressPair(
-                            selectedTask.progressData.currentArticleIndex + 1,
-                            selectedTask.progressData.totalArticles,
-                          )}
-                        </div>
-                        <div>
-                          账号进度:{" "}
-                          {formatProgressPair(
-                            selectedTask.progressData.currentAccountIndex + 1,
-                            selectedTask.progressData.totalAccounts,
-                          )}
-                        </div>
+                        <div>文章进度: {formatProgressPair(selectedTask.progressData.currentArticleIndex + 1, selectedTask.progressData.totalArticles)}</div>
+                        <div>账号进度: {formatProgressPair(selectedTask.progressData.currentAccountIndex + 1, selectedTask.progressData.totalAccounts)}</div>
                       </div>
                     </div>
                   )}
 
-                  {/* Steps */}
-                  {selectedTask.steps && selectedTask.steps.length > 0 && (
+                  {!selectedTask.steps ? (
+                    <div className="flex items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 py-12 text-[13px] text-slate-400">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      正在加载步骤...
+                    </div>
+                  ) : selectedTask.steps.length > 0 ? (
                     <div>
                       <h4 className="mb-2 text-[13px] font-semibold text-slate-800">执行步骤</h4>
                       <div className="space-y-2">
@@ -409,34 +469,25 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                           const status = stepStatusConfig[step.status] || stepStatusConfig.pending;
                           const inputData = step.inputData ?? null;
                           const outputData = step.outputData ?? null;
-                          const traceStage =
-                            step.stepType === "adapter_trace" && inputData && typeof inputData["stage"] === "string"
-                              ? String(inputData["stage"])
-                              : null;
-                          const traceMessage =
-                            step.stepType === "adapter_trace"
-                              ? (outputData && typeof outputData["message"] === "string"
-                                  ? String(outputData["message"])
-                                  : inputData && typeof inputData["message"] === "string"
-                                    ? String(inputData["message"])
-                                    : null)
-                              : null;
+                          const traceStage = step.stepType === "adapter_trace" && inputData && typeof inputData["stage"] === "string" ? String(inputData["stage"]) : null;
+                          const traceMessage = step.stepType === "adapter_trace"
+                            ? (outputData && typeof outputData["message"] === "string"
+                              ? String(outputData["message"])
+                              : inputData && typeof inputData["message"] === "string"
+                                ? String(inputData["message"])
+                                : null)
+                            : null;
 
-                          const stepLabel =
-                            step.stepType === "adapter_trace"
-                              ? traceStage
-                                ? `适配器跟踪 · ${traceStage}`
-                                : "适配器跟踪"
-                              : stepTypeLabels[step.stepType] || step.stepType;
+                          const stepLabel = step.stepType === "adapter_trace"
+                            ? traceStage ? `适配器跟踪 · ${traceStage}` : "适配器跟踪"
+                            : stepTypeLabels[step.stepType] || step.stepType;
 
                           return (
                             <div key={step.id} className="rounded-lg border border-slate-100 bg-white p-3.5">
                               <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                                 <div className="min-w-0 flex-1">
                                   <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                                    <Badge variant="outline" className="text-[10px]">
-                                      #{step.stepNumber}
-                                    </Badge>
+                                    <Badge variant="outline" className="text-[10px]">#{step.stepNumber}</Badge>
                                     <span className={cn("inline-flex items-center gap-1 text-[12px] font-medium", status.className)}>
                                       {status.icon}
                                       {status.label}
@@ -445,12 +496,8 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                                   </div>
 
                                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                                    <span>
-                                      {platformIcons[step.platform]} {platformLabels[step.platform] || step.platform}
-                                    </span>
-                                    {step.articleId ? (
-                                      <span>文章: {selectedTask.articleTitles?.get(step.articleId) || "未知文章"}</span>
-                                    ) : null}
+                                    <span>{platformIcons[step.platform]} {platformLabels[step.platform] || step.platform}</span>
+                                    {step.articleId ? <span>文章: {selectedTask.articleTitles?.get(step.articleId) || "未知文章"}</span> : null}
                                     {step.duration != null ? <span>耗时: {formatDuration(step.duration)}</span> : null}
                                   </div>
 
@@ -487,7 +534,7 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
                         })}
                       </div>
                     </div>
-                  )}
+                  ) : null}
 
                   {selectedTask.errorData && (
                     <div className="rounded-lg border border-red-100 bg-red-50/50 p-3.5">
