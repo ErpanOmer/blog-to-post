@@ -72,11 +72,28 @@ async function applyGlobalPlatformPublishSettings(
 		}
 		return {
 			...config,
-			draftOnly: setting.draftOnly,
+			draftOnly: typeof config.draftOnly === "boolean" ? config.draftOnly : setting.draftOnly,
 			contentSlots: {
-				useCoverImageAsHeader: setting.useCoverImageAsHeader,
-				headerSlot: setting.headerSlot,
-				footerSlot: setting.footerSlot,
+				useCoverImageAsHeader:
+					config.contentSlots?.useCoverImageAsHeader ?? setting.useCoverImageAsHeader,
+				headerSlot: config.contentSlots?.headerSlot ?? setting.headerSlot,
+				footerSlot: config.contentSlots?.footerSlot ?? setting.footerSlot,
+				headerMarkdown:
+					config.contentSlots?.headerMarkdown
+					?? config.contentSlots?.headerSlot
+					?? setting.headerSlot,
+				headerHtml:
+					config.contentSlots?.headerHtml
+					?? config.contentSlots?.headerSlot
+					?? setting.headerSlot,
+				footerMarkdown:
+					config.contentSlots?.footerMarkdown
+					?? config.contentSlots?.footerSlot
+					?? setting.footerSlot,
+				footerHtml:
+					config.contentSlots?.footerHtml
+					?? config.contentSlots?.footerSlot
+					?? setting.footerSlot,
 			},
 		};
 	});
@@ -278,6 +295,7 @@ app.post("/quick", async (c) => {
 			accountId,
 			platform: account.platform,
 			draftOnly,
+			contentSlots,
 		}]);
 
 		const result = await quickPublish(
@@ -287,7 +305,7 @@ app.post("/quick", async (c) => {
 			normalizedConfig.draftOnly,
 			c.executionCtx,
 			{ requestId, encryptionKey: c.env.ENCRYPTION_KEY },
-			normalizedConfig.contentSlots ?? contentSlots,
+			normalizedConfig.contentSlots ?? null,
 		);
 		return c.json({ ...result, requestId });
 	} catch (error) {

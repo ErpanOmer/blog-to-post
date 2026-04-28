@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { EditableTagInput } from "@/react-app/components/EditableTagInput";
 import { generateArticleSummary, generateArticleTags } from "@/react-app/api";
 import {
 	getLocalArticleAIFeatureSettings,
@@ -40,6 +41,12 @@ export function GenerationPanel({
 	const [uploadMessage, setUploadMessage] = useState<string | null>(null);
 	const [uploadError, setUploadError] = useState<string | null>(null);
 	const coverFileInputRef = useRef<HTMLInputElement | null>(null);
+	const coverUploadDisabled = disabled || loading.uploadCover || !article;
+
+	const openCoverPicker = () => {
+		if (coverUploadDisabled) return;
+		coverFileInputRef.current?.click();
+	};
 
 	const handleGenerateSummary = async () => {
 		if (!article?.content?.trim()) return;
@@ -77,7 +84,7 @@ export function GenerationPanel({
 	};
 
 	const handleUploadLocalCover = async (file: File | null) => {
-		if (!file) return;
+		if (!file || !article) return;
 
 		setUploadError(null);
 		setUploadMessage(null);
@@ -109,7 +116,7 @@ export function GenerationPanel({
 						</div>
 						<div>
 							<p className="text-sm font-semibold text-slate-900">封面图</p>
-							{/* <p className="text-xs text-slate-500">支持手动粘贴链接和本地上传</p> */}
+							<p className="text-xs text-slate-500">支持粘贴链接，也可以点击预览区上传本地图片。</p>
 						</div>
 					</div>
 
@@ -117,10 +124,10 @@ export function GenerationPanel({
 						<Button
 							variant="secondary"
 							size="sm"
-							disabled={disabled || loading.uploadCover}
+							disabled={coverUploadDisabled}
 							type="button"
 							className="gap-2"
-							onClick={() => coverFileInputRef.current?.click()}
+							onClick={openCoverPicker}
 						>
 							{loading.uploadCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
 							上传图片
@@ -148,13 +155,30 @@ export function GenerationPanel({
 					className="mb-3"
 				/>
 
-				<div className="h-28 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+				<button
+					type="button"
+					disabled={coverUploadDisabled}
+					onClick={openCoverPicker}
+					className="group relative h-28 w-full overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/40 disabled:cursor-not-allowed disabled:hover:border-slate-300 disabled:hover:bg-slate-50"
+				>
 					{article?.coverImage ? (
-						<img src={article.coverImage} alt="封面预览" className="h-full w-full object-cover" />
+						<>
+							<img src={article.coverImage} alt="封面预览" className="h-full w-full object-cover" />
+							<div className="absolute inset-0 flex items-center justify-center bg-slate-950/0 text-xs font-medium text-white opacity-0 transition-all group-hover:bg-slate-950/35 group-hover:opacity-100">
+								点击更换封面
+							</div>
+						</>
 					) : (
-						<div className="flex h-full items-center justify-center text-sm text-slate-400">封面预览会显示在这里</div>
+						<div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-500">
+							{loading.uploadCover ? (
+								<Loader2 className="h-5 w-5 animate-spin text-brand-500" />
+							) : (
+								<Upload className="h-5 w-5 text-slate-400 transition-colors group-hover:text-brand-500" />
+							)}
+							<span>{loading.uploadCover ? "封面上传中..." : "点击上传本地图片，封面预览会显示在这里"}</span>
+						</div>
 					)}
-				</div>
+				</button>
 
 				{uploadMessage && (
 					<div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
@@ -178,7 +202,7 @@ export function GenerationPanel({
 						</div>
 						<div>
 							<p className="text-sm font-semibold text-slate-900">文章摘要</p>
-							{/* <p className="text-xs text-slate-500">用于列表摘要和部分平台的描述字段</p> */}
+							<p className="text-xs text-slate-500">用于列表摘要和部分平台的描述字段。</p>
 						</div>
 					</div>
 
@@ -214,7 +238,7 @@ export function GenerationPanel({
 						</div>
 						<div>
 							<p className="text-sm font-semibold text-slate-900">文章标签</p>
-							{/* <p className="text-xs text-slate-500">多个标签用逗号分隔，可手动编辑，也可 AI 生成</p> */}
+							<p className="text-xs text-slate-500">可手动新增、删除、修改，也可用 AI 覆盖生成。</p>
 						</div>
 					</div>
 
@@ -233,20 +257,11 @@ export function GenerationPanel({
 					)}
 				</div>
 
-				<Input
-					type="text"
+				<EditableTagInput
 					disabled={disabled}
-					value={article?.tags?.join(", ") ?? ""}
-					onChange={(event) => {
-						if (!article) return;
-						onArticleUpdate({
-							tags: event.target.value
-								.split(/[,，、]/)
-								.map((item) => item.trim())
-								.filter(Boolean),
-						});
-					}}
-					placeholder="性能优化, React, 工程化"
+					tags={article?.tags ?? []}
+					onChange={(tags) => article && onArticleUpdate({ tags })}
+					placeholder="例如：React、工程化、性能优化"
 				/>
 			</section>
 		</div>

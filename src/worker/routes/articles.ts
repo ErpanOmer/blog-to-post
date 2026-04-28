@@ -21,6 +21,7 @@ import type { ArticlePublication } from "@/worker/types/publications";
 import { extractStringArray, safeParseJson } from "@/worker/utils/json-parser";
 import { pickFirstLine } from "@/worker/utils/text";
 import type { ArticleAISettings } from "@/worker/types";
+import { normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
 
 import titleSystemPromptRaw from "@/worker/prompts/generate-title-system-prompt.txt?raw";
 import titleUserPromptTplRaw from "@/worker/prompts/generate-title-user-prompt.txt?raw";
@@ -320,10 +321,11 @@ app.post("/", async (c) => {
 		return c.json({ message: "missing required fields" }, 400);
 	}
 	const now = Date.now();
+	const normalizedContent = normalizeMarkdownImageSyntax(payload.content);
 	const article = await createArticle(c.env.DB, {
 		id: payload.id ?? crypto.randomUUID(),
 		title: payload.title,
-		content: payload.content,
+		content: normalizedContent,
 		summary: payload.summary,
 		htmlContent: payload.htmlContent,
 		tags: payload.tags,
@@ -354,7 +356,10 @@ app.put("/:id", async (c) => {
 		tags?: string[] | null;
 		coverImage?: string | null;
 	};
-	const article = await updateArticle(c.env.DB, c.req.param("id"), payload);
+	const normalizedPayload = payload.content !== undefined
+		? { ...payload, content: normalizeMarkdownImageSyntax(payload.content) }
+		: payload;
+	const article = await updateArticle(c.env.DB, c.req.param("id"), normalizedPayload);
 	if (!article) {
 		return c.json({ message: "not found" }, 404);
 	}

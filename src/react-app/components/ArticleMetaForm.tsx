@@ -2,6 +2,7 @@ import type { Article } from "@/react-app/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { EditableTagInput } from "@/react-app/components/EditableTagInput";
 
 export function ArticleMetaForm({
 	article,
@@ -19,14 +20,15 @@ export function ArticleMetaForm({
 	loading: { summary: boolean; tags: boolean; cover: boolean };
 }) {
 	const disabled = !article;
-	const tagValue = article?.tags?.join(", ") ?? "";
 
 	return (
 		<div className="space-y-4">
 			<div className="space-y-2">
 				<div className="flex items-center justify-between">
 					<label className="text-xs font-semibold text-slate-500">封面图</label>
-					<Button variant="outline" size="sm" disabled={disabled || loading.cover} onClick={onGenerateCover} type="button">AI 生成封面</Button>
+					<Button variant="outline" size="sm" disabled={disabled || loading.cover} onClick={onGenerateCover} type="button">
+						AI 生成封面
+					</Button>
 				</div>
 				<Input
 					disabled={disabled}
@@ -46,7 +48,9 @@ export function ArticleMetaForm({
 			<div className="space-y-2">
 				<div className="flex items-center justify-between">
 					<label className="text-xs font-semibold text-slate-500">摘要</label>
-					<Button variant="outline" size="sm" disabled={disabled || loading.summary} onClick={onGenerateSummary} type="button">AI 生成摘要</Button>
+					<Button variant="outline" size="sm" disabled={disabled || loading.summary} onClick={onGenerateSummary} type="button">
+						AI 生成摘要
+					</Button>
 				</div>
 				<Textarea
 					disabled={disabled}
@@ -58,24 +62,18 @@ export function ArticleMetaForm({
 
 			<div className="space-y-2">
 				<div className="flex items-center justify-between">
-					<label className="text-xs font-semibold text-slate-500">标签（逗号分隔）</label>
-					<Button variant="outline" size="sm" disabled={disabled || loading.tags} onClick={onGenerateTags} type="button">AI 生成标签</Button>
+					<label className="text-xs font-semibold text-slate-500">标签</label>
+					<Button variant="outline" size="sm" disabled={disabled || loading.tags} onClick={onGenerateTags} type="button">
+						AI 生成标签
+					</Button>
 				</div>
-				<Input
+				<EditableTagInput
 					disabled={disabled}
-					value={tagValue}
-					onChange={(event) => {
-						if (!article) return;
-						onChange({
-							tags: event.target.value
-								.split(/[,，]/)
-								.map((item) => item.trim())
-								.filter(Boolean),
-						});
-					}}
-					placeholder="性能优化, React, 工程化"
+					tags={article?.tags ?? []}
+					onChange={(tags) => article && onChange({ tags })}
+					placeholder="例如：React、工程化、性能优化"
 				/>
-				<p className="text-[11px] text-slate-400">点击 AI 按钮会覆盖当前输入。</p>
+				<p className="text-[11px] text-slate-400">点击 AI 按钮会覆盖当前标签。</p>
 			</div>
 		</div>
 	);

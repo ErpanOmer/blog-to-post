@@ -14,6 +14,7 @@ import { randomDelay } from "@/worker/utils/helpers";
 import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
 import { crc32, signAWS4 } from "@/worker/utils/aws4";
 import { resolveImageMimeTypeFromBlob } from "@/worker/utils/media";
+import { convertHtmlImagesToMarkdown, normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
 
 const JUEJIN_BASE_URL = "https://juejin.cn";
 const JUEJIN_API_BASE_URL = "https://api.juejin.cn";
@@ -455,6 +456,17 @@ export default class JuejinAccountService extends AbstractAccountService {
 		return uploadedUrl;
 	}
 
+	private replaceJuejinMarkdownImageUrls(markdownContent: string): string {
+		if (!markdownContent) return markdownContent;
+
+		const options = {
+			normalizeUrl: (rawUrl: string) => this.normalizeImageUrl(rawUrl),
+			resolveUrl: (normalizedUrl: string) => this.imageUrlCache.get(normalizedUrl),
+		};
+		const markdownImagesOnly = convertHtmlImagesToMarkdown(markdownContent, options);
+		return normalizeMarkdownImageSyntax(markdownImagesOnly, options);
+	}
+
 	private async resolveCoverImage(article: SharedArticle): Promise<string> {
 		const normalized = this.normalizeImageUrl(article.coverImage?.trim() ?? "");
 		if (!normalized) return "";
@@ -527,11 +539,7 @@ export default class JuejinAccountService extends AbstractAccountService {
 			}
 		}
 
-		markdown = this.replaceMarkdownImageUrlsByMap(
-			markdown,
-			(rawUrl) => this.normalizeImageUrl(rawUrl),
-			this.imageUrlCache,
-		);
+		markdown = this.replaceJuejinMarkdownImageUrls(markdown);
 
 		await this.tracePublish({
 			stage: "juejin_resolve_content_done",
@@ -539,6 +547,7 @@ export default class JuejinAccountService extends AbstractAccountService {
 			metadata: {
 				markdownLength: markdown.length,
 				replacedImages: this.imageUrlCache.size,
+				imageDestinationSyntax: "plain-no-title",
 			},
 		});
 

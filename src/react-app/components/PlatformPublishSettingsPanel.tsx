@@ -26,6 +26,8 @@ import { cn } from "@/lib/utils";
 
 interface PlatformPublishSettingsPanelProps {
 	initialPlatform?: PublishablePlatformType;
+	initialSettings?: PlatformPublishSettingsMap;
+	persist?: boolean;
 	onSaved?: (settings: PlatformPublishSettingsMap) => void;
 }
 
@@ -33,19 +35,23 @@ const platformDescriptions: Record<PublishablePlatformType, string> = {
 	juejin: "Markdown 草稿与发布，支持封面和内容图上传。",
 	zhihu: "知乎专栏 HTML 内容发布，适合保留图文结构。",
 	xiaohongshu: "小红书图文内容入口，目前以正文和封面为主。",
-	wechat: "微信公众号官方草稿/发布流程，HTML 会做微信专属处理。",
-	csdn: "CSDN 同时提交 Markdown 和 HTML，代码块走 Prism。",
+	wechat: "微信公众号官方草稿发布流程，HTML 会做微信专属处理。",
+	csdn: "CSDN 同时提交 Markdown 和 HTML，代码块使用 Prism。",
 	cnblogs: "博客园 Markdown 编辑器投稿流程。",
 	segmentfault: "SegmentFault Markdown 草稿与发布流程。",
 };
 
 export function PlatformPublishSettingsPanel({
 	initialPlatform = "juejin",
+	initialSettings,
+	persist = true,
 	onSaved,
 }: PlatformPublishSettingsPanelProps) {
-	const [settings, setSettings] = useState<PlatformPublishSettingsMap>(() => normalizePlatformPublishSettings());
+	const [settings, setSettings] = useState<PlatformPublishSettingsMap>(() =>
+		normalizePlatformPublishSettings(initialSettings),
+	);
 	const [activePlatform, setActivePlatform] = useState<PublishablePlatformType>(initialPlatform);
-	const [isLoading, setIsLoading] = useState(true);
+	const [isLoading, setIsLoading] = useState(persist && !initialSettings);
 	const [isSaving, setIsSaving] = useState(false);
 
 	useEffect(() => {
@@ -53,6 +59,15 @@ export function PlatformPublishSettingsPanel({
 	}, [initialPlatform]);
 
 	useEffect(() => {
+		if (initialSettings) {
+			setSettings(normalizePlatformPublishSettings(initialSettings));
+			setIsLoading(false);
+		}
+	}, [initialSettings]);
+
+	useEffect(() => {
+		if (!persist || initialSettings) return;
+
 		let cancelled = false;
 		const loadSettings = async () => {
 			setIsLoading(true);
@@ -73,7 +88,7 @@ export function PlatformPublishSettingsPanel({
 		return () => {
 			cancelled = true;
 		};
-	}, []);
+	}, [initialSettings, persist]);
 
 	const activeSetting = settings[activePlatform];
 	const enabledCount = useMemo(
@@ -97,6 +112,14 @@ export function PlatformPublishSettingsPanel({
 	const handleSave = async () => {
 		setIsSaving(true);
 		try {
+			if (!persist) {
+				const normalized = normalizePlatformPublishSettings(settings);
+				setSettings(normalized);
+				onSaved?.(normalized);
+				toast.success("本次发布设置已应用");
+				return;
+			}
+
 			const saved = await updatePlatformPublishSettings(settings);
 			const normalized = normalizePlatformPublishSettings(saved);
 			setSettings(normalized);
@@ -105,7 +128,7 @@ export function PlatformPublishSettingsPanel({
 			toast.success("平台发布设置已保存");
 		} catch (error) {
 			console.error("Save platform publish settings failed", error);
-			toast.error("保存平台发布设置失败");
+			toast.error(persist ? "保存平台发布设置失败" : "应用本次发布设置失败");
 		} finally {
 			setIsSaving(false);
 		}
@@ -186,7 +209,9 @@ export function PlatformPublishSettingsPanel({
 							<div className="flex items-center justify-between gap-3">
 								<div>
 									<Label className="text-sm font-medium text-slate-800">启用平台</Label>
-									<p className="mt-1 text-xs text-slate-500">关闭后发布入口隐藏，账号只读。</p>
+									<p className="mt-1 text-xs text-slate-500">
+										{persist ? "关闭后发布入口隐藏，账号只读。" : "关闭后本次任务不会投递该平台。"}
+									</p>
 								</div>
 								<Switch
 									checked={activeSetting.enabled}
@@ -199,7 +224,7 @@ export function PlatformPublishSettingsPanel({
 							<div className="flex items-center justify-between gap-3">
 								<div>
 									<Label className="text-sm font-medium text-slate-800">仅发布草稿</Label>
-									<p className="mt-1 text-xs text-slate-500">默认开启，草稿成功即任务成功。</p>
+									<p className="mt-1 text-xs text-slate-500">开启后草稿创建成功即任务成功。</p>
 								</div>
 								<Switch
 									checked={activeSetting.draftOnly}
@@ -259,7 +284,7 @@ export function PlatformPublishSettingsPanel({
 					<div className="flex justify-end border-t border-slate-100 pt-4">
 						<Button onClick={() => void handleSave()} disabled={isSaving} className="gap-1.5">
 							{isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-							保存平台发布设置
+							{persist ? "保存平台发布设置" : "应用到本次发布"}
 						</Button>
 					</div>
 				</CardContent>

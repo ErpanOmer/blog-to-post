@@ -121,3 +121,33 @@ export const buildCloudinaryImageFormatRewriteSources = (
 	}
 	return Array.from(candidates);
 };
+
+export const buildPublicImageFormatRewriteSources = (
+	sourceUrl: string,
+	formats: readonly Extract<CloudinaryImageFormat, "png" | "jpg" | "jpeg" | "webp">[] = [
+		"jpg",
+		"png",
+	],
+): string[] => {
+	if (sourceUrl.startsWith("data:")) return [];
+
+	let parsed: URL;
+	try {
+		parsed = new URL(sourceUrl);
+	} catch {
+		return [];
+	}
+
+	if (parsed.protocol !== "https:") return [];
+	if (parsed.username || parsed.password) return [];
+	if (parsed.hostname.toLowerCase() === "images.weserv.nl") return [];
+
+	const candidates = new Set<string>();
+	for (const format of formats) {
+		const rewrite = new URL("https://images.weserv.nl/");
+		rewrite.searchParams.set("url", sourceUrl);
+		rewrite.searchParams.set("output", format === "jpeg" ? "jpg" : format);
+		candidates.add(rewrite.toString());
+	}
+	return Array.from(candidates);
+};

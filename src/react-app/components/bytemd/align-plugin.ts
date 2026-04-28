@@ -19,11 +19,10 @@ function escapeHtmlAttr(value: string): string {
 }
 
 function convertMarkdownImagesToHtml(content: string): string {
-	return content.replace(MARKDOWN_IMAGE_RE, (_raw, alt: string, src: string, title?: string) => {
+	return content.replace(MARKDOWN_IMAGE_RE, (_raw, alt: string, src: string) => {
 		const altText = escapeHtmlAttr((alt ?? "").trim());
 		const srcValue = escapeHtmlAttr((src ?? "").trim());
-		const titleAttr = title ? ` title="${escapeHtmlAttr(title.trim())}"` : "";
-		return `<img src="${srcValue}" alt="${altText}"${titleAttr} />`;
+		return `<img src="${srcValue}" alt="${altText}" />`;
 	});
 }
 

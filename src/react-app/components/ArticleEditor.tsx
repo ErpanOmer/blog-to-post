@@ -12,6 +12,7 @@ import { generateContent } from "@/react-app/api";
 import { createAlignPlugin } from "@/react-app/components/bytemd/align-plugin";
 import { uploadImagesToImageHosting } from "@/react-app/services/image-hosting";
 import type { Article } from "@/react-app/types";
+import { normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
 import "bytemd/dist/index.css";
 import "../jueijn.css";
 
@@ -37,7 +38,7 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
 
     try {
       const result = await generateContent(article.title);
-      onChange({ ...article, content: result.content });
+      onChange({ ...article, content: normalizeMarkdownImageSyntax(result.content) });
     } catch (error) {
       console.error("生成正文失败", error);
     } finally {
@@ -107,7 +108,7 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
             uploadImages={handleUploadImages}
             onChange={(value) => {
               if (!article) return;
-              onChange({ ...article, content: value });
+              onChange({ ...article, content: normalizeMarkdownImageSyntax(value) });
             }}
           />
         </div>

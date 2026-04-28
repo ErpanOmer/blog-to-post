@@ -34,7 +34,7 @@ function pickBestUrl(payload: ImageHostingUploadResponse): string {
 	return url;
 }
 
-async function uploadSingleImage(file: File): Promise<Pick<Image, "url" | "alt" | "title">> {
+async function uploadSingleImage(file: File): Promise<Pick<Image, "url" | "alt">> {
 	const formData = new FormData();
 	formData.append("file", file);
 
@@ -68,7 +68,6 @@ async function uploadSingleImage(file: File): Promise<Pick<Image, "url" | "alt" 
 	return {
 		url,
 		alt: fileName,
-		title: fileName,
 	};
 }
 
@@ -77,7 +76,7 @@ export async function uploadImageToImageHosting(file: File): Promise<string> {
 	return uploaded.url;
 }
 
-export async function uploadImagesToImageHosting(files: File[]): Promise<Pick<Image, "url" | "alt" | "title">[]> {
+export async function uploadImagesToImageHosting(files: File[]): Promise<Pick<Image, "url" | "alt">[]> {
 	if (!files.length) return [];
 	return Promise.all(files.map((file) => uploadSingleImage(file)));
 }

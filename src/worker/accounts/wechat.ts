@@ -21,6 +21,7 @@ import {
 } from "@/worker/utils/content-slots";
 import {
 	buildCloudinaryImageFormatRewriteSources,
+	buildPublicImageFormatRewriteSources,
 	uploadImageWithCandidates,
 	type ResolvedImageUploadCandidate,
 } from "@/worker/utils/media";
@@ -608,8 +609,10 @@ export default class WechatAccountService extends AbstractAccountService {
 			mimeToSuffix: WECHAT_UPLOAD_MIME_TO_SUFFIX,
 			downloadImageFromUrl: async (url) => await this.downloadImageFromUrl(url),
 			dataUriToBlob: (dataUri) => this.dataUriToBlob(dataUri),
-			buildRewriteSources: (sourceUrl) =>
-				buildCloudinaryImageFormatRewriteSources(sourceUrl, ["png", "jpg"]),
+			buildRewriteSources: (sourceUrl) => [
+				...buildCloudinaryImageFormatRewriteSources(sourceUrl, ["png", "jpg"]),
+				...buildPublicImageFormatRewriteSources(sourceUrl, ["jpg", "png"]),
+			],
 			uploadCandidate: async (candidate) => {
 				const formData = new FormData();
 				formData.append("media", candidate.blob, `${params.filePrefix}.${candidate.suffix}`);
@@ -803,8 +806,9 @@ export default class WechatAccountService extends AbstractAccountService {
 		const normalizedCover = this.normalizeImageUrl(rawCover);
 		if (!normalizedCover) return "";
 
+		const safeSrc = this.escapeHtmlAttribute(normalizedCover);
 		const safeAlt = this.escapeHtmlAttribute(article.title || "cover");
-		return `<figure data-wechat-slot="header" style="margin:0 0 18px;"><img src="${normalizedCover}" alt="${safeAlt}" style="${WECHAT_HEADER_COVER_IMAGE_STYLE}" /></figure>`;
+		return `<figure data-wechat-slot="header" style="margin:0 0 18px;"><img src="${safeSrc}" alt="${safeAlt}" style="${WECHAT_HEADER_COVER_IMAGE_STYLE}" /></figure>`;
 	}
 
 	private buildWechatDefaultFooterHtml(): string {

@@ -88,6 +88,18 @@ function buildAccountConfig(
 	};
 }
 
+function buildAccountConfigMap(
+	accounts: PlatformAccount[],
+	settings: PlatformPublishSettingsMap,
+): Map<string, AccountConfig> {
+	const configs = new Map<string, AccountConfig>();
+	accounts.forEach((account) => {
+		const config = buildAccountConfig(account, settings);
+		if (config) configs.set(account.id, config);
+	});
+	return configs;
+}
+
 function getPlatformBadgeText(setting: PlatformPublishSetting): string {
 	const parts = [setting.draftOnly ? "仅草稿" : "直接发布"];
 	if (setting.useCoverImageAsHeader) parts.push("封面 HEADER");
@@ -152,13 +164,7 @@ export function PublishDialog({
 			setPlatformSettings(settings);
 			setAccounts(activeAccounts);
 			setSelectedAccounts(new Set(activeAccounts.map((item) => item.id)));
-
-			const configs = new Map<string, AccountConfig>();
-			activeAccounts.forEach((account) => {
-				const config = buildAccountConfig(account, settings);
-				if (config) configs.set(account.id, config);
-			});
-			setAccountConfigs(configs);
+			setAccountConfigs(buildAccountConfigMap(activeAccounts, settings));
 		} catch (loadError) {
 			console.error("加载平台账号失败", loadError);
 			setError("加载平台账号失败。");
@@ -229,6 +235,10 @@ export function PublishDialog({
 	}, [currentTaskId, isPolling]);
 
 	const toggleAccount = (accountId: string) => {
+		const account = accounts.find((item) => item.id === accountId);
+		if (!account || !isPublishablePlatform(account.platform) || !platformSettings[account.platform].enabled) {
+			return;
+		}
 		setSelectedAccounts((prev) => {
 			const next = new Set(prev);
 			if (next.has(accountId)) next.delete(accountId);
@@ -238,6 +248,7 @@ export function PublishDialog({
 	};
 
 	const togglePlatform = (platform: string, checked: boolean) => {
+		if (!isPublishablePlatform(platform) || !platformSettings[platform].enabled) return;
 		const platformAccounts = accountsByPlatform[platform] || [];
 		setSelectedAccounts((prev) => {
 			const next = new Set(prev);
@@ -257,10 +268,26 @@ export function PublishDialog({
 
 	const handleSettingsSaved = (settings: PlatformPublishSettingsMap) => {
 		setPlatformSettings(settings);
-		void loadAccounts();
+		setAccountConfigs(buildAccountConfigMap(accounts, settings));
+		setSelectedAccounts((prev) => {
+			const next = new Set<string>();
+			accounts.forEach((account) => {
+				if (prev.has(account.id) && isPublishablePlatform(account.platform) && settings[account.platform].enabled) {
+					next.add(account.id);
+				}
+			});
+			return next;
+		});
+		setSettingsOpen(false);
 	};
 
-	const selectAll = () => setSelectedAccounts(new Set(accounts.map((item) => item.id)));
+	const selectAll = () => {
+		setSelectedAccounts(new Set(
+			accounts
+				.filter((item) => isPublishablePlatform(item.platform) && platformSettings[item.platform].enabled)
+				.map((item) => item.id),
+		));
+	};
 	const deselectAll = () => setSelectedAccounts(new Set());
 
 	const handlePublish = async () => {
@@ -339,7 +366,7 @@ export function PublishDialog({
 								{isSingleArticle ? "发布文章" : `批量发布 ${articles.length} 篇文章`}
 							</DialogTitle>
 							<DialogDescription className="mt-1 text-[13px] text-slate-500">
-								选择投递账号。草稿、HEADER_SLOT 和 FOOTER_SLOT 来自全局平台发布设置，点击 ⚙ 可直接调整。
+								选择投递账号。草稿、HEADER_SLOT 和 FOOTER_SLOT 会继承全局发布设置，点击 ⚙ 可仅为本次任务调整。
 							</DialogDescription>
 						</div>
 
@@ -494,12 +521,14 @@ export function PublishDialog({
 										const platformSelected = platformAccounts.every((item) => selectedAccounts.has(item.id));
 										const platformPartial = platformAccounts.some((item) => selectedAccounts.has(item.id)) && !platformSelected;
 										const setting = isPublishablePlatform(platform) ? platformSettings[platform] : null;
+										const platformDisabled = !setting?.enabled;
 
 										return (
-											<div key={platform} className="overflow-hidden rounded-xl border border-slate-200">
+											<div key={platform} className={cn("overflow-hidden rounded-xl border border-slate-200", platformDisabled && "opacity-65")}>
 												<div className="flex items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
 													<Checkbox
 														checked={platformSelected}
+														disabled={platformDisabled}
 														onCheckedChange={(checked) => togglePlatform(platform, checked === true)}
 														className={cn(platformPartial && "border-brand-500 bg-brand-500")}
 													/>
@@ -512,7 +541,7 @@ export function PublishDialog({
 													</div>
 													{setting ? (
 														<Badge variant="outline" className="hidden border-slate-200 bg-white text-[10px] text-slate-500 sm:inline-flex">
-															{getPlatformBadgeText(setting)}
+															{setting.enabled ? getPlatformBadgeText(setting) : "本次禁用"}
 														</Badge>
 													) : null}
 													<Button
@@ -529,10 +558,12 @@ export function PublishDialog({
 
 												<div className="divide-y divide-slate-100">
 													{platformAccounts.map((account) => {
-														const config = accountConfigs.get(account.id);
+														const config = buildAccountConfig(account, platformSettings) ?? accountConfigs.get(account.id);
 														const isSelected = selectedAccounts.has(account.id);
 														const draftOnly = config?.draftOnly ?? setting?.draftOnly ?? true;
 														const headerUsesCover = config?.contentSlots?.useCoverImageAsHeader ?? setting?.useCoverImageAsHeader ?? false;
+														const headerSlot = config?.contentSlots?.headerSlot ?? setting?.headerSlot ?? "";
+														const accountDisabled = platformDisabled;
 
 														return (
 															<div
@@ -543,7 +574,7 @@ export function PublishDialog({
 																)}
 															>
 																<div className="flex min-w-0 flex-1 items-center gap-3">
-																	<Checkbox checked={isSelected} onCheckedChange={() => toggleAccount(account.id)} />
+																	<Checkbox checked={isSelected} disabled={accountDisabled} onCheckedChange={() => toggleAccount(account.id)} />
 
 																	{account.avatar ? (
 																		<img src={account.avatar} alt={account.userName || ""} className="h-9 w-9 rounded-full object-cover" />
@@ -566,7 +597,7 @@ export function PublishDialog({
 																		{draftOnly ? "仅草稿" : "正式发布"}
 																	</Badge>
 																	<Badge variant="outline" className="border-slate-200 bg-slate-50 text-[10px] text-slate-500">
-																		{headerUsesCover ? "封面作为 HEADER" : setting?.headerSlot.trim() ? "自定义 HEADER" : "无 HEADER"}
+																		{headerUsesCover ? "封面作为 HEADER" : headerSlot.trim() ? "自定义 HEADER" : "无 HEADER"}
 																	</Badge>
 																</div>
 															</div>
@@ -631,6 +662,8 @@ export function PublishDialog({
 				open={settingsOpen}
 				onOpenChange={setSettingsOpen}
 				initialPlatform={settingsInitialPlatform}
+				initialSettings={platformSettings}
+				persist={false}
 				onSaved={handleSettingsSaved}
 			/>
 		</Dialog>

@@ -12,6 +12,7 @@ import { notify, requestNotificationPermission } from "@/react-app/services/noti
 import { createPublishTask, getProviderStatus } from "@/react-app/api";
 import type { Article } from "@/react-app/types";
 import type { AccountConfig } from "@/react-app/types/publications";
+import { normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
 
 const plugins = [gfm(), highlight(), breaks(), frontmatter(), gemoji(), math()];
 
@@ -113,7 +114,10 @@ export function useAppController() {
   const handleArticleUpdate = useCallback((updates: Partial<Article>) => {
     setDraft((prev) => {
       if (!prev) return prev;
-      return { ...prev, ...updates } as Article;
+      const normalizedUpdates = updates.content !== undefined
+        ? { ...updates, content: normalizeMarkdownImageSyntax(updates.content) }
+        : updates;
+      return { ...prev, ...normalizedUpdates } as Article;
     });
   }, []);
 
@@ -125,11 +129,12 @@ export function useAppController() {
       throw new Error("请先补全标题、正文、摘要、标签和封面");
     }
 
+    const normalizedContent = normalizeMarkdownImageSyntax(draft.content);
     const payload: Partial<Article> = {
       title: draft.title,
-      content: draft.content,
+      content: normalizedContent,
       summary: draft.summary,
-      htmlContent: getHtmlContent(draft.content),
+      htmlContent: getHtmlContent(normalizedContent),
       tags: draft.tags,
       coverImage: draft.coverImage,
     };

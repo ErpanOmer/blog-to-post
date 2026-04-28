@@ -12,6 +12,7 @@ import type {
 import type { Article as SharedArticle } from "@/shared/types";
 import { randomDelay } from "@/worker/utils/helpers";
 import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
+import { convertHtmlTagsToMarkdown, normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
 
 interface SegmentFaultResolvedContent {
 	markdownContent: string;
@@ -582,7 +583,10 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 	}
 
 	private async resolveArticleContent(article: SharedArticle): Promise<SegmentFaultResolvedContent> {
-		const markdown = applyMarkdownContentSlots(article.content?.trim() ?? "", article);
+		const markdown = convertHtmlTagsToMarkdown(
+			applyMarkdownContentSlots(article.content?.trim() ?? "", article),
+			{ normalizeUrl: (rawUrl) => this.normalizeImageUrl(rawUrl) },
+		);
 		if (!markdown) {
 			throw new Error("Article markdown content is empty, cannot publish to SegmentFault");
 		}
@@ -611,10 +615,13 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 			}
 		}
 
-		const replacedMarkdown = this.replaceMarkdownImageUrlsByMap(
-			markdown,
-			(rawUrl) => this.normalizeImageUrl(rawUrl),
-			this.imageUrlCache,
+		const replacedMarkdown = normalizeMarkdownImageSyntax(
+			this.replaceMarkdownImageUrlsByMap(
+				markdown,
+				(rawUrl) => this.normalizeImageUrl(rawUrl),
+				this.imageUrlCache,
+			),
+			{ normalizeUrl: (rawUrl) => this.normalizeImageUrl(rawUrl) },
 		);
 
 		const coverUrl = await this.resolveCoverImage(article);
