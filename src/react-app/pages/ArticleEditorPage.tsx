@@ -74,9 +74,9 @@ export function ArticleEditorPage({
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-slate-50 page-enter">
+    <div className="flex h-full w-full flex-col bg-slate-50 page-enter flex-1">
       {/* 沉浸式顶部栏 */}
-      <div className="shrink-0 border-b border-slate-200/60 bg-white/80 px-4 py-3 backdrop-blur-xl md:px-6">
+      <div className="shrink-0 border-b border-slate-200/60 bg-white/80 px-4 py-2.5 backdrop-blur-xl md:px-5">
         <div className="mx-auto flex w-full items-center justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <Button variant="ghost" size="sm" type="button" onClick={handleBackClick} className="gap-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100/60">
@@ -143,15 +143,15 @@ export function ArticleEditorPage({
       </div>
 
       {/* Editor layout */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[460px_minmax(0,1fr)] 2xl:grid-cols-[520px_minmax(0,1fr)]">
-        <aside className="border-r border-slate-200/60 bg-gradient-to-b from-slate-50 via-white to-slate-50 p-5 overflow-y-auto custom-scrollbar lg:p-6">
-            <div className="space-y-5">
+      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[clamp(380px,20vw,450px)_minmax(0,1fr)]">
+        <aside className="border-r border-slate-200/60 bg-gradient-to-b from-slate-50 via-white to-slate-50 p-4 overflow-y-auto custom-scrollbar">
+            <div className="space-y-3">
             <TitleGenerator title={draft?.title ?? ""} onTitleChange={handleTitle} disabled={isGenerating} hideAIActions />
             </div>
             <GenerationPanel article={draft} onArticleUpdate={handleUpdate} disabled={isGenerating} />
         </aside>
 
-        <section className="min-w-0 bg-white p-5 lg:p-6 xl:p-8 overflow-y-auto custom-scrollbar shadow-[-4px_0_24px_rgba(0,0,0,0.02)]">
+        <section className="min-w-0 bg-white p-4 lg:p-5 xl:p-6 overflow-y-auto custom-scrollbar shadow-[-4px_0_24px_rgba(0,0,0,0.02)]">
           <ArticleEditor article={draft} onChange={(article) => handleUpdate(article)} disabled={isGenerating} hideAIActions />
         </section>
       </div>

@@ -60,32 +60,27 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
   };
 
   return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card">
-      <div className="flex flex-col gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
+    <section className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-card">
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
             <Type className="h-4 w-4" />
           </div>
-          <div className="min-w-0">
-            <p className="text-base font-semibold text-slate-950">文章标题</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">标题决定文章的第一眼气质，支持手动打磨和 AI 参考。</p>
-          </div>
+          <p className="min-w-0 truncate text-[15px] font-semibold text-slate-950">文章标题</p>
         </div>
 
         {!hideAIActions && (
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleGenerateTitle}
-              disabled={disabled || loading}
-              type="button"
-              className="w-full gap-2 rounded-full border-slate-200 bg-white shadow-soft sm:w-auto"
-            >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-              生成标题
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleGenerateTitle}
+            disabled={disabled || loading}
+            type="button"
+            className="h-8 shrink-0 gap-1.5 rounded-full border-slate-200 bg-white px-3 text-xs shadow-soft"
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+            生成
+          </Button>
         )}
       </div>
 
@@ -94,12 +89,12 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
         disabled={disabled}
         onChange={(event) => onTitleChange(event.target.value)}
         placeholder="输入文章标题"
-        className="mt-5 min-h-[96px] resize-none rounded-2xl border-slate-200 bg-white p-4 text-[15px] font-medium leading-7 shadow-inner-soft"
-        rows={3}
+        className="min-h-[68px] resize-none rounded-xl border-slate-200 bg-white p-3 text-[15px] font-medium leading-6 shadow-inner-soft"
+        rows={2}
       />
 
       {!hideAIActions && (
-        <div className="mt-3 flex justify-end">
+        <div className="mt-2 flex justify-end">
           <button
             onClick={() => void handleOpenDialog()}
             disabled={disabled}
@@ -107,14 +102,14 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
             type="button"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            查看掘金热门标题
+            热门标题
           </button>
         </div>
       )}
 
       {!hideAIActions && generatedTitles.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-          <p className="mb-3 text-xs text-slate-500">可以直接采用下面的建议标题，也可以继续手动调整。</p>
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="mb-2 text-xs text-slate-500">选择一个建议标题，或继续手动调整。</p>
           <div className="space-y-2">
             {generatedTitles.map((generatedTitle, index) => {
               const selected = selectedTitleIndex === index;
@@ -125,7 +120,7 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
                   type="button"
                   onClick={() => handleSelectTitle(index)}
                   disabled={disabled}
-                  className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
+                  className={`flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                     selected
                       ? "border-brand-500 bg-brand-50 text-brand-900"
                       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
