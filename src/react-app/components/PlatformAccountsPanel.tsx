@@ -114,12 +114,13 @@ export function PlatformAccountsPanel() {
   }) => {
     if (!editingAccount) return false;
     try {
-      await updatePlatformAccount(editingAccount.id, {
+      const updated = await updatePlatformAccount(editingAccount.id, {
         authToken: data.authToken,
         appId: data.appId,
         appSecret: data.appSecret,
         description: data.description,
       });
+      setEditingAccount(updated);
       toast.success("账号更新成功");
       await fetchAccounts();
       return true;

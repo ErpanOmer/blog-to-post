@@ -14,7 +14,7 @@ import { randomDelay } from "@/worker/utils/helpers";
 import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
 import { crc32, signAWS4 } from "@/worker/utils/aws4";
 import { resolveImageMimeTypeFromBlob } from "@/worker/utils/media";
-import { convertHtmlImagesToMarkdown, normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
+import { normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
 
 const JUEJIN_BASE_URL = "https://juejin.cn";
 const JUEJIN_API_BASE_URL = "https://api.juejin.cn";
@@ -463,8 +463,12 @@ export default class JuejinAccountService extends AbstractAccountService {
 			normalizeUrl: (rawUrl: string) => this.normalizeImageUrl(rawUrl),
 			resolveUrl: (normalizedUrl: string) => this.imageUrlCache.get(normalizedUrl),
 		};
-		const markdownImagesOnly = convertHtmlImagesToMarkdown(markdownContent, options);
-		return normalizeMarkdownImageSyntax(markdownImagesOnly, options);
+		const replacedMarkdownAndHtmlImages = this.replaceMarkdownImageUrlsByMap(
+			markdownContent,
+			(rawUrl) => this.normalizeImageUrl(rawUrl),
+			this.imageUrlCache,
+		);
+		return normalizeMarkdownImageSyntax(replacedMarkdownAndHtmlImages, options);
 	}
 
 	private async resolveCoverImage(article: SharedArticle): Promise<string> {

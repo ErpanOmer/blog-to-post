@@ -291,8 +291,8 @@ export async function updatePlatformAccount(
 	const next = {
 		description: payload.description ?? current.description ?? null,
 		isActive: payload.isActive ?? current.isActive,
-		isVerified: payload.isVerified ?? current.isVerified,
-		lastVerifiedAt: payload.lastVerifiedAt ?? current.lastVerifiedAt ?? null,
+		isVerified: payload.isVerified ?? (shouldUpdateToken ? false : current.isVerified),
+		lastVerifiedAt: payload.lastVerifiedAt ?? (shouldUpdateToken ? null : current.lastVerifiedAt ?? null),
 		updatedAt: Date.now(),
 	};
 

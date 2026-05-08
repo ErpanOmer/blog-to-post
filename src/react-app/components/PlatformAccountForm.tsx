@@ -24,16 +24,18 @@ interface PlatformAccountFormProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	account?: PlatformAccount | null;
-	onSave: (data: {
-		platform: PlatformType;
-		authToken?: string;
-		appId?: string;
-		appSecret?: string;
-		description?: string;
-	}) => Promise<boolean>;
+	onSave: (data: PlatformAccountFormPayload) => Promise<boolean>;
 	onVerify?: (accountId: string) => Promise<void>;
 	platformSettings?: PlatformPublishSettingsMap;
 }
+
+type PlatformAccountFormPayload = {
+	platform: PlatformType;
+	authToken?: string;
+	appId?: string;
+	appSecret?: string;
+	description?: string;
+};
 
 function parseWechatCredentialFromToken(authToken?: string | null): { appId: string; appSecret: string } | null {
 	if (!authToken?.trim()) return null;
@@ -130,23 +132,15 @@ export function PlatformAccountForm({
 		setFormError("");
 	}, [account, open]);
 
-	const handleSubmit = async (event: FormEvent) => {
-		event.preventDefault();
-		if (!formData.platform || saving || readOnly) return;
-
+	const buildPayload = (): PlatformAccountFormPayload | null => {
+		if (!formData.platform) return null;
 		if (isPlatformDisabled(formData.platform, platformSettings)) {
 			setFormError("该平台已在设置中禁用，账号配置只能查看或删除。");
-			return;
+			return null;
 		}
 
 		setFormError("");
-		const payload: {
-			platform: PlatformType;
-			authToken?: string;
-			appId?: string;
-			appSecret?: string;
-			description?: string;
-		} = {
+		const payload: PlatformAccountFormPayload = {
 			platform: formData.platform,
 			description: formData.description.trim() || undefined,
 		};
@@ -166,11 +160,25 @@ export function PlatformAccountForm({
 
 			if (!payload.appId && !payload.authToken) {
 				setFormError("公众号账号请填写 appId + appSecret，或提供兼容 authToken。");
-				return;
+				return null;
 			}
 		} else {
 			payload.authToken = formData.authToken.trim() || undefined;
+			if (!payload.authToken) {
+				setFormError("请填写平台认证凭证。");
+				return null;
+			}
 		}
+
+		return payload;
+	};
+
+	const handleSubmit = async (event: FormEvent) => {
+		event.preventDefault();
+		if (!formData.platform || saving || readOnly) return;
+
+		const payload = buildPayload();
+		if (!payload) return;
 
 		setSaving(true);
 		try {
@@ -187,6 +195,10 @@ export function PlatformAccountForm({
 		if (!account || readOnly) return;
 		setVerifying(true);
 		try {
+			const payload = buildPayload();
+			if (!payload) return;
+			const saved = await onSave(payload);
+			if (!saved) return;
 			await onVerify?.(account.id);
 		} finally {
 			setVerifying(false);
