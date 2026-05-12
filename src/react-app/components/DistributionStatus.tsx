@@ -45,6 +45,7 @@ const platformLabels: Record<string, string> = {
   csdn: "CSDN",
   cnblogs: "博客园",
   segmentfault: "SegmentFault",
+  website: "个人网站",
 };
 
 const platformIcons: Record<string, string> = {
@@ -54,6 +55,7 @@ const platformIcons: Record<string, string> = {
   csdn: "C",
   cnblogs: "B",
   segmentfault: "S",
+  website: "W",
 };
 
 const stepTypeLabels: Record<string, string> = {

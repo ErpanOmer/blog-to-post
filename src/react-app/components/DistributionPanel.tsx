@@ -16,6 +16,7 @@ export function DistributionPanel({ article, selectedPlatforms, onToggle, onPubl
 		{ value: "csdn", label: "CSDN" },
 		{ value: "cnblogs", label: "博客园" },
 		{ value: "segmentfault", label: "SegmentFault" },
+		{ value: "website", label: "个人网站" },
 	];
 
 	return (

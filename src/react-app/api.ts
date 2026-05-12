@@ -268,6 +268,9 @@ export async function createPlatformAccount(payload: {
 	authToken?: string | null;
 	appId?: string | null;
 	appSecret?: string | null;
+	baseUrl?: string | null;
+	adminToken?: string | null;
+	author?: string | null;
 	description?: string;
 }): Promise<PlatformAccount> {
 	const response = await fetch("/api/accounts", {
@@ -285,6 +288,9 @@ export async function updatePlatformAccount(
 		& {
 			appId?: string | null;
 			appSecret?: string | null;
+			baseUrl?: string | null;
+			adminToken?: string | null;
+			author?: string | null;
 		}
 	),
 ): Promise<PlatformAccount> {
@@ -421,6 +427,176 @@ export async function getAccountStatistics(platform?: PlatformType): Promise<Acc
 // 获取单个账号的发布统计
 export async function getPlatformAccountStatistics(accountId: string): Promise<AccountStatistics> {
 	return parseJson<AccountStatistics>(await fetch(`/api/accounts/${accountId}/statistics`));
+}
+
+// ==================== 个人网站 CMS API ====================
+
+export type WebsitePost = {
+	slug: string;
+	title: string;
+	description?: string;
+	markdownContent?: string;
+	htmlContent?: string;
+	author?: string;
+	cover?: string;
+	tags: string[];
+	draft: boolean;
+	pubDate?: string;
+	lastModified?: string;
+	views?: number;
+	likes?: number;
+	url?: string;
+	publishedUrl?: string;
+	sourceArticleId?: string;
+	createdAt?: number;
+	updatedAt?: number;
+	publishedAt?: number | null;
+};
+
+export type WebsitePostPayload = {
+	sourceArticleId?: string;
+	slug?: string;
+	title: string;
+	description?: string;
+	markdownContent?: string;
+	htmlContent?: string;
+	pubDate?: string;
+	lastModified?: string;
+	author?: string;
+	draft: boolean;
+	tags?: string[];
+	cover?: string;
+};
+
+export type WebsitePostListResult = {
+	items: WebsitePost[];
+	nextCursor: number | null;
+	hasMore: boolean;
+};
+
+export type WebsiteSlugSettings = {
+	model: string;
+	temperature: number;
+	topP: number;
+	maxTokens: number;
+	requestTimeoutSec: number;
+	systemPrompt: string;
+};
+
+export type WebsiteSource = "local" | "remote";
+
+function appendWebsiteSource(params: URLSearchParams, source?: WebsiteSource) {
+	if (source) params.set("source", source);
+}
+
+function websitePostUrl(slug: string, suffix = "", source?: WebsiteSource): string {
+	const params = new URLSearchParams();
+	appendWebsiteSource(params, source);
+	const query = params.toString();
+	return `/api/website/posts/${encodeURIComponent(slug)}${suffix}${query ? `?${query}` : ""}`;
+}
+
+async function unwrapApiData<T>(response: Promise<{ success: boolean; data: T; message?: string }>): Promise<T> {
+	const payload = await response;
+	if (!payload.success) {
+		throw new Error(payload.message || "请求失败");
+	}
+	return payload.data;
+}
+
+export async function getWebsitePosts(filters?: {
+	status?: "all" | "draft" | "published";
+	limit?: number;
+	cursor?: number;
+	q?: string;
+	tag?: string;
+	accountId?: string;
+	sortBy?: "createdAt" | "updatedAt";
+	sortOrder?: "asc" | "desc";
+	source?: WebsiteSource;
+}): Promise<WebsitePostListResult> {
+	const params = new URLSearchParams();
+	params.set("status", filters?.status ?? "all");
+	params.set("limit", String(filters?.limit ?? 20));
+	params.set("cursor", String(filters?.cursor ?? 0));
+	if (filters?.q) params.set("q", filters.q);
+	if (filters?.tag) params.set("tag", filters.tag);
+	if (filters?.accountId) params.set("accountId", filters.accountId);
+	if (filters?.sortBy) params.set("sortBy", filters.sortBy);
+	if (filters?.sortOrder) params.set("sortOrder", filters.sortOrder);
+	appendWebsiteSource(params, filters?.source);
+	return unwrapApiData(parseJson<{ success: boolean; data: WebsitePostListResult; message?: string }>(
+		await fetch(`/api/website/posts?${params.toString()}`),
+	));
+}
+
+export async function getWebsitePost(slug: string, source?: WebsiteSource): Promise<WebsitePost> {
+	return unwrapApiData(parseJson<{ success: boolean; data: WebsitePost; message?: string }>(
+		await fetch(websitePostUrl(slug, "", source)),
+	));
+}
+
+export async function createWebsitePost(payload: WebsitePostPayload, source?: WebsiteSource): Promise<{ slug: string; url?: string; publishedUrl?: string; draft: boolean }> {
+	const params = new URLSearchParams();
+	appendWebsiteSource(params, source);
+	return unwrapApiData(parseJson<{ success: boolean; data: { slug: string; url?: string; publishedUrl?: string; draft: boolean }; message?: string }>(
+		await fetch(`/api/website/posts${params.toString() ? `?${params.toString()}` : ""}`, {
+			method: "POST",
+			headers: jsonHeaders,
+			body: JSON.stringify(payload),
+		}),
+	));
+}
+
+export async function updateWebsitePost(slug: string, payload: Partial<WebsitePostPayload>, source?: WebsiteSource): Promise<{ slug: string; url?: string; publishedUrl?: string; draft?: boolean }> {
+	return unwrapApiData(parseJson<{ success: boolean; data: { slug: string; url?: string; publishedUrl?: string; draft?: boolean }; message?: string }>(
+		await fetch(websitePostUrl(slug, "", source), {
+			method: "PUT",
+			headers: jsonHeaders,
+			body: JSON.stringify(payload),
+		}),
+	));
+}
+
+export async function deleteWebsitePost(slug: string, source?: WebsiteSource): Promise<void> {
+	await unwrapApiData(parseJson<{ success: boolean; data: unknown; message?: string }>(
+		await fetch(websitePostUrl(slug, "", source), {
+			method: "DELETE",
+			headers: jsonHeaders,
+		}),
+	));
+}
+
+export async function publishWebsitePost(slug: string, source?: WebsiteSource): Promise<{ slug: string; publishedUrl?: string; draft?: boolean }> {
+	return unwrapApiData(parseJson<{ success: boolean; data: { slug: string; publishedUrl?: string; draft?: boolean }; message?: string }>(
+		await fetch(websitePostUrl(slug, "/publish", source), {
+			method: "POST",
+			headers: jsonHeaders,
+		}),
+	));
+}
+
+export async function unpublishWebsitePost(slug: string, source?: WebsiteSource): Promise<{ slug: string; draft?: boolean }> {
+	return unwrapApiData(parseJson<{ success: boolean; data: { slug: string; draft?: boolean }; message?: string }>(
+		await fetch(websitePostUrl(slug, "/unpublish", source), {
+			method: "POST",
+			headers: jsonHeaders,
+		}),
+	));
+}
+
+export async function getWebsiteSlugSettings(): Promise<WebsiteSlugSettings> {
+	return parseJson<WebsiteSlugSettings>(await fetch("/api/settings/website-slug"));
+}
+
+export async function updateWebsiteSlugSettings(payload: Partial<WebsiteSlugSettings>): Promise<WebsiteSlugSettings> {
+	return parseJson<WebsiteSlugSettings>(
+		await fetch("/api/settings/website-slug", {
+			method: "PUT",
+			headers: jsonHeaders,
+			body: JSON.stringify(payload),
+		}),
+	);
 }
 
 

@@ -26,6 +26,7 @@ const platformLabels: Record<string, string> = {
   csdn: "CSDN",
   cnblogs: "博客园",
   segmentfault: "SegmentFault",
+  website: "个人网站",
 };
 
 function getRelativeTime(timestamp: number): string {

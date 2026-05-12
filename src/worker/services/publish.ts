@@ -7,7 +7,7 @@ import type {
 	PublicationDetail,
 	PublishStepType,
 } from "@/worker/types/publications";
-import type { PlatformType } from "@/worker/types";
+import type { Env, PlatformType } from "@/worker/types";
 import type { AccountService, PublishTraceEvent } from "@/worker/accounts/types";
 import { getAccountService } from "@/worker/accounts";
 import { getPlatformAccount } from "@/worker/db/platform-accounts";
@@ -60,6 +60,7 @@ interface ProgressState {
 interface TaskExecutionOptions {
 	encryptionKey?: string;
 	requestId?: string;
+	env?: Env;
 }
 
 function errorMessageOf(error: unknown): string {
@@ -739,7 +740,7 @@ export async function executePublishTask(
 									message: "Account auth token is missing",
 								});
 							}
-							const service = getAccountService(account.platform, account.authToken);
+							const service = getAccountService(account.platform, account.authToken, options.env);
 							if (!service) {
 								throw new PublishServiceError({
 									code: PublishErrorCodes.UNSUPPORTED_PLATFORM,

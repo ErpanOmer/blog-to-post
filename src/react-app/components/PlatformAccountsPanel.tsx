@@ -87,6 +87,9 @@ export function PlatformAccountsPanel() {
     authToken?: string;
     appId?: string;
     appSecret?: string;
+    baseUrl?: string;
+    adminToken?: string;
+    author?: string;
     description?: string;
   }) => {
     try {
@@ -110,6 +113,9 @@ export function PlatformAccountsPanel() {
     authToken?: string;
     appId?: string;
     appSecret?: string;
+    baseUrl?: string;
+    adminToken?: string;
+    author?: string;
     description?: string;
   }) => {
     if (!editingAccount) return false;
@@ -118,6 +124,9 @@ export function PlatformAccountsPanel() {
         authToken: data.authToken,
         appId: data.appId,
         appSecret: data.appSecret,
+        baseUrl: data.baseUrl,
+        adminToken: data.adminToken,
+        author: data.author,
         description: data.description,
       });
       setEditingAccount(updated);

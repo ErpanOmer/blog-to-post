@@ -41,6 +41,7 @@ const platformLabels: Record<Exclude<PlatformType, "">, string> = {
   csdn: "CSDN",
   cnblogs: "博客园",
   segmentfault: "SegmentFault",
+  website: "个人网站",
 };
 
 function formatDateTime(timestamp: number): string {

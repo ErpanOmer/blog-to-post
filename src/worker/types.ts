@@ -38,4 +38,6 @@ export interface Env {
 	OLLAMA_API_KEY?: string;
 	ENCRYPTION_KEY?: string;
 	ENVIRONMENT?: "production" | "development" | undefined;
+	WEBSITE_BASE_URL?: string;
+	WEBSITE_ADMIN_TOKEN?: string;
 }

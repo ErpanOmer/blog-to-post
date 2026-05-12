@@ -28,7 +28,7 @@ const app = new Hono<{ Bindings: Env }>();
 
 const allowedTaskStatuses: PublishTaskStatus[] = ["pending", "processing", "completed", "failed", "cancelled"];
 const allowedPublicationStatuses: PublicationStatus[] = ["pending", "draft_created", "publishing", "published", "failed", "cancelled"];
-const allowedPlatforms: PlatformType[] = ["juejin", "zhihu", "wechat", "csdn", "cnblogs", "segmentfault", ""];
+const allowedPlatforms: PlatformType[] = ["juejin", "zhihu", "wechat", "csdn", "cnblogs", "segmentfault", "website", ""];
 
 function parseTaskStatus(value?: string): PublishTaskStatus | undefined {
 	if (!value) return undefined;
@@ -181,7 +181,7 @@ app.post("/tasks", async (c) => {
 				idempotencyKey,
 			},
 			c.executionCtx,
-			{ requestId, encryptionKey: c.env.ENCRYPTION_KEY },
+			{ requestId, encryptionKey: c.env.ENCRYPTION_KEY, env: c.env },
 		);
 
 		return c.json({ ...result, requestId });
@@ -313,7 +313,7 @@ app.post("/quick", async (c) => {
 			accountId,
 			normalizedConfig.draftOnly,
 			c.executionCtx,
-			{ requestId, encryptionKey: c.env.ENCRYPTION_KEY },
+			{ requestId, encryptionKey: c.env.ENCRYPTION_KEY, env: c.env },
 			normalizedConfig.contentSlots ?? null,
 		);
 		return c.json({ ...result, requestId });

@@ -34,6 +34,9 @@ type PlatformAccountFormPayload = {
 	authToken?: string;
 	appId?: string;
 	appSecret?: string;
+	baseUrl?: string;
+	adminToken?: string;
+	author?: string;
 	description?: string;
 };
 
@@ -70,6 +73,24 @@ function parseWechatCredentialFromToken(authToken?: string | null): { appId: str
 	return null;
 }
 
+function parseWebsiteCredentialFromToken(authToken?: string | null): { baseUrl: string; adminToken: string; author: string } | null {
+	if (!authToken?.trim()) return null;
+	try {
+		const parsed = JSON.parse(authToken.trim()) as Record<string, unknown>;
+		const baseUrl = typeof parsed.baseUrl === "string" ? parsed.baseUrl.trim() : "";
+		const adminToken = typeof parsed.adminToken === "string"
+			? parsed.adminToken.trim()
+			: (typeof parsed.token === "string" ? parsed.token.trim() : "");
+		const author = typeof parsed.author === "string" ? parsed.author.trim() : "ErpanOmer";
+		if (baseUrl && adminToken) {
+			return { baseUrl, adminToken, author };
+		}
+	} catch {
+		return null;
+	}
+	return null;
+}
+
 function isPlatformDisabled(platform: PlatformType, settings?: PlatformPublishSettingsMap): boolean {
 	return isPublishablePlatform(platform) && settings?.[platform]?.enabled === false;
 }
@@ -87,6 +108,9 @@ export function PlatformAccountForm({
 		authToken: "",
 		appId: "",
 		appSecret: "",
+		baseUrl: "http://localhost:4321",
+		adminToken: "",
+		author: "ErpanOmer",
 		description: "",
 	});
 	const [showAuthToken, setShowAuthToken] = useState(false);
@@ -99,6 +123,7 @@ export function PlatformAccountForm({
 	const readOnly = Boolean(account && isPlatformDisabled(account.platform, platformSettings));
 	const isPlatformLocked = isEditing || readOnly;
 	const isWechatPlatform = formData.platform === "wechat";
+	const isWebsitePlatform = formData.platform === "website";
 	const enabledPlatformOptions = useMemo(
 		() => platformOptions.filter((option) => platformSettings?.[option.value]?.enabled !== false),
 		[platformSettings],
@@ -111,12 +136,18 @@ export function PlatformAccountForm({
 			const parsedWechatCredential = account.platform === "wechat"
 				? parseWechatCredentialFromToken(account.authToken)
 				: null;
+			const parsedWebsiteCredential = account.platform === "website"
+				? parseWebsiteCredentialFromToken(account.authToken)
+				: null;
 
 			setFormData({
 				platform: account.platform,
 				authToken: account.authToken ?? "",
 				appId: parsedWechatCredential?.appId ?? "",
 				appSecret: parsedWechatCredential?.appSecret ?? "",
+				baseUrl: parsedWebsiteCredential?.baseUrl ?? "http://localhost:4321",
+				adminToken: parsedWebsiteCredential?.adminToken ?? "",
+				author: parsedWebsiteCredential?.author ?? "ErpanOmer",
 				description: account.description ?? "",
 			});
 		} else {
@@ -125,6 +156,9 @@ export function PlatformAccountForm({
 				authToken: "",
 				appId: "",
 				appSecret: "",
+				baseUrl: "http://localhost:4321",
+				adminToken: "",
+				author: "ErpanOmer",
 				description: "",
 			});
 		}
@@ -160,6 +194,25 @@ export function PlatformAccountForm({
 
 			if (!payload.appId && !payload.authToken) {
 				setFormError("公众号账号请填写 appId + appSecret，或提供兼容 authToken。");
+				return null;
+			}
+		} else if (isWebsitePlatform) {
+			const baseUrl = formData.baseUrl.trim();
+			const adminToken = formData.adminToken.trim();
+			const author = formData.author.trim();
+			const authToken = formData.authToken.trim();
+
+			if (baseUrl && adminToken) {
+				payload.baseUrl = baseUrl;
+				payload.adminToken = adminToken;
+				payload.author = author || "ErpanOmer";
+			}
+			if (authToken) {
+				payload.authToken = authToken;
+			}
+
+			if (!payload.baseUrl && !payload.authToken) {
+				setFormError("个人网站请填写站点地址 + Admin Token，或提供兼容 JSON 凭证。");
 				return null;
 			}
 		} else {
@@ -310,6 +363,90 @@ export function PlatformAccountForm({
 										value={formData.authToken}
 										onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
 										placeholder="可选：兼容模式凭证"
+										className="font-mono text-sm"
+										disabled={readOnly}
+									/>
+								)}
+							</div>
+						</>
+					) : isWebsitePlatform ? (
+						<>
+							<div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.4fr_0.8fr]">
+								<div className="space-y-2">
+									<Label htmlFor="websiteBaseUrl">站点地址</Label>
+									<Input
+										id="websiteBaseUrl"
+										value={formData.baseUrl}
+										onChange={(event) => setFormData((prev) => ({ ...prev, baseUrl: event.target.value }))}
+										placeholder="http://localhost:4321 或 https://erpanomer.nurverse.com"
+										className="font-mono text-sm"
+										disabled={readOnly}
+									/>
+								</div>
+								<div className="space-y-2">
+									<Label htmlFor="websiteAuthor">作者</Label>
+									<Input
+										id="websiteAuthor"
+										value={formData.author}
+										onChange={(event) => setFormData((prev) => ({ ...prev, author: event.target.value }))}
+										placeholder="ErpanOmer"
+										disabled={readOnly}
+									/>
+								</div>
+							</div>
+
+							<div className="space-y-2">
+								<div className="flex items-center justify-between">
+									<Label htmlFor="websiteAdminToken">Admin Token</Label>
+									<button
+										type="button"
+										onClick={() => setShowAuthToken((prev) => !prev)}
+										className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+									>
+										{showAuthToken ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+										{showAuthToken ? "隐藏" : "显示"}
+									</button>
+								</div>
+								<Input
+									id="websiteAdminToken"
+									type={showAuthToken ? "text" : "password"}
+									value={formData.adminToken}
+									onChange={(event) => setFormData((prev) => ({ ...prev, adminToken: event.target.value }))}
+									placeholder="个人站 WEBSITE_ADMIN_TOKEN"
+									className="font-mono text-sm"
+									disabled={readOnly}
+								/>
+								<p className="text-xs text-slate-500">本地测试可使用个人站约定的 dev token；线上使用 Cloudflare secret 中的 WEBSITE_ADMIN_TOKEN。</p>
+							</div>
+
+							<div className="space-y-2 rounded-lg border border-slate-200 p-3">
+								<div className="flex items-center justify-between">
+									<Label htmlFor="authToken">兼容模式 JSON 凭证（可选）</Label>
+									<button
+										type="button"
+										onClick={() => setShowAuthToken((prev) => !prev)}
+										className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+									>
+										{showAuthToken ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+										{showAuthToken ? "隐藏" : "显示"}
+									</button>
+								</div>
+								{showAuthToken ? (
+									<Textarea
+										id="authToken"
+										value={formData.authToken}
+										onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
+										placeholder='{"baseUrl":"http://localhost:4321","adminToken":"dev-website-admin-token","author":"ErpanOmer"}'
+										className="min-h-[90px] font-mono text-sm"
+										disabled={readOnly}
+									/>
+								) : (
+									<Input
+										id="authToken"
+										type="password"
+										value={formData.authToken}
+										onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
+										placeholder="可选：兼容 JSON 凭证"
 										className="font-mono text-sm"
 										disabled={readOnly}
 									/>

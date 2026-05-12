@@ -1,4 +1,4 @@
-import type { PlatformType } from "@/worker/types";
+import type { Env, PlatformType } from "@/worker/types";
 import type {
 	AccountService,
 	AccountInfo,
@@ -19,7 +19,7 @@ export abstract class AbstractAccountService implements AccountService {
 	protected headers: Record<string, string>;
 	protected publishTraceLogger?: PublishTraceLogger;
 
-	constructor(platform: PlatformType, authToken: string) {
+	constructor(platform: PlatformType, authToken: string, protected env?: Env) {
 		this.platform = platform;
 		this.authToken = authToken;
 		this.headers = this.buildHeaders();

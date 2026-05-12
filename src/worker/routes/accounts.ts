@@ -31,15 +31,39 @@ function buildWechatCredentialToken(appId?: string | null, appSecret?: string | 
     });
 }
 
+function buildWebsiteCredentialToken(
+    baseUrl?: string | null,
+    adminToken?: string | null,
+    author?: string | null,
+): string | null {
+    const normalizedBaseUrl = normalizeCredentialValue(baseUrl);
+    const normalizedAdminToken = normalizeCredentialValue(adminToken);
+    const normalizedAuthor = normalizeCredentialValue(author);
+    if (!normalizedBaseUrl || !normalizedAdminToken) return null;
+
+    return JSON.stringify({
+        baseUrl: normalizedBaseUrl,
+        adminToken: normalizedAdminToken,
+        author: normalizedAuthor || "ErpanOmer",
+    });
+}
+
 function resolveAuthTokenForCreate(payload: {
     platform: PlatformType;
     authToken?: string | null;
     appId?: string | null;
     appSecret?: string | null;
+    baseUrl?: string | null;
+    adminToken?: string | null;
+    author?: string | null;
 }): string | null {
     if (payload.platform === "wechat") {
         const wechatToken = buildWechatCredentialToken(payload.appId, payload.appSecret);
         if (wechatToken) return wechatToken;
+    }
+    if (payload.platform === "website") {
+        const websiteToken = buildWebsiteCredentialToken(payload.baseUrl, payload.adminToken, payload.author);
+        if (websiteToken) return websiteToken;
     }
     return normalizeCredentialValue(payload.authToken);
 }
@@ -49,10 +73,17 @@ function resolveAuthTokenForUpdate(payload: {
     authToken?: string | null;
     appId?: string | null;
     appSecret?: string | null;
+    baseUrl?: string | null;
+    adminToken?: string | null;
+    author?: string | null;
 }): string | null {
     if (payload.platform === "wechat") {
         const wechatToken = buildWechatCredentialToken(payload.appId, payload.appSecret);
         if (wechatToken) return wechatToken;
+    }
+    if (payload.platform === "website") {
+        const websiteToken = buildWebsiteCredentialToken(payload.baseUrl, payload.adminToken, payload.author);
+        if (websiteToken) return websiteToken;
     }
     return normalizeCredentialValue(payload.authToken);
 }
@@ -87,6 +118,9 @@ app.post("/", async (c) => {
         authToken?: string | null;
         appId?: string | null;
         appSecret?: string | null;
+        baseUrl?: string | null;
+        adminToken?: string | null;
+        author?: string | null;
         description?: string | null;
     };
     if (!payload.platform) {
@@ -134,6 +168,9 @@ app.put("/:id", async (c) => {
         authToken?: string | null;
         appId?: string | null;
         appSecret?: string | null;
+        baseUrl?: string | null;
+        adminToken?: string | null;
+        author?: string | null;
         description?: string | null;
         isActive?: boolean;
     };
@@ -151,6 +188,9 @@ app.put("/:id", async (c) => {
         Object.prototype.hasOwnProperty.call(payload, "authToken")
         || Object.prototype.hasOwnProperty.call(payload, "appId")
         || Object.prototype.hasOwnProperty.call(payload, "appSecret")
+        || Object.prototype.hasOwnProperty.call(payload, "baseUrl")
+        || Object.prototype.hasOwnProperty.call(payload, "adminToken")
+        || Object.prototype.hasOwnProperty.call(payload, "author")
     );
     const nextAuthToken = shouldUpdateCredential
         ? resolveAuthTokenForUpdate({
@@ -158,6 +198,9 @@ app.put("/:id", async (c) => {
             authToken: payload.authToken,
             appId: payload.appId,
             appSecret: payload.appSecret,
+            baseUrl: payload.baseUrl,
+            adminToken: payload.adminToken,
+            author: payload.author,
         })
         : undefined;
 

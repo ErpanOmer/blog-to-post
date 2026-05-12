@@ -1,4 +1,4 @@
-﻿import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "@/lib/utils";
@@ -21,6 +21,7 @@ const platformStyles: Record<
 	csdn: { textClass: "text-sky-600", badgeClass: "bg-sky-50 text-sky-600 border-sky-200/60" },
 	cnblogs: { textClass: "text-indigo-600", badgeClass: "bg-indigo-50 text-indigo-600 border-indigo-200/60" },
 	segmentfault: { textClass: "text-teal-600", badgeClass: "bg-teal-50 text-teal-600 border-teal-200/60" },
+	website: { textClass: "text-violet-600", badgeClass: "bg-violet-50 text-violet-600 border-violet-200/60" },
 	"": { textClass: "text-slate-600", badgeClass: "bg-slate-50 text-slate-600 border-slate-200" },
 };
 

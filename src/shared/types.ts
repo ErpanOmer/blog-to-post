@@ -1,4 +1,4 @@
-export type PlatformType = "juejin" | "zhihu" | "wechat" | "csdn" | "cnblogs" | "segmentfault" | "";
+export type PlatformType = "juejin" | "zhihu" | "wechat" | "csdn" | "cnblogs" | "segmentfault" | "website" | "";
 export type ArticleStatus = "draft" | "reviewed" | "scheduled" | "published" | "failed";
 export type PromptKey = "title" | "content" | "summary" | "tags" | "cover";
 

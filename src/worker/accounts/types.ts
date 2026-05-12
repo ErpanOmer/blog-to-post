@@ -1,4 +1,5 @@
 import type { PlatformType } from "@/worker/types";
+import type { Env } from "@/worker/types";
 import type { Article as SharedArticle } from "@/shared/types";
 
 export interface AccountInfo {
@@ -91,4 +92,4 @@ export interface AccountService {
     clearPublishTraceLogger?(): void;
 }
 
-export type AccountServiceConstructor = new (authToken: string) => AccountService;
+export type AccountServiceConstructor = new (authToken: string, env?: Env) => AccountService;

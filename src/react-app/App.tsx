@@ -11,6 +11,8 @@ import { ArticleEditorPage } from "./pages/ArticleEditorPage";
 import { AccountsView } from "./views/AccountsView";
 import { ArticlesView } from "./views/ArticlesView";
 import { SettingsView } from "./views/SettingsView";
+import { WebsiteEditorView } from "./views/WebsiteEditorView";
+import { WebsiteView } from "./views/WebsiteView";
 import "./App.css";
 
 function EmptyState({ title, description, backTo }: { title: string; description: string; backTo: string }) {
@@ -148,6 +150,7 @@ function App() {
       articles: "/articles",
       distribution: "/distribution",
       accounts: "/accounts",
+      website: "/website",
       settings: "/settings",
     };
 
@@ -193,6 +196,8 @@ function App() {
           }
         />
         <Route path="/accounts" element={<AccountsView />} />
+        <Route path="/website" element={<WebsiteView />} />
+        <Route path="/website/:slug/edit" element={<WebsiteEditorView />} />
         <Route path="/settings" element={<SettingsView providerStatus={state.providerStatus} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

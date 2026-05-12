@@ -38,6 +38,7 @@ const platformDescriptions: Record<PublishablePlatformType, string> = {
 	csdn: "CSDN 同时提交 Markdown 和 HTML，代码块使用 Prism。",
 	cnblogs: "博客园 Markdown 编辑器投稿流程。",
 	segmentfault: "SegmentFault Markdown 草稿与发布流程。",
+	website: "个人网站 D1 Blog 发布与管理，图片地址保持原文链接。",
 };
 
 export function PlatformPublishSettingsPanel({

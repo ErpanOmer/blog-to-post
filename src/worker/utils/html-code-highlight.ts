@@ -807,6 +807,72 @@ export const highlightHtmlPreCodeBlocksWithPrism = (
 	);
 };
 
+export const highlightHtmlPreCodeBlocksForAstroGithubDark = (
+	htmlContent: string,
+	options: {
+		languageAliasMap?: Record<string, string>;
+		autoDetectLanguages?: string[];
+	} = {},
+): string => {
+	if (!htmlContent.trim()) return htmlContent;
+
+	const languageAliasMap = options.languageAliasMap ?? FRONTEND_LANGUAGE_ALIAS_MAP;
+	const isLanguageAvailable = (language: string): boolean => Boolean(hljsFull.getLanguage(language));
+	const normalizedAutoDetectLanguages = (options.autoDetectLanguages ?? FRONTEND_AUTO_DETECT_LANGUAGES)
+		.map((language) => normalizeCodeLanguageWithChecker(language, languageAliasMap, isLanguageAvailable))
+		.filter((language): language is string => Boolean(language));
+
+	return htmlContent.replace(
+		CODE_BLOCK_REGEX,
+		(_fullMatch, preAttrs: string | undefined, codeAttrs: string | undefined, codeInnerHtml: string | undefined) => {
+			const resolvedPreAttrs = preAttrs ?? "";
+			const resolvedCodeAttrs = codeAttrs ?? "";
+			const plainCode = decodeHtmlEntities(stripHtmlTags(codeInnerHtml ?? ""));
+			const explicitLanguage = resolveCodeLanguageFromAttributesWithChecker(
+				resolvedPreAttrs,
+				resolvedCodeAttrs,
+				languageAliasMap,
+				isLanguageAvailable,
+			);
+
+			let highlightedHtml = escapeHtml(plainCode);
+			let detectedLanguage = explicitLanguage ?? "plaintext";
+			try {
+				if (explicitLanguage) {
+					const highlighted = hljsFull.highlight(plainCode, {
+						language: explicitLanguage,
+						ignoreIllegals: true,
+					});
+					highlightedHtml = highlighted.value;
+					detectedLanguage = explicitLanguage;
+				} else {
+					const autoHighlighted = normalizedAutoDetectLanguages.length > 0
+						? hljsFull.highlightAuto(plainCode, normalizedAutoDetectLanguages)
+						: hljsFull.highlightAuto(plainCode);
+					highlightedHtml = autoHighlighted.value;
+					detectedLanguage = autoHighlighted.language ?? "plaintext";
+				}
+			} catch {
+				highlightedHtml = escapeHtml(plainCode);
+				detectedLanguage = explicitLanguage ?? "plaintext";
+			}
+
+			const normalizedLanguage = normalizeCodeLanguageWithChecker(
+				detectedLanguage,
+				languageAliasMap,
+				isLanguageAvailable,
+			) ?? "plaintext";
+			const highlightedWithStyles = inlineHighlightTokenStyles(highlightedHtml, GITHUB_DARK_TOKEN_STYLE_MAP);
+			const lines = highlightedWithStyles.split("\n");
+			const lineHtml = lines
+				.map((line) => `<span class="line">${line}</span>`)
+				.join("\n");
+
+			return `<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="${escapeHtml(normalizedLanguage)}"><code>${lineHtml}</code></pre>`;
+		},
+	);
+};
+
 export const highlightHtmlCodeBlocks = (
 	htmlContent: string,
 	options: HtmlCodeHighlightOptions,

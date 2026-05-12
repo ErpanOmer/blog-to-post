@@ -41,6 +41,12 @@ class SegmentFaultAdapter implements PlatformAdapter {
 	}
 }
 
+class WebsiteAdapter implements PlatformAdapter {
+	adapt(content: string) {
+		return content;
+	}
+}
+
 export function getPlatformAdapter(platform: PlatformType): PlatformAdapter {
 	switch (platform) {
 		case "juejin":
@@ -55,6 +61,8 @@ export function getPlatformAdapter(platform: PlatformType): PlatformAdapter {
 			return new CnblogsAdapter();
 		case "segmentfault":
 			return new SegmentFaultAdapter();
+		case "website":
+			return new WebsiteAdapter();
 		default:
 			throw new Error(`Unsupported platform: ${platform}`);
 	}

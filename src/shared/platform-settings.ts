@@ -11,6 +11,7 @@ export const PUBLISHABLE_PLATFORMS = [
 	"csdn",
 	"cnblogs",
 	"segmentfault",
+	"website",
 ] as const satisfies readonly PublishablePlatformType[];
 
 export const PLATFORM_DISPLAY_NAMES: Record<PublishablePlatformType, string> = {
@@ -20,6 +21,7 @@ export const PLATFORM_DISPLAY_NAMES: Record<PublishablePlatformType, string> = {
 	csdn: "CSDN",
 	cnblogs: "博客园",
 	segmentfault: "SegmentFault",
+	website: "个人网站",
 };
 
 export const PLATFORM_SHORT_ICONS: Record<PublishablePlatformType, string> = {
@@ -29,6 +31,7 @@ export const PLATFORM_SHORT_ICONS: Record<PublishablePlatformType, string> = {
 	csdn: "C",
 	cnblogs: "B",
 	segmentfault: "S",
+	website: "W",
 };
 
 export function createDefaultPlatformPublishSetting(
