@@ -28,6 +28,7 @@ interface ArticleListProps {
   onEdit?: (article: Article) => void;
   onDelete?: (article: Article) => void;
   onPublish?: (articles: Article[]) => void;
+  publicationRefreshKey?: number;
 }
 
 type SortValue = "createdAt:desc" | "createdAt:asc" | "updatedAt:desc" | "updatedAt:asc" | "title:asc";
@@ -89,7 +90,7 @@ function compareArticles(a: Article, b: Article, sortValue: SortValue): number {
   }
 }
 
-export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublish }: ArticleListProps) {
+export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublish, publicationRefreshKey = 0 }: ArticleListProps) {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<Exclude<PlatformType, "">>>(new Set());
@@ -418,7 +419,7 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
 
                     <div className="mt-3 flex flex-col gap-3 border-t border-slate-100 pt-3 lg:flex-row lg:items-center lg:justify-between">
                       <div className="min-w-0 flex-1">
-                        <ArticlePublicationStatus articleId={article.id} />
+                        <ArticlePublicationStatus articleId={article.id} refreshKey={publicationRefreshKey} />
                       </div>
 
                       {!isBatchMode && (

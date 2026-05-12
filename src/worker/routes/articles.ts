@@ -15,6 +15,7 @@ import { getCachedJuejinTitles } from "@/worker/services/juejin-cache";
 import { transitionArticle } from "@/worker/services/distribution";
 import {
 	getArticlePublicationsByArticleId,
+	listArticlePublications,
 	updateArticlePublication,
 } from "@/worker/db/publications";
 import type { ArticlePublication } from "@/worker/types/publications";
@@ -612,6 +613,184 @@ function resolvePublicationLinkCheckStatus(
 	return "valid";
 }
 
+interface ValidatePublicationLinksBody {
+	force?: boolean;
+	cleanupDuplicates?: boolean;
+}
+
+function safeDecodeURIComponent(value: string): string {
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		return value;
+	}
+}
+
+function getPublicationLinkDedupeKey(publication: ArticlePublication, rawUrl: string): string {
+	const articleScope = publication.articleId || "unknown-article";
+	try {
+		const parsed = new URL(rawUrl);
+		const normalizedPath = parsed.pathname.replace(/\/+$/, "").toLowerCase();
+		if (publication.platform === "website") {
+			const slugMatch = normalizedPath.match(/\/blog\/([^/]+)/);
+			if (slugMatch?.[1]) {
+				return `${articleScope}:${publication.platform}:slug:${safeDecodeURIComponent(slugMatch[1]).toLowerCase()}`;
+			}
+		}
+		return `${articleScope}:${publication.platform}:url:${parsed.origin.toLowerCase()}${normalizedPath}${parsed.search}`;
+	} catch {
+		return `${articleScope}:${publication.platform}:url:${normalizeComparableUrl(rawUrl).toLowerCase()}`;
+	}
+}
+
+function getPublicationLatestTime(publication: ArticlePublication): number {
+	return Math.max(publication.updatedAt ?? 0, publication.createdAt ?? 0, publication.completedAt ?? 0);
+}
+
+async function validatePublicationLinks(
+	env: Env,
+	publications: ArticlePublication[],
+	options: { force: boolean; cleanupDuplicates: boolean },
+): Promise<{
+	removed: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }>;
+	restored: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }>;
+	skipped: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }>;
+	deduplicated: Array<{ id: string; platform: PlatformType; publishedUrl: string; keptId: string; reason: string }>;
+}> {
+	const removed: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }> = [];
+	const restored: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }> = [];
+	const skipped: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }> = [];
+	const deduplicated: Array<{ id: string; platform: PlatformType; publishedUrl: string; keptId: string; reason: string }> = [];
+	const deduplicatedIds = new Set<string>();
+	const now = Date.now();
+
+	for (const publication of publications) {
+		if (!publication.publishedUrl?.trim()) {
+			const restoredUrl = restoreKnownPublishedUrl(publication);
+			if (!restoredUrl) continue;
+			await updateArticlePublication(env.DB, publication.id, {
+				publishedUrl: restoredUrl,
+			});
+			publication.publishedUrl = restoredUrl;
+			restored.push({
+				id: publication.id,
+				platform: publication.platform,
+				publishedUrl: restoredUrl,
+				reason: "restored_from_publish_id",
+			});
+		}
+	}
+
+	if (options.cleanupDuplicates) {
+		const seen = new Map<string, ArticlePublication>();
+		const withLinks = publications
+			.filter((publication) => Boolean(publication.publishedUrl?.trim()))
+			.sort((a, b) => getPublicationLatestTime(b) - getPublicationLatestTime(a));
+
+		for (const publication of withLinks) {
+			const publishedUrl = publication.publishedUrl?.trim();
+			if (!publishedUrl) continue;
+			const key = getPublicationLinkDedupeKey(publication, publishedUrl);
+			const existing = seen.get(key);
+			if (!existing) {
+				seen.set(key, publication);
+				continue;
+			}
+
+			await updateArticlePublication(env.DB, publication.id, {
+				publishedUrl: null,
+			});
+			deduplicatedIds.add(publication.id);
+			deduplicated.push({
+				id: publication.id,
+				platform: publication.platform,
+				publishedUrl,
+				keptId: existing.id,
+				reason: "duplicate_publication_url_keep_latest",
+			});
+		}
+	}
+
+	for (const publication of publications) {
+		if (deduplicatedIds.has(publication.id)) continue;
+
+		const publishedUrl = publication.publishedUrl?.trim();
+		if (!publishedUrl) continue;
+
+		const state = await getPublicationLinkCheckState(env, publication.id);
+		if (!options.force && isPublicationLinkCheckFresh(state, publishedUrl, now)) {
+			skipped.push({
+				id: publication.id,
+				platform: publication.platform,
+				publishedUrl,
+				reason: "checked_within_one_week",
+			});
+			continue;
+		}
+
+		if (!options.force && !state && isKnownStablePublishedUrl(publication, publishedUrl)) {
+			await setPublicationLinkCheckState(
+				env,
+				publication,
+				publishedUrl,
+				"skipped_initial",
+				"stable_publish_id_url_initial_skip",
+			);
+			skipped.push({
+				id: publication.id,
+				platform: publication.platform,
+				publishedUrl,
+				reason: "stable_publish_id_url_initial_skip",
+			});
+			continue;
+		}
+
+		const result = await isPublicationUrlStillValid({
+			...publication,
+			publishedUrl,
+		});
+		await setPublicationLinkCheckState(
+			env,
+			publication,
+			publishedUrl,
+			resolvePublicationLinkCheckStatus(result),
+			result.reason,
+		);
+		if (result.valid) continue;
+
+		await updateArticlePublication(env.DB, publication.id, {
+			publishedUrl: null,
+		});
+		removed.push({
+			id: publication.id,
+			platform: publication.platform,
+			publishedUrl,
+			reason: result.reason ?? "invalid",
+		});
+	}
+
+	return { removed, restored, skipped, deduplicated };
+}
+
+app.post("/publications/validate-links", async (c) => {
+	try {
+		const publications = await listArticlePublications(c.env.DB);
+		const result = await validatePublicationLinks(c.env, publications, {
+			force: true,
+			cleanupDuplicates: true,
+		});
+		const refreshed = await listArticlePublications(c.env.DB);
+		return c.json({
+			publications: refreshed,
+			total: refreshed.length,
+			...result,
+		});
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "failed to validate all publication links";
+		return c.json({ message }, 500);
+	}
+});
+
 // Get article publications
 app.get("/:id/publications", async (c) => {
 	try {
@@ -626,83 +805,15 @@ app.get("/:id/publications", async (c) => {
 app.post("/:id/publications/validate-links", async (c) => {
 	try {
 		const articleId = c.req.param("id");
+		const body = await c.req.json().catch(() => ({})) as ValidatePublicationLinksBody;
+		const force = body.force === true;
 		const publications = await getArticlePublicationsByArticleId(c.env.DB, articleId);
-		const removed: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }> = [];
-		const restored: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }> = [];
-		const skipped: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }> = [];
-		const now = Date.now();
-
-		for (const publication of publications) {
-			let publishedUrl = publication.publishedUrl?.trim();
-			if (!publishedUrl) {
-				const restoredUrl = restoreKnownPublishedUrl(publication);
-				if (!restoredUrl) continue;
-				await updateArticlePublication(c.env.DB, publication.id, {
-					publishedUrl: restoredUrl,
-				});
-				publishedUrl = restoredUrl;
-				restored.push({
-					id: publication.id,
-					platform: publication.platform,
-					publishedUrl,
-					reason: "restored_from_publish_id",
-				});
-			}
-
-			const state = await getPublicationLinkCheckState(c.env, publication.id);
-			if (isPublicationLinkCheckFresh(state, publishedUrl, now)) {
-				skipped.push({
-					id: publication.id,
-					platform: publication.platform,
-					publishedUrl,
-					reason: "checked_within_one_week",
-				});
-				continue;
-			}
-
-			if (!state && isKnownStablePublishedUrl(publication, publishedUrl)) {
-				await setPublicationLinkCheckState(
-					c.env,
-					publication,
-					publishedUrl,
-					"skipped_initial",
-					"stable_publish_id_url_initial_skip",
-				);
-				skipped.push({
-					id: publication.id,
-					platform: publication.platform,
-					publishedUrl,
-					reason: "stable_publish_id_url_initial_skip",
-				});
-				continue;
-			}
-
-			const result = await isPublicationUrlStillValid({
-				...publication,
-				publishedUrl,
-			});
-			await setPublicationLinkCheckState(
-				c.env,
-				publication,
-				publishedUrl,
-				resolvePublicationLinkCheckStatus(result),
-				result.reason,
-			);
-			if (result.valid) continue;
-
-			await updateArticlePublication(c.env.DB, publication.id, {
-				publishedUrl: null,
-			});
-			removed.push({
-				id: publication.id,
-				platform: publication.platform,
-				publishedUrl,
-				reason: result.reason ?? "invalid",
-			});
-		}
-
+		const result = await validatePublicationLinks(c.env, publications, {
+			force,
+			cleanupDuplicates: force || body.cleanupDuplicates === true,
+		});
 		const refreshed = await getArticlePublicationsByArticleId(c.env.DB, articleId);
-		return c.json({ publications: refreshed, removed, restored, skipped });
+		return c.json({ publications: refreshed, ...result });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "failed to validate publication links";
 		return c.json({ message }, 500);

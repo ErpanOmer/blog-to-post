@@ -10,6 +10,7 @@ import { PLATFORM_DISPLAY_NAMES, PLATFORM_SHORT_ICONS, isPublishablePlatform } f
 
 interface ArticlePublicationStatusProps {
 	articleId: string;
+	refreshKey?: number;
 }
 
 const statusConfig = {
@@ -53,7 +54,34 @@ function getPlatformIcon(platform: string): string {
 	return isPublishablePlatform(platform) ? PLATFORM_SHORT_ICONS[platform] : "?";
 }
 
-export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatusProps) {
+function safeDecodeURIComponent(value: string): string {
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		return value;
+	}
+}
+
+function getPublicationDedupeKey(publication: ArticlePublication): string {
+	const rawUrl = publication.publishedUrl?.trim();
+	if (!rawUrl) return `${publication.platform}:${publication.id}`;
+
+	try {
+		const parsed = new URL(rawUrl);
+		const normalizedPath = parsed.pathname.replace(/\/+$/, "").toLowerCase();
+		if (publication.platform === "website") {
+			const slugMatch = normalizedPath.match(/\/blog\/([^/]+)/);
+			if (slugMatch?.[1]) {
+				return `${publication.platform}:slug:${safeDecodeURIComponent(slugMatch[1]).toLowerCase()}`;
+			}
+		}
+		return `${publication.platform}:url:${parsed.origin.toLowerCase()}${normalizedPath}${parsed.search}`;
+	} catch {
+		return `${publication.platform}:url:${rawUrl.replace(/\/+$/, "").toLowerCase()}`;
+	}
+}
+
+export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticlePublicationStatusProps) {
 	const [publications, setPublications] = useState<ArticlePublication[]>([]);
 	const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
 	const [activePlatform, setActivePlatform] = useState<string | null>(null);
@@ -89,14 +117,25 @@ export function ArticlePublicationStatus({ articleId }: ArticlePublicationStatus
 
 	useEffect(() => {
 		void loadData();
-	}, [loadData]);
+	}, [loadData, refreshKey]);
 
 	useEffect(() => {
 		setActivePlatform(null);
 	}, [articleId]);
 
 	const linkPublications = useMemo(
-		() => publications.filter((item) => Boolean(item.publishedUrl?.trim())).sort((a, b) => b.updatedAt - a.updatedAt),
+		() => {
+			const seen = new Set<string>();
+			return publications
+				.filter((item) => Boolean(item.publishedUrl?.trim()))
+				.sort((a, b) => b.updatedAt - a.updatedAt)
+				.filter((publication) => {
+					const key = getPublicationDedupeKey(publication);
+					if (seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				});
+		},
 		[publications],
 	);
 

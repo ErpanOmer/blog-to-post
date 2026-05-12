@@ -391,17 +391,38 @@ export async function getArticlePublications(articleId: string): Promise<Article
 	return parseJson<ArticlePublication[]>(await fetch(`/api/articles/${articleId}/publications`));
 }
 
-export async function validateArticlePublicationLinks(articleId: string): Promise<ArticlePublication[]> {
+export async function validateArticlePublicationLinks(
+	articleId: string,
+	options?: { force?: boolean; cleanupDuplicates?: boolean },
+): Promise<ArticlePublication[]> {
 	const result = await parseJson<{ publications: ArticlePublication[] }>(
 		await fetch(`/api/articles/${articleId}/publications/validate-links`, {
 			method: "POST",
 			headers: jsonHeaders,
+			body: JSON.stringify(options ?? {}),
 		}),
 	);
 	return result.publications;
 }
 
 // 获取全部发布记录
+export async function validateAllArticlePublicationLinks(): Promise<{
+	publications: ArticlePublication[];
+	total: number;
+	removed: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }>;
+	restored: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }>;
+	skipped: Array<{ id: string; platform: PlatformType; publishedUrl: string; reason: string }>;
+	deduplicated: Array<{ id: string; platform: PlatformType; publishedUrl: string; keptId: string; reason: string }>;
+}> {
+	return parseJson(
+		await fetch("/api/articles/publications/validate-links", {
+			method: "POST",
+			headers: jsonHeaders,
+			body: JSON.stringify({}),
+		}),
+	);
+}
+
 export async function getPublications(filters?: {
 	articleId?: string;
 	accountId?: string;
