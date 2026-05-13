@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { PlatformBadge } from "@/react-app/components/PlatformBrand";
 
 // ByteMD 插件
 import gfm from "@bytemd/plugin-gfm";
@@ -54,26 +55,6 @@ const plugins = [
 	gemoji(),
 	math(),
 ];
-
-const platformLabels: Record<string, string> = {
-	juejin: "掘金",
-	zhihu: "知乎",
-	wechat: "公众号",
-	csdn: "CSDN",
-	cnblogs: "博客园",
-	segmentfault: "SegmentFault",
-	website: "个人网站",
-};
-
-const platformIcons: Record<string, string> = {
-	juejin: "🔟",
-	zhihu: "📕",
-	wechat: "📰",
-	csdn: "C",
-	cnblogs: "B",
-	segmentfault: "S",
-	website: "W",
-};
 
 const statusConfig = {
 	draft: {
@@ -175,10 +156,7 @@ export function ArticleDetailDialog({
 											{status.label}
 										</Badge>
 										{article.status === "published" && article.platform && (
-											<Badge variant="outline" className="gap-1">
-												<span>{platformIcons[article.platform]}</span>
-												<span>{platformLabels[article.platform]}</span>
-											</Badge>
+											<PlatformBadge platform={article.platform} size="xs" />
 										)}
 									</div>
 									<h1 className="text-2xl font-bold text-white drop-shadow-lg">

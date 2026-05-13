@@ -360,6 +360,26 @@ export async function getPublishTaskSteps(taskId: string): Promise<PublishTaskSt
 	return parseJson<PublishTaskStep[]>(await fetch(`/api/publish/tasks/${taskId}/steps`));
 }
 
+export async function deletePublishTask(taskId: string): Promise<{ success: boolean; deleted: number }> {
+	return parseJson<{ success: boolean; deleted: number }>(
+		await fetch(`/api/publish/tasks/${taskId}`, {
+			method: "DELETE",
+			headers: jsonHeaders,
+		}),
+	);
+}
+
+export async function clearPublishTasks(status?: PublishTask['status']): Promise<{ success: boolean; deleted: number }> {
+	const params = new URLSearchParams({ clear: "1" });
+	if (status) params.set("status", status);
+	return parseJson<{ success: boolean; deleted: number }>(
+		await fetch(`/api/publish/tasks?${params.toString()}`, {
+			method: "DELETE",
+			headers: jsonHeaders,
+		}),
+	);
+}
+
 // 取消发布任务
 export async function cancelPublishTask(taskId: string): Promise<{ success: boolean; message: string }> {
 	return parseJson<{ success: boolean; message: string }>(

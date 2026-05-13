@@ -1,6 +1,8 @@
 import type { Article, PlatformType } from "@/react-app/types";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
+import { PUBLISHABLE_PLATFORMS } from "@/shared/platform-settings";
 
 export function DistributionPanel({ article, selectedPlatforms, onToggle, onPublish, onSchedule }: {
 	article: Article | null;
@@ -9,26 +11,21 @@ export function DistributionPanel({ article, selectedPlatforms, onToggle, onPubl
 	onPublish: () => void;
 	onSchedule: () => void;
 }) {
-	const options: { value: PlatformType; label: string }[] = [
-		{ value: "juejin", label: "掘金" },
-		{ value: "zhihu", label: "知乎" },
-		{ value: "wechat", label: "公众号" },
-		{ value: "csdn", label: "CSDN" },
-		{ value: "cnblogs", label: "博客园" },
-		{ value: "segmentfault", label: "SegmentFault" },
-		{ value: "website", label: "个人网站" },
-	];
+	const options: PlatformType[] = [...PUBLISHABLE_PLATFORMS];
 
 	return (
 		<div className="space-y-4">
 			<div className="space-y-3">
-				{options.map((option) => (
-					<div key={option.value} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3">
-						<div>
-							<p className="text-sm font-semibold text-slate-900">{option.label}</p>
-							<p className="text-xs text-slate-500">适配内容将自动生成并存入发布队列</p>
+				{options.map((platform) => (
+					<div key={platform} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3">
+						<div className="flex items-center gap-3">
+							<PlatformLogo platform={platform} size="md" />
+							<div>
+								<p className="text-sm font-semibold text-slate-900">{getPlatformDisplayName(platform)}</p>
+								<p className="text-xs text-slate-500">适配内容会自动生成并写入发布队列</p>
+							</div>
 						</div>
-						<Switch checked={selectedPlatforms.includes(option.value)} onCheckedChange={() => onToggle(option.value)} />
+						<Switch checked={selectedPlatforms.includes(platform)} onCheckedChange={() => onToggle(platform)} />
 					</div>
 				))}
 			</div>

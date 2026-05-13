@@ -33,11 +33,10 @@ import {
 } from "@/react-app/api";
 import { PublishProgress } from "./PublishProgress";
 import { PlatformPublishSettingsDialog } from "./PlatformPublishSettingsDialog";
+import { PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
 import type { Article } from "@/react-app/types";
 import type { AccountConfig, PublishTask, PublishTaskStep } from "@/react-app/types/publications";
 import {
-	PLATFORM_DISPLAY_NAMES,
-	PLATFORM_SHORT_ICONS,
 	isPublishablePlatform,
 	normalizePlatformPublishSettings,
 } from "@/shared/platform-settings";
@@ -532,11 +531,9 @@ export function PublishDialog({
 														onCheckedChange={(checked) => togglePlatform(platform, checked === true)}
 														className={cn(platformPartial && "border-brand-500 bg-brand-500")}
 													/>
-													<span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-white text-xs font-semibold text-slate-600">
-														{isPublishablePlatform(platform) ? PLATFORM_SHORT_ICONS[platform] : "?"}
-													</span>
+													<PlatformLogo platform={platform} size="sm" className="ring-0" />
 													<div className="min-w-0 flex-1">
-														<p className="text-sm font-medium text-slate-900">{isPublishablePlatform(platform) ? PLATFORM_DISPLAY_NAMES[platform] : platform}</p>
+														<p className="text-sm font-medium text-slate-900">{getPlatformDisplayName(platform)}</p>
 														<p className="text-xs text-slate-500">{platformAccounts.length} 个可用账号</p>
 													</div>
 													{setting ? (

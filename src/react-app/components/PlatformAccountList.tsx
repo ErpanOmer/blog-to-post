@@ -3,41 +3,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "@/lib/utils";
 import type { PlatformAccount, PlatformType } from "@/react-app/api";
-import {
-	PLATFORM_DISPLAY_NAMES,
-	PLATFORM_SHORT_ICONS,
-	isPublishablePlatform,
-} from "@/shared/platform-settings";
+import { PlatformBadge, PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
+import { isPublishablePlatform } from "@/shared/platform-settings";
 import type { PlatformPublishSettingsMap } from "@/shared/types";
 import { CheckCircle2, Clock, Eye, Key, Pencil, Shield, ShieldX, Trash2 } from "lucide-react";
-
-const platformStyles: Record<
-	PlatformType,
-	{ textClass: string; badgeClass: string }
-> = {
-	juejin: { textClass: "text-orange-600", badgeClass: "bg-orange-50 text-orange-600 border-orange-200/60" },
-	zhihu: { textClass: "text-blue-600", badgeClass: "bg-blue-50 text-blue-600 border-blue-200/60" },
-	wechat: { textClass: "text-emerald-600", badgeClass: "bg-emerald-50 text-emerald-600 border-emerald-200/60" },
-	csdn: { textClass: "text-sky-600", badgeClass: "bg-sky-50 text-sky-600 border-sky-200/60" },
-	cnblogs: { textClass: "text-indigo-600", badgeClass: "bg-indigo-50 text-indigo-600 border-indigo-200/60" },
-	segmentfault: { textClass: "text-teal-600", badgeClass: "bg-teal-50 text-teal-600 border-teal-200/60" },
-	website: { textClass: "text-violet-600", badgeClass: "bg-violet-50 text-violet-600 border-violet-200/60" },
-	"": { textClass: "text-slate-600", badgeClass: "bg-slate-50 text-slate-600 border-slate-200" },
-};
 
 interface PlatformAccountListProps {
 	accounts: PlatformAccount[];
 	onEdit: (account: PlatformAccount) => void;
 	onDelete: (account: PlatformAccount) => void;
 	platformSettings?: PlatformPublishSettingsMap;
-}
-
-function getPlatformLabel(platform: PlatformType): string {
-	return isPublishablePlatform(platform) ? PLATFORM_DISPLAY_NAMES[platform] : "未知平台";
-}
-
-function getPlatformIcon(platform: PlatformType): string {
-	return isPublishablePlatform(platform) ? PLATFORM_SHORT_ICONS[platform] : "?";
 }
 
 function isAccountPlatformDisabled(
@@ -63,9 +38,7 @@ export function PlatformAccountList({ accounts, onEdit, onDelete, platformSettin
 	return (
 		<div className="space-y-2.5">
 			{accounts.map((account) => {
-				const style = platformStyles[account.platform] ?? platformStyles[""];
-				const label = getPlatformLabel(account.platform);
-				const icon = getPlatformIcon(account.platform);
+				const label = getPlatformDisplayName(account.platform);
 				const disabledByPlatform = isAccountPlatformDisabled(account, platformSettings);
 				const maskedToken = account.authToken ? `${account.authToken.slice(0, 4)}...${account.authToken.slice(-4)}` : null;
 
@@ -82,7 +55,9 @@ export function PlatformAccountList({ accounts, onEdit, onDelete, platformSettin
 										alt={account.userName || ""}
 										referrerPolicy="no-referrer"
 									/>
-									<AvatarFallback className={`text-sm ${style.textClass}`}>{account.userName?.charAt(0) || icon}</AvatarFallback>
+									<AvatarFallback className="bg-transparent">
+										<PlatformLogo platform={account.platform} size="md" className="ring-0" />
+									</AvatarFallback>
 								</Avatar>
 
 								<div className="min-w-0 flex-1">
@@ -108,9 +83,7 @@ export function PlatformAccountList({ accounts, onEdit, onDelete, platformSettin
 									</div>
 
 									<div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-										<Badge variant="outline" className={`${style.badgeClass} text-[10px]`}>
-											{label}
-										</Badge>
+										<PlatformBadge platform={account.platform} size="xs" />
 										{account.userId && (
 											<span className="rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-mono text-slate-400">
 												{account.userId.slice(0, 12)}...

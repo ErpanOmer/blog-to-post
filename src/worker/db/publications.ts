@@ -422,8 +422,55 @@ export async function getPendingScheduledTasks(db: D1Database): Promise<PublishT
 }
 
 export async function deletePublishTask(db: D1Database, id: string): Promise<boolean> {
+  await db.prepare("DELETE FROM publish_task_steps WHERE taskId = ?").bind(id).run();
   const result = await db.prepare("DELETE FROM publish_tasks WHERE id = ?").bind(id).run();
   return result.success;
+}
+
+function readChangedRows(result: D1Result<unknown>): number {
+  const meta = result.meta as { changes?: number; rows_written?: number } | undefined;
+  return meta?.changes ?? meta?.rows_written ?? 0;
+}
+
+export async function deletePublishTasks(db: D1Database, ids: string[]): Promise<number> {
+  const normalizedIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (normalizedIds.length === 0) return 0;
+
+  let deleted = 0;
+  for (let i = 0; i < normalizedIds.length; i += 50) {
+    const chunk = normalizedIds.slice(i, i + 50);
+    const placeholders = chunk.map(() => "?").join(", ");
+    await db.prepare(`DELETE FROM publish_task_steps WHERE taskId IN (${placeholders})`).bind(...chunk).run();
+    const result = await db.prepare(`DELETE FROM publish_tasks WHERE id IN (${placeholders})`).bind(...chunk).run();
+    deleted += readChangedRows(result);
+  }
+
+  return deleted;
+}
+
+export async function clearPublishTasks(
+  db: D1Database,
+  filters?: { status?: PublishTaskStatus },
+): Promise<number> {
+  const params: unknown[] = [];
+  let whereClause = "";
+  if (filters?.status) {
+    whereClause = " WHERE status = ?";
+    params.push(filters.status);
+  }
+
+  await db.prepare(`DELETE FROM publish_task_steps WHERE taskId IN (SELECT id FROM publish_tasks${whereClause})`).bind(...params).run();
+  const result = await db.prepare(`DELETE FROM publish_tasks${whereClause}`).bind(...params).run();
+  return readChangedRows(result);
+}
+
+export async function deletePublishTasksOlderThan(db: D1Database, cutoff: number): Promise<number> {
+  await db
+    .prepare("DELETE FROM publish_task_steps WHERE taskId IN (SELECT id FROM publish_tasks WHERE createdAt < ?)")
+    .bind(cutoff)
+    .run();
+  const result = await db.prepare("DELETE FROM publish_tasks WHERE createdAt < ?").bind(cutoff).run();
+  return readChangedRows(result);
 }
 
 // ==================== Publish Task Step Operations ====================

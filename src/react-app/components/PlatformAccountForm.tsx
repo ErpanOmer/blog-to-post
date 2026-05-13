@@ -6,18 +6,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-	PLATFORM_DISPLAY_NAMES,
-	PLATFORM_SHORT_ICONS,
 	PUBLISHABLE_PLATFORMS,
 	isPublishablePlatform,
 } from "@/shared/platform-settings";
+import { PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
 import type { PlatformPublishSettingsMap, PublishablePlatformType } from "@/shared/types";
 import { Eye, EyeOff, Loader2, Shield, ShieldCheck, ShieldX } from "lucide-react";
 
-const platformOptions: { value: PublishablePlatformType; label: string; icon: string }[] = PUBLISHABLE_PLATFORMS.map((platform) => ({
+const platformOptions: { value: PublishablePlatformType; label: string }[] = PUBLISHABLE_PLATFORMS.map((platform) => ({
 	value: platform,
-	label: PLATFORM_DISPLAY_NAMES[platform],
-	icon: PLATFORM_SHORT_ICONS[platform],
+	label: getPlatformDisplayName(platform),
 }));
 
 interface PlatformAccountFormProps {
@@ -287,7 +285,7 @@ export function PlatformAccountForm({
 											: "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
 									} ${isPlatformLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
 								>
-									<span className="text-base font-semibold">{option.icon}</span>
+									<PlatformLogo platform={option.value} size="sm" className="ring-0 shadow-none" />
 									<span className="text-xs font-medium">{option.label}</span>
 								</button>
 							))}

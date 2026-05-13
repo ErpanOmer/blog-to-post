@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { Article } from "@/react-app/types";
 import type { PublishTask, PublishTaskStep } from "@/react-app/types/publications";
+import { PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
 
 interface PublishProgressProps {
   task: PublishTask;
@@ -14,16 +15,6 @@ interface PublishProgressProps {
   onClose: () => void;
   onViewDetails: () => void;
 }
-
-const platformLabels: Record<string, string> = {
-  juejin: "掘金",
-  zhihu: "知乎",
-  wechat: "公众号",
-  csdn: "CSDN",
-  cnblogs: "博客园",
-  segmentfault: "SegmentFault",
-  website: "个人网站",
-};
 
 const stepTypeLabels: Record<string, string> = {
   prepare_task: "准备任务",
@@ -173,8 +164,9 @@ export function PublishProgress({ task, steps, article, onClose, onViewDetails }
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium text-slate-900">
-                          {platformLabels[step.platform] || step.platform} · {stepTypeLabels[step.stepType] || step.stepType}
+                        <p className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-900">
+                          <PlatformLogo platform={step.platform} size="xs" className="ring-0 shadow-none" />
+                          {getPlatformDisplayName(step.platform)} · {stepTypeLabels[step.stepType] || step.stepType}
                         </p>
                         <Badge variant="outline" className="text-[11px]">
                           步骤 #{step.stepNumber}

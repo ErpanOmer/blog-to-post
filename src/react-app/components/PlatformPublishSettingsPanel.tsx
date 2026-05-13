@@ -7,8 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
-	PLATFORM_DISPLAY_NAMES,
-	PLATFORM_SHORT_ICONS,
 	PUBLISHABLE_PLATFORMS,
 	normalizePlatformPublishSettings,
 } from "@/shared/platform-settings";
@@ -21,6 +19,7 @@ import {
 	getPlatformPublishSettings,
 	updatePlatformPublishSettings,
 } from "@/react-app/api";
+import { PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
 import { Loader2, Save, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -171,9 +170,9 @@ export function PlatformPublishSettingsPanel({
 										"inline-flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold",
 										active ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500",
 									)}>
-										{PLATFORM_SHORT_ICONS[platform]}
+										<PlatformLogo platform={platform} size="sm" className={cn("ring-0 shadow-none", active && "bg-white/20")} />
 									</span>
-									<span className="truncate">{PLATFORM_DISPLAY_NAMES[platform]}</span>
+									<span className="truncate">{getPlatformDisplayName(platform)}</span>
 								</span>
 								<span className={cn(
 									"h-2 w-2 rounded-full",
@@ -191,9 +190,9 @@ export function PlatformPublishSettingsPanel({
 						<div>
 							<CardTitle className="flex items-center gap-2 text-base">
 								<span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-sm font-semibold text-brand-600">
-									{PLATFORM_SHORT_ICONS[activePlatform]}
+									<PlatformLogo platform={activePlatform} size="sm" className="ring-0 shadow-none" />
 								</span>
-								{PLATFORM_DISPLAY_NAMES[activePlatform]} 发布设置
+								{getPlatformDisplayName(activePlatform)} 发布设置
 							</CardTitle>
 							<CardDescription className="mt-1">{platformDescriptions[activePlatform]}</CardDescription>
 						</div>

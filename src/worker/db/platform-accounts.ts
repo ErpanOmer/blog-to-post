@@ -281,11 +281,15 @@ export async function updatePlatformAccount(
 	const current = await mapPlatformAccount(currentRow, encryptionKey);
 
 	const tokenFromPayload = normalizeAuthToken(payload.authToken);
-	const shouldUpdateToken = payload.authToken !== undefined;
-	const nextStoredToken = shouldUpdateToken
-		? tokenFromPayload
-			? await encryptAuthToken(tokenFromPayload, encryptionKey)
-			: null
+	const hasTokenPayload = payload.authToken !== undefined;
+	const currentToken = normalizeAuthToken(current.authToken);
+	const shouldUpdateToken = hasTokenPayload && tokenFromPayload !== currentToken;
+	const nextStoredToken = hasTokenPayload
+		? shouldUpdateToken
+			? tokenFromPayload
+				? await encryptAuthToken(tokenFromPayload, encryptionKey)
+				: null
+			: currentRow.authToken ?? null
 		: currentRow.authToken ?? null;
 
 	const next = {

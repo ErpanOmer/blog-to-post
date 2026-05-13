@@ -17,18 +17,18 @@ import { PlatformAccountForm } from "./PlatformAccountForm";
 import { PlatformAccountList } from "./PlatformAccountList";
 import { Loader2, Plus } from "lucide-react";
 import {
-  PLATFORM_DISPLAY_NAMES,
   PUBLISHABLE_PLATFORMS,
   isPublishablePlatform,
   normalizePlatformPublishSettings,
 } from "@/shared/platform-settings";
+import { PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
 import type { PlatformPublishSettingsMap } from "@/shared/types";
 
 const platformFilters: { value: PlatformType | "all"; label: string }[] = [
   { value: "all", label: "全部" },
   ...PUBLISHABLE_PLATFORMS.map((platform) => ({
     value: platform,
-    label: PLATFORM_DISPLAY_NAMES[platform],
+    label: getPlatformDisplayName(platform),
   })),
 ];
 
@@ -202,6 +202,7 @@ export function PlatformAccountsPanel() {
                 : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
             }`}
           >
+            {item.value !== "all" ? <PlatformLogo platform={item.value} size="xs" className="mr-1 inline-flex ring-0 shadow-none" /> : null}
             {item.label}
           </button>
         ))}

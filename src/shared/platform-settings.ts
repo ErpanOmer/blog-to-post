@@ -31,7 +31,7 @@ export const PLATFORM_SHORT_ICONS: Record<PublishablePlatformType, string> = {
 	csdn: "C",
 	cnblogs: "B",
 	segmentfault: "S",
-	website: "W",
+	website: "站",
 };
 
 export function createDefaultPlatformPublishSetting(

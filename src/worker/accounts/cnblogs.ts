@@ -12,10 +12,19 @@ import type {
 import type { Article as SharedArticle } from "@/shared/types";
 import { randomDelay } from "@/worker/utils/helpers";
 import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
+import {
+	COMMON_IMAGE_MIME_TO_EXTENSION,
+	buildCloudinaryImageFormatRewriteSources,
+	buildPublicImageFormatRewriteSources,
+	uploadImageWithCandidates,
+	type ResolvedImageUploadCandidate,
+} from "@/worker/utils/media";
 
 interface CnblogsResolvedContent {
 	markdownContent: string;
 }
+
+type CnblogsImageUploadPurpose = "content" | "featured";
 
 type CnblogsPostResponse = Record<string, unknown>;
 
@@ -117,6 +126,16 @@ export default class CnblogsAccountService extends AbstractAccountService {
 		return null;
 	}
 
+	private async requireXsrfToken(): Promise<string> {
+		const xsrfToken = await this.ensureXsrfToken();
+		if (!xsrfToken) {
+			throw new Error(
+				"Missing XSRF token. Please update cnblogs cookies from i.cnblogs.com and include XSRF-TOKEN.",
+			);
+		}
+		return xsrfToken;
+	}
+
 	private extractUserNameFromCurrentUserHtml(html: string): string | null {
 		const profileMatch =
 			html.match(/href=["']\/u\/([^/"']+)\/["']/i)
@@ -203,35 +222,6 @@ export default class CnblogsAccountService extends AbstractAccountService {
 			throw new Error(`Resource is not an image: ${url}`);
 		}
 		return blob;
-	}
-
-	private guessImageSuffix(sourceUrl: string, mimeType: string): string {
-		const typeMap: Record<string, string> = {
-			"image/jpeg": "jpg",
-			"image/jpg": "jpg",
-			"image/png": "png",
-			"image/gif": "gif",
-			"image/webp": "webp",
-			"image/bmp": "bmp",
-			"image/svg+xml": "svg",
-		};
-
-		const normalizedMime = mimeType.toLowerCase();
-		if (typeMap[normalizedMime]) {
-			return typeMap[normalizedMime];
-		}
-
-		try {
-			const parsed = new URL(sourceUrl);
-			const suffix = parsed.pathname.split(".").pop()?.toLowerCase();
-			if (suffix && ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(suffix)) {
-				return suffix === "jpeg" ? "jpg" : suffix;
-			}
-		} catch {
-			// ignore
-		}
-
-		return "jpg";
 	}
 
 	private tryParseJson(raw: string): unknown | null {
@@ -350,9 +340,46 @@ export default class CnblogsAccountService extends AbstractAccountService {
 		return [];
 	}
 
-	private resolveFeaturedImageValue(article: SharedArticle): string | null {
+	private resolveRawFeaturedImageValue(article: SharedArticle): string | null {
 		if (!article.coverImage) return null;
 		return this.normalizeImageUrl(article.coverImage) ?? null;
+	}
+
+	private getImageUrlExtension(sourceUrl: string): string | null {
+		try {
+			const parsed = new URL(sourceUrl);
+			const suffix = parsed.pathname.split(".").pop()?.trim().toLowerCase();
+			if (!suffix) return null;
+			return suffix === "jpeg" ? "jpg" : suffix;
+		} catch {
+			return null;
+		}
+	}
+
+	private buildImageFormatRewriteSources(sourceUrl: string): string[] {
+		return [
+			...buildCloudinaryImageFormatRewriteSources(sourceUrl, ["jpg", "png"]),
+			...buildPublicImageFormatRewriteSources(sourceUrl, ["jpg", "png"]),
+		];
+	}
+
+	private async resolveFeaturedImageValue(article: SharedArticle): Promise<string | null> {
+		const normalized = this.resolveRawFeaturedImageValue(article);
+		if (!normalized) return null;
+
+		const cached = this.imageUrlCache.get(normalized);
+		const cachedSuffix = cached ? this.getImageUrlExtension(cached) : null;
+		if (cached && cachedSuffix && new Set(["jpg", "png"]).has(cachedSuffix)) {
+			return cached;
+		}
+
+		const uploadedUrl = await this.uploadImageBySourceUrl(normalized, {
+			purpose: "featured",
+			preferConvertedImage: true,
+			allowedSuffixes: new Set(["jpg", "png"]),
+		});
+		this.imageUrlCache.set(normalized, uploadedUrl);
+		return uploadedUrl;
 	}
 
 	private buildPostPayload(params: {
@@ -421,12 +448,7 @@ export default class CnblogsAccountService extends AbstractAccountService {
 		method: "POST" | "PUT",
 		body: Record<string, unknown>,
 	): Promise<T> {
-		const xsrfToken = await this.ensureXsrfToken();
-		if (!xsrfToken) {
-			throw new Error(
-				"Missing XSRF token. Please provide full cnblogs cookies including XSRF-TOKEN.",
-			);
-		}
+		const xsrfToken = await this.requireXsrfToken();
 
 		return await this.request<T>(url, {
 			method,
@@ -482,60 +504,120 @@ export default class CnblogsAccountService extends AbstractAccountService {
 		throw (lastError instanceof Error ? lastError : new Error(String(lastError)));
 	}
 
-	private async uploadImageBySourceUrl(sourceUrl: string): Promise<string> {
+	private async uploadImageBySourceUrl(
+		sourceUrl: string,
+		options: {
+			purpose?: CnblogsImageUploadPurpose;
+			preferConvertedImage?: boolean;
+			allowedSuffixes?: ReadonlySet<string>;
+		} = {},
+	): Promise<string> {
 		const normalized = this.normalizeImageUrl(sourceUrl);
 		if (!normalized) {
 			throw new Error(`Invalid image URL: ${sourceUrl}`);
 		}
-		if (!normalized.startsWith("data:") && this.isCnblogsHostedImage(normalized)) {
+		const normalizedSuffix = this.getImageUrlExtension(normalized);
+		if (
+			!options.preferConvertedImage
+			&& !normalized.startsWith("data:")
+			&& this.isCnblogsHostedImage(normalized)
+		) {
+			return normalized;
+		}
+		if (
+			options.preferConvertedImage
+			&& !normalized.startsWith("data:")
+			&& this.isCnblogsHostedImage(normalized)
+			&& normalizedSuffix
+			&& options.allowedSuffixes?.has(normalizedSuffix)
+		) {
 			return normalized;
 		}
 
-		const xsrfToken = await this.ensureXsrfToken();
-		if (!xsrfToken) {
-			throw new Error(
-				"Missing XSRF token. Please provide full cnblogs cookies including XSRF-TOKEN.",
-			);
-		}
+		const xsrfToken = await this.requireXsrfToken();
+		const rewriteSources = this.buildImageFormatRewriteSources(normalized);
+		const uploadSourceUrl = options.preferConvertedImage && rewriteSources.length > 0
+			? rewriteSources[0]
+			: normalized;
+		const fallbackRewriteSources = options.preferConvertedImage
+			? rewriteSources.slice(1)
+			: rewriteSources;
 
 		await this.tracePublish({
-			stage: "cnblogs_image_upload_start",
+			stage: options.purpose === "featured" ? "cnblogs_featured_image_upload_start" : "cnblogs_image_upload_start",
 			message: "Start uploading cnblogs image",
 			metadata: {
 				source: normalized.startsWith("data:") ? "data-uri" : normalized,
+				uploadSource: uploadSourceUrl.startsWith("data:") ? "data-uri" : uploadSourceUrl,
+				purpose: options.purpose ?? "content",
 			},
 		});
 
-		const blob = normalized.startsWith("data:")
-			? this.dataUriToBlob(normalized)
-			: await this.downloadImageFromUrl(normalized);
-		const suffix = this.guessImageSuffix(normalized, blob.type || "image/jpeg");
+		const uploadCandidate = async (candidate: ResolvedImageUploadCandidate): Promise<Record<string, unknown> | null> => {
+			const formData = new FormData();
+			formData.append("image", candidate.blob, `image.${candidate.suffix}`);
+			formData.append("app", "blog");
+			formData.append("uploadType", "Select");
 
-		const formData = new FormData();
-		formData.append("image", blob, `image.${suffix}`);
-		formData.append("app", "blog");
-		formData.append("uploadType", "Select");
+			const response = await fetch(CNBLOGS_UPLOAD_IMAGE_URL, {
+				method: "POST",
+				headers: {
+					cookie: this.normalizeCookieHeader(this.authToken),
+					origin: "https://i.cnblogs.com",
+					referer: CNBLOGS_EDITOR_REFERER,
+					"x-xsrf-token": xsrfToken,
+					"user-agent":
+						"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+					accept: "*/*",
+				},
+				body: formData,
+			});
 
-		const response = await fetch(CNBLOGS_UPLOAD_IMAGE_URL, {
-			method: "POST",
-			headers: {
-				cookie: this.normalizeCookieHeader(this.authToken),
-				origin: "https://i.cnblogs.com",
-				referer: CNBLOGS_EDITOR_REFERER,
-				"x-xsrf-token": xsrfToken,
-				"user-agent":
-					"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-				accept: "*/*",
+			const rawText = await response.text();
+			if (!response.ok) {
+				throw new Error(`Cnblogs image upload failed (${response.status}): ${rawText.slice(0, 220)}`);
+			}
+
+			return this.toRecord(this.tryParseJson(rawText));
+		};
+
+		const { payload, candidate } = await uploadImageWithCandidates({
+			sourceUrl: uploadSourceUrl,
+			mimeToSuffix: COMMON_IMAGE_MIME_TO_EXTENSION,
+			downloadImageFromUrl: (url) => this.downloadImageFromUrl(url),
+			dataUriToBlob: (dataUri) => this.dataUriToBlob(dataUri),
+			buildRewriteSources: () => fallbackRewriteSources,
+			uploadCandidate: async (candidate) => {
+				const candidateSuffix = candidate.suffix === "jpeg" ? "jpg" : candidate.suffix;
+				if (options.allowedSuffixes && !options.allowedSuffixes.has(candidateSuffix)) {
+					throw new Error(`Unsupported cnblogs ${options.purpose ?? "image"} file type: ${candidateSuffix}`);
+				}
+				return await uploadCandidate(candidate);
 			},
-			body: formData,
+			shouldRetryError: (error) => {
+				const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+				return (
+					message.includes("unsupported")
+					|| message.includes("invalid file")
+					|| message.includes("file type")
+					|| message.includes("图片格式")
+					|| message.includes("文件格式")
+				);
+			},
+			onUseRewriteCandidate: async (candidate) => {
+				await this.tracePublish({
+					stage: options.purpose === "featured" ? "cnblogs_featured_image_upload_retry" : "cnblogs_image_upload_retry",
+					level: "warn",
+					message: "Retry cnblogs image upload with converted source",
+					metadata: {
+						source: candidate.source,
+						mimeType: candidate.mimeType,
+						suffix: candidate.suffix,
+					},
+				});
+			},
 		});
 
-		const rawText = await response.text();
-		if (!response.ok) {
-			throw new Error(`Cnblogs image upload failed (${response.status}): ${rawText.slice(0, 220)}`);
-		}
-
-		const payload = this.toRecord(this.tryParseJson(rawText));
 		const nestedData = this.toRecord(payload?.data);
 		const uploadedCandidate = (
 			(typeof payload?.data === "string" ? payload.data : null)
@@ -549,15 +631,18 @@ export default class CnblogsAccountService extends AbstractAccountService {
 
 		const uploadedUrl = uploadedCandidate ? this.normalizeImageUrl(uploadedCandidate) : null;
 		if (!uploadedUrl) {
-			throw new Error(`Cnblogs image upload returned invalid payload: ${rawText.slice(0, 220)}`);
+			throw new Error(`Cnblogs image upload returned invalid payload: ${JSON.stringify(payload).slice(0, 220)}`);
 		}
 
 		await this.tracePublish({
-			stage: "cnblogs_image_upload_done",
+			stage: options.purpose === "featured" ? "cnblogs_featured_image_upload_done" : "cnblogs_image_upload_done",
 			message: "Cnblogs image uploaded",
 			metadata: {
-				source: normalized.startsWith("data:") ? "data-uri" : normalized,
+				source: candidate.source.startsWith("data:") ? "data-uri" : candidate.source,
+				mimeType: candidate.mimeType,
+				suffix: candidate.suffix,
 				uploadedUrl,
+				purpose: options.purpose ?? "content",
 			},
 		});
 
@@ -608,6 +693,7 @@ export default class CnblogsAccountService extends AbstractAccountService {
 	async verify(): Promise<VerifyResult> {
 		try {
 			const accountInfo = await this.info();
+			await this.requireXsrfToken();
 			return {
 				valid: true,
 				message: "Cnblogs account verified successfully",
@@ -678,7 +764,7 @@ export default class CnblogsAccountService extends AbstractAccountService {
 				mode: "draft",
 				description: this.resolveDescriptionValue(article),
 				tags: this.resolveTagsValue(article),
-				featuredImage: this.resolveFeaturedImageValue(article),
+				featuredImage: await this.resolveFeaturedImageValue(article),
 			});
 
 			const data = await this.withNetworkRetry(
@@ -755,7 +841,7 @@ export default class CnblogsAccountService extends AbstractAccountService {
 				mode: "publish",
 				description: this.resolveDescriptionValue(article),
 				tags: this.resolveTagsValue(article),
-				featuredImage: this.resolveFeaturedImageValue(article),
+				featuredImage: await this.resolveFeaturedImageValue(article),
 				draftId,
 			});
 

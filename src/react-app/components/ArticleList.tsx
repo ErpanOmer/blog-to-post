@@ -4,6 +4,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { Article, PlatformType } from "@/react-app/types";
 import { ArticlePublicationStatus } from "./ArticlePublicationStatus";
+import { PlatformBadge, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
+import { PUBLISHABLE_PLATFORMS, isPublishablePlatform } from "@/shared/platform-settings";
 import {
   Calendar,
   CheckSquare,
@@ -35,16 +37,6 @@ type SortValue = "createdAt:desc" | "createdAt:asc" | "updatedAt:desc" | "update
 
 const PAGE_SIZE = 20;
 
-const platformLabels: Record<Exclude<PlatformType, "">, string> = {
-  juejin: "掘金",
-  zhihu: "知乎",
-  wechat: "公众号",
-  csdn: "CSDN",
-  cnblogs: "博客园",
-  segmentfault: "SegmentFault",
-  website: "个人网站",
-};
-
 function formatDateTime(timestamp: number): string {
   const date = new Date(timestamp);
   return date.toLocaleString("zh-CN", {
@@ -71,7 +63,7 @@ function getRelativeTime(timestamp: number): string {
 }
 
 function isKnownPlatform(platform: PlatformType): platform is Exclude<PlatformType, ""> {
-  return Boolean(platform) && platform in platformLabels;
+  return Boolean(platform) && isPublishablePlatform(platform);
 }
 
 function compareArticles(a: Article, b: Article, sortValue: SortValue): number {
@@ -104,11 +96,11 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
       counts.set(article.platform, (counts.get(article.platform) ?? 0) + 1);
     });
 
-    return Object.entries(platformLabels)
-      .map(([platform, label]) => ({
-        platform: platform as Exclude<PlatformType, "">,
-        label,
-        count: counts.get(platform as Exclude<PlatformType, "">) ?? 0,
+    return PUBLISHABLE_PLATFORMS
+      .map((platform) => ({
+        platform,
+        label: getPlatformDisplayName(platform),
+        count: counts.get(platform) ?? 0,
       }))
       .filter((item) => item.count > 0);
   }, [articles]);
@@ -375,9 +367,7 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
                       <div className="min-w-0 flex-1">
                         <div className="mb-2 flex flex-wrap items-center gap-1.5">
                           {isKnownPlatform(article.platform) && (
-                            <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                              {platformLabels[article.platform]}
-                            </span>
+                            <PlatformBadge platform={article.platform} size="xs" />
                           )}
                           <span className="text-[11px] text-slate-400">更新于 {getRelativeTime(article.updatedAt)}</span>
                           <span className="text-[11px] text-slate-300">创建 {formatDateTime(article.createdAt)}</span>

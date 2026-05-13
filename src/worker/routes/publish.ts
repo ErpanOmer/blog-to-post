@@ -12,6 +12,10 @@ import {
 	listPublishTasks,
 	listPublishTaskSteps,
 	listArticlePublications,
+	deletePublishTask,
+	deletePublishTasks,
+	clearPublishTasks,
+	deletePublishTasksOlderThan,
 } from "@/worker/db/publications";
 import { getPlatformAccount } from "@/worker/db/platform-accounts";
 import {
@@ -29,6 +33,7 @@ const app = new Hono<{ Bindings: Env }>();
 const allowedTaskStatuses: PublishTaskStatus[] = ["pending", "processing", "completed", "failed", "cancelled"];
 const allowedPublicationStatuses: PublicationStatus[] = ["pending", "draft_created", "publishing", "published", "failed", "cancelled"];
 const allowedPlatforms: PlatformType[] = ["juejin", "zhihu", "wechat", "csdn", "cnblogs", "segmentfault", "website", ""];
+const PUBLISH_TASK_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 function parseTaskStatus(value?: string): PublishTaskStatus | undefined {
 	if (!value) return undefined;
@@ -194,6 +199,7 @@ app.post("/tasks", async (c) => {
 app.get("/tasks", async (c) => {
 	const requestId = createRequestId();
 	try {
+		await deletePublishTasksOlderThan(c.env.DB, Date.now() - PUBLISH_TASK_RETENTION_MS);
 		const status = parseTaskStatus(c.req.query("status"));
 		const limitRaw = c.req.query("limit");
 		const offsetRaw = c.req.query("offset");
@@ -221,12 +227,57 @@ app.get("/tasks", async (c) => {
 	}
 });
 
+// Delete publish tasks in bulk, or clear the current task list.
+app.delete("/tasks", async (c) => {
+	const requestId = createRequestId();
+	try {
+		const status = parseTaskStatus(c.req.query("status"));
+		const clearAll = c.req.query("clear") === "1" || c.req.query("clear") === "true";
+		let ids: string[] = [];
+
+		if (!clearAll) {
+			try {
+				const body = (await c.req.json()) as { ids?: string[] };
+				ids = Array.isArray(body.ids) ? body.ids : [];
+			} catch {
+				ids = [];
+			}
+		}
+
+		const deleted = clearAll
+			? await clearPublishTasks(c.env.DB, { status })
+			: await deletePublishTasks(c.env.DB, ids);
+
+		return c.json({ success: true, deleted, requestId });
+	} catch (error) {
+		return jsonError(c, requestId, error, PublishErrorCodes.INVALID_REQUEST);
+	}
+});
+
 // Get task detail
 app.get("/tasks/:id", async (c) => {
 	const requestId = createRequestId();
 	try {
 		const { task, steps } = await getPublishTaskStatus(c.env.DB, c.req.param("id"));
 		return c.json({ task, steps });
+	} catch (error) {
+		return jsonError(c, requestId, error, PublishErrorCodes.TASK_NOT_FOUND);
+	}
+});
+
+// Delete single publish task
+app.delete("/tasks/:id", async (c) => {
+	const requestId = createRequestId();
+	try {
+		const success = await deletePublishTask(c.env.DB, c.req.param("id"));
+		if (!success) {
+			throw new PublishServiceError({
+				code: PublishErrorCodes.TASK_NOT_FOUND,
+				status: 404,
+				message: "Task not found",
+			});
+		}
+		return c.json({ success: true, deleted: 1, requestId });
 	} catch (error) {
 		return jsonError(c, requestId, error, PublishErrorCodes.TASK_NOT_FOUND);
 	}

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, Clock, ExternalLink, FileEdit, Loader2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PLATFORM_DISPLAY_NAMES, PLATFORM_SHORT_ICONS, isPublishablePlatform } from "@/shared/platform-settings";
+import { PlatformBadge } from "@/react-app/components/PlatformBrand";
 
 interface ArticlePublicationStatusProps {
 	articleId: string;
@@ -45,14 +45,6 @@ const statusConfig = {
 		icon: XCircle,
 	},
 } as const;
-
-function getPlatformLabel(platform: string): string {
-	return isPublishablePlatform(platform) ? PLATFORM_DISPLAY_NAMES[platform] : platform;
-}
-
-function getPlatformIcon(platform: string): string {
-	return isPublishablePlatform(platform) ? PLATFORM_SHORT_ICONS[platform] : "?";
-}
 
 function safeDecodeURIComponent(value: string): string {
 	try {
@@ -230,10 +222,9 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 							key={platform}
 							type="button"
 							onClick={() => setActivePlatform(platform)}
-							className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 transition-colors hover:bg-slate-50"
+							className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-600 transition-colors hover:bg-slate-50"
 						>
-							<span className="text-slate-500">{getPlatformIcon(platform)}</span>
-							<span>{getPlatformLabel(platform)}</span>
+							<PlatformBadge platform={platform} size="xs" className="border-0 bg-transparent px-0" />
 							<span className="rounded bg-slate-100 px-1 py-0 text-[10px] text-slate-500">{entries.length}</span>
 						</button>
 					))}
@@ -248,7 +239,7 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 								variant="outline"
 								className="rounded-md border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700"
 							>
-								{activeGroup ? `${getPlatformIcon(activeGroup.platform)} ${getPlatformLabel(activeGroup.platform)}` : ""}
+								{activeGroup ? <PlatformBadge platform={activeGroup.platform} size="xs" className="border-0 bg-transparent px-0" /> : null}
 							</Badge>
 							<span className="text-sm text-slate-500">{activeGroup?.entries.length ?? 0} 条发布记录</span>
 						</DialogTitle>
