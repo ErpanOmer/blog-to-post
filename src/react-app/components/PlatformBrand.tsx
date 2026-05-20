@@ -75,6 +75,16 @@ export const PLATFORM_BRANDS: Record<PublishablePlatformType, PlatformBrandTone>
 		logoTextClass: "text-white",
 		ringClass: "ring-teal-100",
 	},
+	"51cto": {
+		label: PLATFORM_DISPLAY_NAMES["51cto"],
+		shortName: PLATFORM_SHORT_ICONS["51cto"],
+		textClass: "text-cyan-700",
+		softClass: "bg-cyan-50 text-cyan-700 border-cyan-200/70",
+		badgeClass: "border-cyan-200 bg-cyan-50 text-cyan-700",
+		logoClass: "bg-gradient-to-br from-cyan-500 to-sky-600",
+		logoTextClass: "text-white",
+		ringClass: "ring-cyan-100",
+	},
 	website: {
 		label: PLATFORM_DISPLAY_NAMES.website,
 		shortName: PLATFORM_SHORT_ICONS.website,

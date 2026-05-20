@@ -496,6 +496,12 @@ function hasExpectedPublicationUrlShape(platform: PlatformType, rawUrl: string):
 			return host.endsWith("juejin.cn") && /^\/post\/\d+/.test(pathname);
 		case "segmentfault":
 			return host.endsWith("segmentfault.com") && pathname.startsWith("/a/");
+		case "51cto":
+			return host.endsWith("51cto.com") && (
+				pathname.includes("/blogger/draft/")
+				|| pathname.includes("/blogger/success/")
+				|| /^\/[^/]+\/\d+/.test(pathname)
+			);
 		case "cnblogs":
 			return host.endsWith("cnblogs.com") && (
 				pathname.includes("/p/")

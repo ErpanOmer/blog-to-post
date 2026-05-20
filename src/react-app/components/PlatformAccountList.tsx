@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "@/lib/utils";
-import type { PlatformAccount, PlatformType } from "@/react-app/api";
+import type { PlatformAccount } from "@/react-app/api";
 import { PlatformBadge, PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
 import { isPublishablePlatform } from "@/shared/platform-settings";
 import type { PlatformPublishSettingsMap } from "@/shared/types";

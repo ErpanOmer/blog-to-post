@@ -35,6 +35,7 @@ import "./wechat";
 import "./csdn";
 import "./cnblogs";
 import "./segmentfault";
+import "./cto51";
 import "./website";
 
 export type { JuejinUserInfo, ZhihuUserInfo, WechatUserInfo, CSDNUserInfo } from "@/worker/accounts/abstract";

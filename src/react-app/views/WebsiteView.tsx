@@ -93,13 +93,11 @@ function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOp
   const [settings, setSettings] = useState<WebsiteSlugSettings | null>(null);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [globalDefaultModel, setGlobalDefaultModel] = useState("");
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open || settings) return;
     let cancelled = false;
-    setLoading(true);
     void (async () => {
       try {
         const [data, catalog, globalSettings] = await Promise.all([
@@ -120,8 +118,6 @@ function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOp
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "加载 slug 配置失败");
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     })();
     return () => {

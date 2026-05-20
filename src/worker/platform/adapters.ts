@@ -41,6 +41,12 @@ class SegmentFaultAdapter implements PlatformAdapter {
 	}
 }
 
+class Cto51Adapter implements PlatformAdapter {
+	adapt(content: string) {
+		return `# 51CTO 技术发布\n\n${content}\n\n> 本文由自动分发系统生成。`;
+	}
+}
+
 class WebsiteAdapter implements PlatformAdapter {
 	adapt(content: string) {
 		return content;
@@ -61,6 +67,8 @@ export function getPlatformAdapter(platform: PlatformType): PlatformAdapter {
 			return new CnblogsAdapter();
 		case "segmentfault":
 			return new SegmentFaultAdapter();
+		case "51cto":
+			return new Cto51Adapter();
 		case "website":
 			return new WebsiteAdapter();
 		default:

@@ -32,7 +32,7 @@ const app = new Hono<{ Bindings: Env }>();
 
 const allowedTaskStatuses: PublishTaskStatus[] = ["pending", "processing", "completed", "failed", "cancelled"];
 const allowedPublicationStatuses: PublicationStatus[] = ["pending", "draft_created", "publishing", "published", "failed", "cancelled"];
-const allowedPlatforms: PlatformType[] = ["juejin", "zhihu", "wechat", "csdn", "cnblogs", "segmentfault", "website", ""];
+const allowedPlatforms: PlatformType[] = ["juejin", "zhihu", "wechat", "csdn", "cnblogs", "segmentfault", "51cto", "website", ""];
 const PUBLISH_TASK_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 function parseTaskStatus(value?: string): PublishTaskStatus | undefined {

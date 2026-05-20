@@ -34,9 +34,9 @@ function stripHtmlTags(value: string): string {
 
 function getHtmlAttribute(tag: string, name: string): string | null {
 	const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-	const regex = new RegExp("\\b" + escapedName + "\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s\"'=<>`]+))", "i");
+	const regex = new RegExp("\\b" + escapedName + "\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|“([^”]*)”|‘([^’]*)’|([^\\s\"'=<>`]+))", "i");
 	const match = tag.match(regex);
-	const value = match?.[1] ?? match?.[2] ?? match?.[3];
+	const value = match?.[1] ?? match?.[2] ?? match?.[3] ?? match?.[4] ?? match?.[5];
 	return value ? decodeHtmlEntities(value) : null;
 }
 
