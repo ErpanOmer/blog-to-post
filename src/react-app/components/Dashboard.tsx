@@ -573,7 +573,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="max-h-[330px] space-y-2 overflow-y-auto pr-1">
+            <div className="max-h-[500px] space-y-2 overflow-y-auto pr-1">
               {summary.recentActivity.length === 0 ? (
                 <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 text-[13px] text-slate-400">当前筛选下暂无动态</div>
               ) : summary.recentActivity.map((activity) => (
