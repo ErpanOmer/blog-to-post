@@ -246,7 +246,7 @@ export default class JuejinAccountService extends AbstractAccountService {
 	}
 
 	private async fetchJson<T>(url: string, options: RequestInit, message: string): Promise<T> {
-		const response = await fetch(url, options);
+		const response = await this.fetchPlatform(url, options);
 		const rawText = await response.text();
 		if (!response.ok) {
 			throw new Error(`${message}: ${response.status} ${rawText.slice(0, 300)}`);
@@ -264,7 +264,7 @@ export default class JuejinAccountService extends AbstractAccountService {
 			return this.cachedCsrfToken;
 		}
 
-		const response = await fetch(`${JUEJIN_API_BASE_URL}/user_api/v1/sys/token`, {
+		const response = await this.fetchPlatform(`${JUEJIN_API_BASE_URL}/user_api/v1/sys/token`, {
 			method: "HEAD",
 			headers: {
 				...this.headers,
@@ -364,7 +364,7 @@ export default class JuejinAccountService extends AbstractAccountService {
 		const arrayBuffer = await file.arrayBuffer();
 		const bytes = new Uint8Array(arrayBuffer);
 		const uploadUrl = `https://${uploadHost}/${storeInfo.StoreUri}`;
-		const response = await fetch(uploadUrl, {
+		const response = await this.fetchPlatform(uploadUrl, {
 			method: "PUT",
 			headers: {
 				authorization: storeInfo.Auth,

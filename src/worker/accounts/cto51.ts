@@ -524,7 +524,7 @@ export default class Cto51AccountService extends AbstractAccountService {
 		formData.append("Content-Type", candidate.mimeType);
 		formData.append("file", candidate.blob, filename);
 
-		const response = await fetch(config.url, {
+		const response = await this.fetchPlatform(config.url, {
 			method: "POST",
 			body: formData,
 		});

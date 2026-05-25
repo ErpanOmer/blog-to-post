@@ -1,9 +1,7 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ArticlePublication } from "@/react-app/types/publications";
 import { getArticlePublications, getPlatformAccounts, validateArticlePublicationLinks } from "@/react-app/api";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, Clock, ExternalLink, FileEdit, Loader2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlatformBadge } from "@/react-app/components/PlatformBrand";
@@ -91,8 +89,7 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 				}),
 				getPlatformAccounts(),
 			]);
-			const sorted = [...pubs].sort((a, b) => b.updatedAt - a.updatedAt);
-			setPublications(sorted);
+			setPublications([...pubs].sort((a, b) => b.updatedAt - a.updatedAt));
 
 			const nameMap = new Map<string, string>();
 			accounts.forEach((account) => {
@@ -115,21 +112,18 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 		setActivePlatform(null);
 	}, [articleId]);
 
-	const linkPublications = useMemo(
-		() => {
-			const seen = new Set<string>();
-			return publications
-				.filter((item) => Boolean(item.publishedUrl?.trim()))
-				.sort((a, b) => b.updatedAt - a.updatedAt)
-				.filter((publication) => {
-					const key = getPublicationDedupeKey(publication);
-					if (seen.has(key)) return false;
-					seen.add(key);
-					return true;
-				});
-		},
-		[publications],
-	);
+	const linkPublications = useMemo(() => {
+		const seen = new Set<string>();
+		return publications
+			.filter((item) => Boolean(item.publishedUrl?.trim()))
+			.sort((a, b) => b.updatedAt - a.updatedAt)
+			.filter((publication) => {
+				const key = getPublicationDedupeKey(publication);
+				if (seen.has(key)) return false;
+				seen.add(key);
+				return true;
+			});
+	}, [publications]);
 
 	const platformGroups = useMemo(() => {
 		const perPlatformCounter = new Map<string, number>();
@@ -147,27 +141,6 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 			.map(([platform, entries]) => ({ platform, entries }))
 			.sort((a, b) => b.entries[0].publication.updatedAt - a.entries[0].publication.updatedAt);
 	}, [linkPublications]);
-
-	const activeGroup = useMemo(
-		() => (activePlatform ? platformGroups.find((group) => group.platform === activePlatform) ?? null : null),
-		[activePlatform, platformGroups],
-	);
-
-	if (isLoading) {
-		return (
-			<div className="flex items-center gap-1 text-[11px] text-slate-400">
-				<Loader2 className="h-3 w-3 animate-spin" />
-				<span>加载中...</span>
-			</div>
-		);
-	}
-
-	if (linkPublications.length === 0) {
-		if (publications.length > 0) {
-			return <div className="text-[11px] text-slate-400">存在分发记录，但暂无可访问链接</div>;
-		}
-		return <div className="text-[11px] text-slate-400">尚未分发到任何平台</div>;
-	}
 
 	const renderPublicationLink = (entry: { publication: ArticlePublication; sequence: number }) => {
 		const { publication, sequence } = entry;
@@ -210,46 +183,86 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 		);
 	};
 
-	return (
-		<>
-			<div className="overflow-x-auto">
-				<div className="flex min-w-max items-center gap-1.5 whitespace-nowrap">
-					<span className="text-[11px] font-medium text-slate-500">分发链接</span>
-					<span className="mr-1 text-[11px] text-slate-400">{linkPublications.length} 条</span>
-					{isCheckingLinks ? <Loader2 className="h-3 w-3 animate-spin text-slate-300" /> : null}
-					{platformGroups.map(({ platform, entries }) => (
-						<button
-							key={platform}
-							type="button"
-							onClick={() => setActivePlatform(platform)}
-							className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-600 transition-colors hover:bg-slate-50"
-						>
-							<PlatformBadge platform={platform} size="xs" className="border-0 bg-transparent px-0" />
-							<span className="rounded bg-slate-100 px-1 py-0 text-[10px] text-slate-500">{entries.length}</span>
-						</button>
-					))}
-				</div>
+	if (isLoading) {
+		return (
+			<div className="flex items-center gap-1 text-[11px] text-slate-400">
+				<Loader2 className="h-3 w-3 animate-spin" />
+				<span>加载中...</span>
 			</div>
+		);
+	}
 
-			<Dialog open={Boolean(activeGroup)} onOpenChange={(open) => !open && setActivePlatform(null)}>
-				<DialogContent className="max-h-[82vh] max-w-2xl overflow-hidden">
-					<DialogHeader>
-						<DialogTitle className="flex items-center gap-2">
-							<Badge
-								variant="outline"
-								className="rounded-md border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700"
+	if (linkPublications.length === 0) {
+		if (publications.length > 0) {
+			return <div className="text-[11px] text-slate-400">存在分发记录，但暂无可访问链接</div>;
+		}
+		return <div className="text-[11px] text-slate-400">尚未分发到任何平台</div>;
+	}
+
+	return (
+		<div className="flex flex-wrap items-center gap-1.5">
+			<span className="text-[11px] font-medium text-slate-500">分发链接</span>
+			<span className="mr-1 text-[11px] text-slate-400">{linkPublications.length} 条</span>
+			{isCheckingLinks ? <Loader2 className="h-3 w-3 animate-spin text-slate-300" /> : null}
+			{platformGroups.map(({ platform, entries }) => {
+				const isActive = activePlatform === platform;
+				const singlePublication = entries.length === 1 ? entries[0].publication : null;
+				const triggerClassName = "inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-600 transition-colors hover:border-brand-200 hover:bg-brand-50";
+
+				return (
+					<div
+						key={platform}
+						className="relative"
+						onMouseEnter={() => setActivePlatform(platform)}
+						onMouseLeave={() => setActivePlatform(null)}
+						onFocus={() => setActivePlatform(platform)}
+						onBlur={(event) => {
+							if (!event.currentTarget.contains(event.relatedTarget)) {
+								setActivePlatform(null);
+							}
+						}}
+					>
+						{singlePublication?.publishedUrl ? (
+							<a
+								href={singlePublication.publishedUrl}
+								target="_blank"
+								rel="noopener noreferrer"
+								className={cn(triggerClassName, "hover:text-brand-700")}
+								title={singlePublication.publishedUrl}
+								onClick={(event) => event.stopPropagation()}
 							>
-								{activeGroup ? <PlatformBadge platform={activeGroup.platform} size="xs" className="border-0 bg-transparent px-0" /> : null}
-							</Badge>
-							<span className="text-sm text-slate-500">{activeGroup?.entries.length ?? 0} 条发布记录</span>
-						</DialogTitle>
-					</DialogHeader>
-
-					<ScrollArea className="max-h-[62vh] pr-2">
-						<div className="space-y-2">{activeGroup?.entries.map((entry) => renderPublicationLink(entry))}</div>
-					</ScrollArea>
-				</DialogContent>
-			</Dialog>
-		</>
+								<PlatformBadge platform={platform} size="xs" className="border-0 bg-transparent px-0" />
+								<span className="rounded bg-slate-100 px-1 py-0 text-[10px] text-slate-500">{entries.length}</span>
+								<ExternalLink className="h-3 w-3" />
+							</a>
+						) : (
+							<button type="button" className={triggerClassName}>
+								<PlatformBadge platform={platform} size="xs" className="border-0 bg-transparent px-0" />
+								<span className="rounded bg-slate-100 px-1 py-0 text-[10px] text-slate-500">{entries.length}</span>
+							</button>
+						)}
+						<div
+							className={cn(
+								"absolute left-0 top-full z-50 w-[min(360px,calc(100vw-48px))] pt-2 transition-all duration-150",
+								isActive ? "pointer-events-auto visible opacity-100" : "pointer-events-none invisible opacity-0",
+							)}
+						>
+							<div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+								<div className="mb-2 flex items-center justify-between gap-2">
+									<div className="flex items-center gap-2">
+										<PlatformBadge platform={platform} size="xs" />
+										<span className="text-xs font-semibold text-slate-700">发布记录</span>
+									</div>
+									<span className="text-[11px] text-slate-400">{entries.length} 条</span>
+								</div>
+								<div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+									{entries.map((entry) => renderPublicationLink(entry))}
+								</div>
+							</div>
+						</div>
+					</div>
+				);
+			})}
+		</div>
 	);
 }

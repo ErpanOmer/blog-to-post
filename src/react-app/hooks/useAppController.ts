@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import * as bytemd from "bytemd";
 import gfm from "@bytemd/plugin-gfm";
 import highlight from "@bytemd/plugin-highlight";
@@ -13,6 +13,13 @@ import { createPublishTask, getProviderStatus } from "@/react-app/api";
 import type { Article } from "@/react-app/types";
 import type { AccountConfig } from "@/react-app/types/publications";
 import { normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
+import {
+  clearArticleDraftBackup,
+  readArticleDraftBackup,
+  readLatestTempArticleDraftBackup,
+  saveArticleDraftBackup,
+  shouldRestoreArticleDraftBackup,
+} from "@/react-app/utils/articleDraftBackup";
 
 const plugins = [gfm(), highlight(), breaks(), frontmatter(), gemoji(), math()];
 
@@ -34,6 +41,8 @@ export function useAppController() {
   const { articles, updateArticle, createArticle, deleteArticle, refreshArticles } = useArticles();
 
   const [draft, setDraft] = useState<Article | null>(null);
+  const [hasDraftBackupChanges, setHasDraftBackupChanges] = useState(false);
+  const draftBackupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [providerStatus, setProviderStatus] = useState<{
     provider: string;
     ready: boolean;
@@ -90,8 +99,38 @@ export function useAppController() {
       });
   }, []);
 
+  useEffect(() => {
+    if (draftBackupTimerRef.current) {
+      clearTimeout(draftBackupTimerRef.current);
+      draftBackupTimerRef.current = null;
+    }
+
+    if (!draft || !hasDraftBackupChanges) return;
+
+    draftBackupTimerRef.current = setTimeout(() => {
+      saveArticleDraftBackup(draft);
+      draftBackupTimerRef.current = null;
+    }, 700);
+
+    return () => {
+      if (draftBackupTimerRef.current) {
+        clearTimeout(draftBackupTimerRef.current);
+        draftBackupTimerRef.current = null;
+      }
+    };
+  }, [draft, hasDraftBackupChanges]);
+
   const openNewArticleEditor = useCallback(() => {
+    const latestBackup = readLatestTempArticleDraftBackup();
+    if (latestBackup) {
+      setDraft(latestBackup.article);
+      setHasDraftBackupChanges(false);
+      notify.info("已恢复上次未保存的新文章", new Date(latestBackup.savedAt).toLocaleString("zh-CN"));
+      return;
+    }
+
     setDraft(createEmptyArticle());
+    setHasDraftBackupChanges(false);
   }, []);
 
   const openArticleEditor = useCallback((article: Article) => {
@@ -99,19 +138,29 @@ export function useAppController() {
       notify.error("只有草稿状态的文章才能编辑");
       return false;
     }
-    setDraft({ ...article });
+    const backup = readArticleDraftBackup(article.id);
+    if (shouldRestoreArticleDraftBackup(article, backup)) {
+      setDraft(backup.article);
+      notify.info("已恢复本地实时备份", new Date(backup.savedAt).toLocaleString("zh-CN"));
+    } else {
+      setDraft({ ...article });
+    }
+    setHasDraftBackupChanges(false);
     return true;
   }, []);
 
   const clearDraft = useCallback(() => {
     setDraft(null);
+    setHasDraftBackupChanges(false);
   }, []);
 
   const handleTitleChange = useCallback((title: string) => {
+    setHasDraftBackupChanges(true);
     setDraft((prev) => (prev ? { ...prev, title } : prev));
   }, []);
 
   const handleArticleUpdate = useCallback((updates: Partial<Article>) => {
+    setHasDraftBackupChanges(true);
     setDraft((prev) => {
       if (!prev) return prev;
       const normalizedUpdates = updates.content !== undefined
@@ -144,6 +193,9 @@ export function useAppController() {
       ? await updateArticle(draft.id, payload)
       : await createArticle({ ...draft, ...payload, status: "draft" } as Article);
 
+    clearArticleDraftBackup(draft.id);
+    clearArticleDraftBackup(savedArticle.id);
+    setHasDraftBackupChanges(false);
     setDraft(savedArticle);
     return savedArticle;
   }, [articles, createArticle, draft, isFormValid, updateArticle]);
@@ -233,6 +285,42 @@ export function useAppController() {
     [deleteArticle],
   );
 
+  const handleBatchDelete = useCallback(
+    (targetArticles: Article[]) => {
+      if (targetArticles.length === 0) return;
+
+      const lockedArticles = targetArticles.filter((article) => article.status !== "draft");
+      if (lockedArticles.length > 0) {
+        notify.error("只能批量删除草稿文章", `当前选择中有 ${lockedArticles.length} 篇文章不是草稿状态`);
+        return;
+      }
+
+      setConfirmDialog({
+        open: true,
+        title: "批量删除文章",
+        description: `确定删除已选择的 ${targetArticles.length} 篇草稿文章吗？删除后无法恢复。`,
+        confirmLabel: "确认批量删除",
+        variant: "destructive",
+        onConfirm: () => {
+          setConfirmDialog((prev) => ({ ...prev, isLoading: true }));
+          Promise.all(targetArticles.map((article) => deleteArticle(article.id).then(() => {
+            clearArticleDraftBackup(article.id);
+          })))
+            .then(() => {
+              notify.success("批量删除成功");
+              setConfirmDialog((prev) => ({ ...prev, open: false, isLoading: false }));
+            })
+            .catch((error: Error) => {
+              console.error("批量删除失败", error);
+              notify.error("批量删除失败", error.message || "未知错误");
+              setConfirmDialog((prev) => ({ ...prev, open: false, isLoading: false }));
+            });
+        },
+      });
+    },
+    [deleteArticle],
+  );
+
   const handlePublish = useCallback((targetArticles: Article[]) => {
     setIsQuickPublishMode(false);
     setArticlesToPublish(targetArticles);
@@ -295,6 +383,7 @@ export function useAppController() {
       handleQuickPublish,
       handleQuickPublishConfirm,
       handleDelete,
+      handleBatchDelete,
       handlePublish,
       handlePublishConfirm,
       setIsPublishDialogOpen,

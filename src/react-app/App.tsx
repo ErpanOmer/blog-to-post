@@ -58,6 +58,7 @@ const ArticleNewRoute = ({ state, actions }: { state: AppState; actions: AppActi
       onSave={async () => {
         const saved = await actions.handleSave();
         if (saved) navigate(`/articles/${saved.id}`);
+        return saved;
       }}
       onQuickPublish={actions.handleQuickPublish}
     />
@@ -105,6 +106,7 @@ const ArticleEditRoute = ({ state, actions }: { state: AppState; actions: AppAct
       onSave={async () => {
         const saved = await actions.handleSave();
         if (saved) navigate(`/articles/${saved.id}`);
+        return saved;
       }}
       onQuickPublish={actions.handleQuickPublish}
     />
@@ -179,6 +181,7 @@ function App() {
                 if (ok) navigate(`/articles/${article.id}/edit`);
               }}
               onDelete={actions.handleDelete}
+              onDeleteMany={actions.handleBatchDelete}
               onPublish={actions.handlePublish}
             />
           }

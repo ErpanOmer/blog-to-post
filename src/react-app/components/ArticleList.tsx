@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { Article, PlatformType } from "@/react-app/types";
+import type { ArticlePublication } from "@/react-app/types/publications";
 import { ArticlePublicationStatus } from "./ArticlePublicationStatus";
 import { PlatformBadge, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
 import { PUBLISHABLE_PLATFORMS, isPublishablePlatform } from "@/shared/platform-settings";
@@ -29,8 +30,10 @@ interface ArticleListProps {
   onViewDetail: (article: Article) => void;
   onEdit?: (article: Article) => void;
   onDelete?: (article: Article) => void;
+  onDeleteMany?: (articles: Article[]) => void;
   onPublish?: (articles: Article[]) => void;
   publicationRefreshKey?: number;
+  publicationHistory?: ArticlePublication[];
 }
 
 type SortValue = "createdAt:desc" | "createdAt:asc" | "updatedAt:desc" | "updatedAt:asc" | "title:asc";
@@ -49,8 +52,7 @@ function formatDateTime(timestamp: number): string {
 }
 
 function getRelativeTime(timestamp: number): string {
-  const now = Date.now();
-  const diff = now - timestamp;
+  const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
@@ -82,19 +84,52 @@ function compareArticles(a: Article, b: Article, sortValue: SortValue): number {
   }
 }
 
-export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublish, publicationRefreshKey = 0 }: ArticleListProps) {
+export function ArticleList({
+  articles,
+  onViewDetail,
+  onEdit,
+  onDelete,
+  onDeleteMany,
+  onPublish,
+  publicationRefreshKey = 0,
+  publicationHistory = [],
+}: ArticleListProps) {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<Exclude<PlatformType, "">>>(new Set());
   const [sortValue, setSortValue] = useState<SortValue>("createdAt:desc");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
+  const publicationsByArticleId = useMemo(() => {
+    const map = new Map<string, ArticlePublication[]>();
+    publicationHistory.forEach((publication) => {
+      const current = map.get(publication.articleId) ?? [];
+      current.push(publication);
+      map.set(publication.articleId, current);
+    });
+    return map;
+  }, [publicationHistory]);
+
+  const hasPublicationHistory = publicationHistory.length > 0;
+
   const platformOptions = useMemo(() => {
     const counts = new Map<Exclude<PlatformType, "">, number>();
-    articles.forEach((article) => {
-      if (!isKnownPlatform(article.platform)) return;
-      counts.set(article.platform, (counts.get(article.platform) ?? 0) + 1);
-    });
+    const seenArticleIdsByPlatform = new Map<Exclude<PlatformType, "">, Set<string>>();
+
+    if (publicationHistory.length > 0) {
+      publicationHistory.forEach((publication) => {
+        if (!isKnownPlatform(publication.platform)) return;
+        const seen = seenArticleIdsByPlatform.get(publication.platform) ?? new Set<string>();
+        seen.add(publication.articleId);
+        seenArticleIdsByPlatform.set(publication.platform, seen);
+      });
+      seenArticleIdsByPlatform.forEach((seen, platform) => counts.set(platform, seen.size));
+    } else {
+      articles.forEach((article) => {
+        if (!isKnownPlatform(article.platform)) return;
+        counts.set(article.platform, (counts.get(article.platform) ?? 0) + 1);
+      });
+    }
 
     return PUBLISHABLE_PLATFORMS
       .map((platform) => ({
@@ -103,15 +138,24 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
         count: counts.get(platform) ?? 0,
       }))
       .filter((item) => item.count > 0);
-  }, [articles]);
+  }, [articles, publicationHistory]);
 
   const filteredArticles = useMemo(() => {
     const filtered = selectedPlatforms.size === 0
       ? articles
-      : articles.filter((article) => isKnownPlatform(article.platform) && selectedPlatforms.has(article.platform));
+      : articles.filter((article) => {
+        if (!hasPublicationHistory) {
+          return isKnownPlatform(article.platform) && selectedPlatforms.has(article.platform);
+        }
+
+        const publications = publicationsByArticleId.get(article.id) ?? [];
+        return publications.some((publication) => (
+          isKnownPlatform(publication.platform) && selectedPlatforms.has(publication.platform)
+        ));
+      });
 
     return [...filtered].sort((a, b) => compareArticles(a, b, sortValue));
-  }, [articles, selectedPlatforms, sortValue]);
+  }, [articles, hasPublicationHistory, publicationsByArticleId, selectedPlatforms, sortValue]);
 
   const visibleArticles = useMemo(
     () => filteredArticles.slice(0, visibleCount),
@@ -120,9 +164,9 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
 
   const hasMore = visibleCount < filteredArticles.length;
 
-  const selectedArticles = useMemo(() => {
-    return articles.filter((article) => selectedIds.has(article.id));
-  }, [articles, selectedIds]);
+  const selectedArticles = useMemo(() => (
+    articles.filter((article) => selectedIds.has(article.id))
+  ), [articles, selectedIds]);
 
   useEffect(() => {
     if (!hasMore) return;
@@ -147,11 +191,8 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
   const toggleArticle = (articleId: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(articleId)) {
-        next.delete(articleId);
-      } else {
-        next.add(articleId);
-      }
+      if (next.has(articleId)) next.delete(articleId);
+      else next.add(articleId);
       return next;
     });
   };
@@ -161,11 +202,8 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
     setSelectedIds(new Set());
     setSelectedPlatforms((prev) => {
       const next = new Set(prev);
-      if (next.has(platform)) {
-        next.delete(platform);
-      } else {
-        next.add(platform);
-      }
+      if (next.has(platform)) next.delete(platform);
+      else next.add(platform);
       return next;
     });
   };
@@ -181,6 +219,13 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
   const handleBatchPublish = () => {
     if (selectedArticles.length === 0) return;
     onPublish?.(selectedArticles);
+    setIsBatchMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedArticles.length === 0) return;
+    onDeleteMany?.(selectedArticles);
     setIsBatchMode(false);
     setSelectedIds(new Set());
   };
@@ -267,6 +312,10 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
                       <Layers className="h-3.5 w-3.5" />
                       批量发布
                     </Button>
+                    <Button variant="ghost" size="xs" onClick={handleBatchDelete} className="gap-1.5 text-red-500 hover:bg-red-50 hover:text-red-600">
+                      <Trash2 className="h-3.5 w-3.5" />
+                      批量删除
+                    </Button>
                   </>
                 )}
               </div>
@@ -329,9 +378,9 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
               <article
                 key={article.id}
                 className={cn(
-                  "group relative overflow-hidden rounded-xl border border-slate-200/80 bg-white p-4 transition-all duration-200",
+                  "group relative overflow-visible rounded-xl border border-slate-200/80 bg-white p-4 transition-all duration-200",
                   "hover:border-slate-300/80 hover:shadow-card-hover",
-                  isBatchMode && isSelected && "border-brand-300 ring-2 ring-brand-500/20 bg-brand-50/30",
+                  isBatchMode && isSelected && "border-brand-300 bg-brand-50/30 ring-2 ring-brand-500/20",
                 )}
               >
                 <div className="flex flex-col gap-4 md:flex-row">
@@ -342,7 +391,7 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
                   )}
 
                   <button
-                    className="relative block w-full flex-shrink-0 overflow-hidden rounded-lg md:w-[200px]"
+                    className="relative block w-full flex-shrink-0 overflow-hidden rounded-lg md:w-[260px] md:self-stretch lg:w-[280px]"
                     onClick={() => !isBatchMode && onViewDetail(article)}
                     type="button"
                   >
@@ -350,13 +399,13 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
                       <img
                         src={article.coverImage}
                         alt={article.title}
-                        className="h-40 w-full object-cover transition-transform duration-500 group-hover:scale-[1.02] md:h-32"
+                        className="h-44 w-full object-cover transition-transform duration-500 group-hover:scale-[1.02] md:h-full"
                         onError={(event) => {
                           (event.target as HTMLImageElement).style.display = "none";
                         }}
                       />
                     ) : (
-                      <div className="flex h-40 w-full items-center justify-center bg-slate-50 md:h-32">
+                      <div className="flex h-44 w-full items-center justify-center bg-slate-50 md:h-full">
                         <ImageIcon className="h-8 w-8 text-slate-200" />
                       </div>
                     )}
@@ -372,48 +421,55 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
                           <span className="text-[11px] text-slate-400">更新于 {getRelativeTime(article.updatedAt)}</span>
                           <span className="text-[11px] text-slate-300">创建 {formatDateTime(article.createdAt)}</span>
                         </div>
-                        <h3
-                          className="line-clamp-2 cursor-pointer text-base font-semibold leading-snug text-slate-900 transition-colors group-hover:text-brand-600"
-                          onClick={() => !isBatchMode && onViewDetail(article)}
-                        >
-                          {article.title || "未命名文章"}
-                        </h3>
+
+                        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                          <h3
+                            className="line-clamp-2 min-w-0 flex-1 cursor-pointer text-base font-semibold leading-snug text-slate-900 transition-colors group-hover:text-brand-600"
+                            onClick={() => !isBatchMode && onViewDetail(article)}
+                          >
+                            {article.title || "未命名文章"}
+                          </h3>
+
+                          {article.tags?.length ? (
+                            <div className="flex max-w-full shrink-0 flex-wrap items-center gap-1.5 lg:max-w-[48%] lg:justify-end">
+                              {article.tags.slice(0, 3).map((tag, index) => (
+                                <span
+                                  key={`${tag}-${index}`}
+                                  className="inline-flex items-center gap-0.5 rounded-md border border-slate-200/60 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500"
+                                >
+                                  <Hash className="h-2.5 w-2.5 text-slate-400" />
+                                  {tag}
+                                </span>
+                              ))}
+                              {article.tags.length > 3 && (
+                                <span className="rounded-md bg-slate-50 px-2 py-0.5 text-[10px] text-slate-400">
+                                  +{article.tags.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+
                         {article.summary && <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-slate-500">{article.summary}</p>}
                       </div>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                      {article.publishedAt && (
+                    {article.publishedAt && (
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
                         <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200/60 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600">
                           <Calendar className="h-3 w-3" />
                           {formatDateTime(article.publishedAt)}
                         </span>
-                      )}
+                      </div>
+                    )}
 
-                      {article.tags?.slice(0, 3).map((tag, index) => (
-                        <span
-                          key={`${tag}-${index}`}
-                          className="inline-flex items-center gap-0.5 rounded-md border border-slate-200/60 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500"
-                        >
-                          <Hash className="h-2.5 w-2.5 text-slate-400" />
-                          {tag}
-                        </span>
-                      ))}
-
-                      {article.tags && article.tags.length > 3 && (
-                        <span className="rounded-md bg-slate-50 px-2 py-0.5 text-[10px] text-slate-400">
-                          +{article.tags.length - 3}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-3 flex flex-col gap-3 border-t border-slate-100 pt-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="min-w-0 flex-1">
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <div className="min-w-0">
                         <ArticlePublicationStatus articleId={article.id} refreshKey={publicationRefreshKey} />
                       </div>
 
                       {!isBatchMode && (
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="mt-3 flex flex-wrap items-center justify-end gap-1.5">
                           <Button variant="default" size="xs" className="gap-1" onClick={() => onPublish?.([article])}>
                             <Send className="h-3 w-3" />
                             发布
@@ -428,6 +484,7 @@ export function ArticleList({ articles, onViewDetail, onEdit, onDelete, onPublis
                             <Pencil className="h-3 w-3" />
                             编辑
                           </Button>
+
                           <Button variant="ghost" size="xs" className="gap-1 text-red-500 hover:bg-red-50 hover:text-red-600" onClick={() => onDelete?.(article)}>
                             <Trash2 className="h-3 w-3" />
                             删除

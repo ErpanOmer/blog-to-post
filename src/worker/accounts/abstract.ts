@@ -12,6 +12,10 @@ import type {
 	PublishTraceLogger,
 } from "@/worker/accounts/types";
 import type { Article as SharedArticle } from "@/shared/types";
+import { sleep } from "@/worker/utils/helpers";
+
+const PLATFORM_REQUEST_DELAY_MIN_MS = 3000;
+const PLATFORM_REQUEST_DELAY_MAX_MS = 6500;
 
 export abstract class AbstractAccountService implements AccountService {
 	platform: PlatformType;
@@ -58,6 +62,40 @@ export abstract class AbstractAccountService implements AccountService {
 	}
 
 	protected abstract buildHeaders(): Record<string, string>;
+
+	protected platformRequestDelayRange(): { minMs: number; maxMs: number } {
+		return {
+			minMs: PLATFORM_REQUEST_DELAY_MIN_MS,
+			maxMs: PLATFORM_REQUEST_DELAY_MAX_MS,
+		};
+	}
+
+	protected async waitForPlatformRequestDelay(url: string, options: RequestInit = {}): Promise<void> {
+		const range = this.platformRequestDelayRange();
+		const minMs = Math.max(0, range.minMs);
+		const maxMs = Math.max(minMs, range.maxMs);
+		if (maxMs <= 0) return;
+
+		const delayMs = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+		const method = (options.method || "GET").toUpperCase();
+		const safeUrl = this.sanitizeUrlForLog(url);
+		await this.tracePublish({
+			stage: "platform_request_delay",
+			message: "Delay before platform request",
+			metadata: {
+				platform: this.platform,
+				method,
+				url: safeUrl,
+				delayMs,
+			},
+		});
+		await sleep(delayMs);
+	}
+
+	protected async fetchPlatform(url: string, options: RequestInit = {}): Promise<Response> {
+		await this.waitForPlatformRequestDelay(url, options);
+		return await fetch(url, options);
+	}
 
 	/**
 	 * Extract all image URLs from HTML `<img src="...">`.
@@ -161,6 +199,7 @@ export abstract class AbstractAccountService implements AccountService {
 	): Promise<T> {
 		const method = (options.method || "GET").toUpperCase();
 		const safeUrl = this.sanitizeUrlForLog(url);
+		await this.waitForPlatformRequestDelay(url, options);
 
 		await this.tracePublish({
 			stage: "http_request_start",

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { Editor } from "@bytemd/react";
+import { toast } from "sonner";
 import breaks from "@bytemd/plugin-breaks";
 import frontmatter from "@bytemd/plugin-frontmatter";
 import gemoji from "@bytemd/plugin-gemoji";
@@ -56,6 +57,7 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
     } catch (error) {
       const message = error instanceof Error ? error.message : "图片上传失败";
       setUploadError(message);
+      toast.error(message);
       throw error;
     } finally {
       setIsUploadingImages(false);

@@ -1,29 +1,50 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileText, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SectionCard } from "@/react-app/components/SectionCard";
 import { ArticleList } from "@/react-app/components/ArticleList";
-import { validateAllArticlePublicationLinks } from "@/react-app/api";
+import { getPublications, validateAllArticlePublicationLinks } from "@/react-app/api";
 import type { Article } from "@/react-app/types";
+import type { ArticlePublication } from "@/react-app/types/publications";
 
 interface ArticlesViewProps {
   articles: Article[];
   onViewDetail: (article: Article) => void;
   onEdit: (article: Article) => void;
   onDelete: (article: Article) => void;
+  onDeleteMany?: (articles: Article[]) => void;
   onPublish: (articles: Article[]) => void;
 }
 
-export function ArticlesView({ articles, onViewDetail, onEdit, onDelete, onPublish }: ArticlesViewProps) {
+export function ArticlesView({ articles, onViewDetail, onEdit, onDelete, onDeleteMany, onPublish }: ArticlesViewProps) {
   const [isCleaningLinks, setIsCleaningLinks] = useState(false);
   const [publicationRefreshKey, setPublicationRefreshKey] = useState(0);
+  const [publications, setPublications] = useState<ArticlePublication[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const history = await getPublications();
+        if (!cancelled) {
+          setPublications(history);
+        }
+      } catch (error) {
+        console.error("加载文章分发筛选数据失败", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [publicationRefreshKey]);
 
   const handleCleanPublicationLinks = async () => {
     setIsCleaningLinks(true);
     try {
       const result = await validateAllArticlePublicationLinks();
       setPublicationRefreshKey((value) => value + 1);
+      setPublications(result.publications);
       toast.success(
         `链接清理完成：去重 ${result.deduplicated.length} 条，移除失效 ${result.removed.length} 条，恢复 ${result.restored.length} 条`,
       );
@@ -58,8 +79,10 @@ export function ArticlesView({ articles, onViewDetail, onEdit, onDelete, onPubli
         onViewDetail={onViewDetail}
         onEdit={onEdit}
         onDelete={onDelete}
+        onDeleteMany={onDeleteMany}
         onPublish={onPublish}
         publicationRefreshKey={publicationRefreshKey}
+        publicationHistory={publications}
       />
     </SectionCard>
   );

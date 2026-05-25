@@ -884,6 +884,7 @@ export default class WechatAccountService extends AbstractAccountService {
 		});
 
 		let uploadedCount = 0;
+		const failedImages: Array<{ source: string; error: string }> = [];
 		for (const source of imageSources) {
 			const normalized = this.normalizeImageUrl(source);
 			if (!normalized) continue;
@@ -891,21 +892,38 @@ export default class WechatAccountService extends AbstractAccountService {
 			if (this.imageUrlCache.has(normalized)) continue;
 
 			try {
-				const uploadedUrl = await this.uploadContentImageBySourceUrl(normalized);
+				const uploadedUrl = await this.withNetworkRetry(
+					"wechat_content_image_upload_retry",
+					async () => await this.uploadContentImageBySourceUrl(normalized),
+					4,
+				);
 				this.imageUrlCache.set(normalized, uploadedUrl);
 				uploadedCount += 1;
 				await randomDelay(120, 320);
 			} catch (error) {
-				await this.tracePublish({
-					stage: "wechat_resolve_single_image_failed",
-					level: "warn",
-					message: "Image upload failed, keep original source",
-					metadata: {
-						source: normalized,
-						error: error instanceof Error ? error.message : "unknown",
-					},
+				failedImages.push({
+					source: normalized,
+					error: error instanceof Error ? error.message : "unknown",
 				});
 			}
+		}
+
+		if (failedImages.length > 0) {
+			await this.tracePublish({
+				stage: "wechat_content_images_upload_failed",
+				level: "error",
+				message: "Some WeChat content images failed to upload",
+				metadata: {
+					imageCandidates: imageSources.length,
+					uploadedImages: uploadedCount,
+					failedImages,
+				},
+			});
+			throw new Error(
+				`WeChat content image upload failed for ${failedImages.length}/${imageSources.length} image(s): ${
+					failedImages.map((item) => `${item.source} (${item.error})`).join("; ")
+				}`,
+			);
 		}
 
 		const replacedHtml = this.replaceHtmlImageUrlsByMap(
@@ -913,6 +931,26 @@ export default class WechatAccountService extends AbstractAccountService {
 			(rawUrl) => this.normalizeImageUrl(rawUrl),
 			this.imageUrlCache,
 		);
+		const unresolvedImages = this.extractImageUrlsFromHtmlContent(replacedHtml)
+			.map((rawUrl) => this.normalizeImageUrl(rawUrl))
+			.filter((url): url is string => Boolean(url))
+			.filter((url) => !url.startsWith("data:") && !this.isWechatHostedImage(url));
+		if (unresolvedImages.length > 0) {
+			await this.tracePublish({
+				stage: "wechat_content_images_unresolved",
+				level: "error",
+				message: "Final WeChat HTML still contains non-WeChat image URLs",
+				metadata: {
+					imageCandidates: imageSources.length,
+					uploadedImages: uploadedCount,
+					unresolvedImages,
+				},
+			});
+			throw new Error(
+				`WeChat content image replacement incomplete; unresolved image(s): ${unresolvedImages.join("; ")}`,
+			);
+		}
+		const finalHtmlImageCount = this.extractImageUrlsFromHtmlContent(replacedHtml).length;
 
 		await this.tracePublish({
 			stage: "wechat_content_images_resolved",
@@ -920,6 +958,7 @@ export default class WechatAccountService extends AbstractAccountService {
 			metadata: {
 				imageCandidates: imageSources.length,
 				uploadedImages: uploadedCount,
+				finalHtmlImages: finalHtmlImageCount,
 				finalHtmlLength: replacedHtml.length,
 			},
 		});

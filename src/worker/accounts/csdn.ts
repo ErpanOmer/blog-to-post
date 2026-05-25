@@ -409,7 +409,7 @@ export default class CSDNAccountService extends AbstractAccountService {
 		formData.append("x:username", customParam.username);
 		formData.append("file", blob, `image.${suffix}`);
 
-		const obsResponse = await fetch(uploadData.host, {
+		const obsResponse = await this.fetchPlatform(uploadData.host, {
 			method: "POST",
 			body: formData,
 		});

@@ -16,7 +16,7 @@ interface ArticleEditorPageProps {
   onBack: () => void;
   onTitleChange: (title: string) => void;
   onArticleUpdate: (updates: Partial<Article>) => void;
-  onSave: () => void;
+  onSave: () => Promise<Article | null> | void;
   onQuickPublish: () => void;
 }
 
@@ -73,6 +73,11 @@ export function ArticleEditorPage({
     onBack();
   };
 
+  const handleSaveClick = async () => {
+    const result = await onSave();
+    if (result) setHasUnsavedChanges(false);
+  };
+
   return (
     <div className="flex h-full w-full flex-col bg-slate-50 page-enter flex-1">
       {/* 沉浸式顶部栏 */}
@@ -95,6 +100,7 @@ export function ArticleEditorPage({
               <p className="text-[11px] text-slate-400">
                 {hasTitle ? "正在编辑并准备分发" : "请先输入一个好标题"}
                 {hasUnsavedChanges && <span className="ml-2 text-amber-500 font-medium">* 有未保存的更改</span>}
+                <span className="ml-2 text-emerald-500">实时备份已开启</span>
               </p>
             </div>
           </div>
@@ -115,10 +121,7 @@ export function ArticleEditorPage({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                setHasUnsavedChanges(false);
-                onSave();
-              }}
+              onClick={() => void handleSaveClick()}
               disabled={!isFormValid || isSaving || isGenerating}
               type="button"
               className="gap-1.5 border-slate-200 bg-white shadow-sm hover:bg-slate-50"

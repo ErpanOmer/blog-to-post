@@ -89,11 +89,35 @@ function sortPosts(posts: WebsitePost[], sort: WebsiteSortValue): WebsitePost[] 
   });
 }
 
+function normalizeSlugNumber(value: number, fallback: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeWebsiteSlugSettingsForSave(settings: WebsiteSlugSettings): WebsiteSlugSettings {
+  return {
+    model: settings.model.trim(),
+    temperature: normalizeSlugNumber(settings.temperature, 0.25, 0, 2),
+    topP: normalizeSlugNumber(settings.topP, 0.85, 0, 1),
+    maxTokens: Math.round(normalizeSlugNumber(settings.maxTokens, 128, 16, 512)),
+    requestTimeoutSec: Math.round(normalizeSlugNumber(settings.requestTimeoutSec, 90, 10, 300)),
+    systemPrompt: settings.systemPrompt.trim(),
+  };
+}
+
 function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [settings, setSettings] = useState<WebsiteSlugSettings | null>(null);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [globalDefaultModel, setGlobalDefaultModel] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) return;
+    setSettings(null);
+    setModelOptions([]);
+    setGlobalDefaultModel("");
+    setSaving(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open || settings) return;
@@ -111,9 +135,9 @@ function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOp
           setModelOptions([...new Set([
             data.model,
             globalSettings.defaultModel,
-            ...catalog.models,
-            ...catalog.cloudModels,
-            ...catalog.localModels,
+            ...(catalog.models ?? []),
+            ...(catalog.cloudModels ?? []),
+            ...(catalog.localModels ?? []),
           ].map((model) => model.trim()).filter(Boolean))]);
         }
       } catch (error) {
@@ -129,9 +153,15 @@ function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOp
     if (!settings) return;
     setSaving(true);
     try {
-      const next = await updateWebsiteSlugSettings(settings);
+      const payload = normalizeWebsiteSlugSettingsForSave(settings);
+      if (!payload.systemPrompt) {
+        toast.error("Prompt 不能为空");
+        return;
+      }
+      const next = await updateWebsiteSlugSettings(payload);
       setSettings(next);
       toast.success("Slug AI 配置已保存");
+      onOpenChange(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "保存 slug 配置失败");
     } finally {

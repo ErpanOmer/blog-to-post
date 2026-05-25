@@ -162,7 +162,7 @@ export function PublishDialog({
 
 			setPlatformSettings(settings);
 			setAccounts(activeAccounts);
-			setSelectedAccounts(new Set(activeAccounts.map((item) => item.id)));
+			setSelectedAccounts(new Set());
 			setAccountConfigs(buildAccountConfigMap(activeAccounts, settings));
 		} catch (loadError) {
 			console.error("加载平台账号失败", loadError);

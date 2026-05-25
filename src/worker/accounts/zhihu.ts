@@ -198,7 +198,7 @@ export default class ZhihuAccountService extends AbstractAccountService {
 
 			console.log("Sending content to Zhihu convert API, content length:", content);
 
-			const response = await fetch("https://www.zhihu.com/api/v4/document/convert", {
+			const response = await this.fetchPlatform("https://www.zhihu.com/api/v4/document/convert", {
 				method: "POST",
 				body: formdata,
 				headers: this.buildZhihuBrowserHeaders({
@@ -416,7 +416,7 @@ export default class ZhihuAccountService extends AbstractAccountService {
 			source: "article",
 		});
 
-		const response = await fetch(ZHIHU_URL_IMAGE_UPLOAD_ENDPOINT, {
+		const response = await this.fetchPlatform(ZHIHU_URL_IMAGE_UPLOAD_ENDPOINT, {
 			method: "POST",
 			headers: this.buildZhihuBrowserHeaders({
 				"x-requested-with": "fetch",
@@ -454,7 +454,7 @@ export default class ZhihuAccountService extends AbstractAccountService {
 	}
 
 	private async requestImageUploadToken(imageHash: string): Promise<ZhihuImageTokenResponse> {
-		const response = await fetch(ZHIHU_IMAGE_TOKEN_ENDPOINT, {
+		const response = await this.fetchPlatform(ZHIHU_IMAGE_TOKEN_ENDPOINT, {
 			method: "POST",
 			headers: this.buildZhihuBrowserHeaders({
 				"Content-Type": "application/json",
@@ -488,7 +488,7 @@ export default class ZhihuAccountService extends AbstractAccountService {
 
 	private async waitForImageReady(imageId: string): Promise<ZhihuImageDetailResponse> {
 		for (let attempt = 0; attempt < 20; attempt++) {
-			const response = await fetch(`${ZHIHU_IMAGE_DETAIL_ENDPOINT}/${imageId}`, {
+			const response = await this.fetchPlatform(`${ZHIHU_IMAGE_DETAIL_ENDPOINT}/${imageId}`, {
 				method: "GET",
 				headers: this.buildZhihuBrowserHeaders(),
 			});
@@ -543,7 +543,7 @@ export default class ZhihuAccountService extends AbstractAccountService {
 		const signature = await this.hmacSha1Base64(token.access_key, stringToSign);
 		const authorization = `OSS ${token.access_id}:${signature}`;
 
-		const response = await fetch(`${ZHIHU_OSS_UPLOAD_ENDPOINT}/${objectKey}`, {
+		const response = await this.fetchPlatform(`${ZHIHU_OSS_UPLOAD_ENDPOINT}/${objectKey}`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": contentType,

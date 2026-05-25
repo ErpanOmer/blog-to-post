@@ -95,7 +95,7 @@ export default class CnblogsAccountService extends AbstractAccountService {
 		}
 
 		try {
-			const response = await fetch(CNBLOGS_EDIT_PAGE_URL, {
+			const response = await this.fetchPlatform(CNBLOGS_EDIT_PAGE_URL, {
 				method: "GET",
 				headers: this.buildHeaders(),
 				redirect: "follow",
@@ -559,7 +559,7 @@ export default class CnblogsAccountService extends AbstractAccountService {
 			formData.append("app", "blog");
 			formData.append("uploadType", "Select");
 
-			const response = await fetch(CNBLOGS_UPLOAD_IMAGE_URL, {
+			const response = await this.fetchPlatform(CNBLOGS_UPLOAD_IMAGE_URL, {
 				method: "POST",
 				headers: {
 					cookie: this.normalizeCookieHeader(this.authToken),

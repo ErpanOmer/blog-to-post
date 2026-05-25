@@ -16,6 +16,22 @@ interface ImageHostingUploadResponse {
 }
 
 export const IMAGE_HOSTING_UPLOAD_ENDPOINT = "https://image-hosting.nurverse.com/api/upload";
+export const MAX_IMAGE_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+export const MAX_IMAGE_UPLOAD_SIZE_LABEL = "5MB";
+
+function formatFileSize(bytes: number): string {
+	if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)}KB`;
+	return `${(bytes / 1024 / 1024).toFixed(1).replace(/\.0$/, "")}MB`;
+}
+
+function assertImageUploadSize(file: File) {
+	if (file.size <= MAX_IMAGE_UPLOAD_SIZE_BYTES) return;
+	throw new Error(`图片 ${file.name || "未命名图片"} 为 ${formatFileSize(file.size)}，超过 ${MAX_IMAGE_UPLOAD_SIZE_LABEL} 限制`);
+}
+
+export function validateImageUploadFiles(files: File[]) {
+	files.forEach(assertImageUploadSize);
+}
 
 function pickBestUrl(payload: ImageHostingUploadResponse): string {
 	const url =
@@ -35,6 +51,8 @@ function pickBestUrl(payload: ImageHostingUploadResponse): string {
 }
 
 async function uploadSingleImage(file: File): Promise<Pick<Image, "url" | "alt">> {
+	assertImageUploadSize(file);
+
 	const formData = new FormData();
 	formData.append("file", file);
 
@@ -78,5 +96,6 @@ export async function uploadImageToImageHosting(file: File): Promise<string> {
 
 export async function uploadImagesToImageHosting(files: File[]): Promise<Pick<Image, "url" | "alt">[]> {
 	if (!files.length) return [];
+	validateImageUploadFiles(files);
 	return Promise.all(files.map((file) => uploadSingleImage(file)));
 }
