@@ -27,7 +27,7 @@ interface PublishStatusPanelProps {
 }
 
 const taskStatusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  pending: { label: "Pending", color: "bg-slate-100 text-slate-600", icon: <Clock className="h-3 w-3" /> },
+  pending: { label: "Pending", color: "bg-design-background text-design-textSecondary", icon: <Clock className="h-3 w-3" /> },
   processing: { label: "Processing", color: "bg-blue-100 text-blue-600", icon: <Loader2 className="h-3 w-3 animate-spin" /> },
   completed: { label: "Completed", color: "bg-emerald-100 text-emerald-600", icon: <CheckCircle2 className="h-3 w-3" /> },
   failed: { label: "Failed", color: "bg-red-100 text-red-600", icon: <XCircle className="h-3 w-3" /> },
@@ -35,7 +35,7 @@ const taskStatusConfig: Record<string, { label: string; color: string; icon: Rea
 };
 
 const stepStatusConfig: Record<string, { label: string; color: string }> = {
-  pending: { label: "Pending", color: "text-slate-500" },
+  pending: { label: "Pending", color: "text-design-textSecondary" },
   running: { label: "Running", color: "text-blue-600" },
   completed: { label: "Completed", color: "text-emerald-600" },
   failed: { label: "Failed", color: "text-red-600" },
@@ -179,21 +179,21 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
 
         <div className="flex min-h-0 flex-1 gap-4">
           <div className="flex w-1/2 min-h-0 flex-col">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <h3 className="mb-3 flex items-center gap-2 text-[13px] font-medium text-design-textSecondary">
               <Layers className="h-4 w-4" />
               Tasks
-              <Badge variant="outline" className="text-xs">{tasks.length}</Badge>
+              <Badge variant="outline" className="text-[12px]">{tasks.length}</Badge>
             </h3>
 
             <ScrollArea className="flex-1 pr-2">
               {isLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                  <Loader2 className="h-6 w-6 animate-spin text-design-neutral" />
                 </div>
               ) : tasks.length === 0 ? (
-                <div className="py-8 text-center text-slate-500">
-                  <Clock className="mx-auto mb-3 h-12 w-12 text-slate-300" />
-                  <p className="text-sm">No tasks</p>
+                <div className="py-8 text-center text-design-textSecondary">
+                  <Clock className="mx-auto mb-3 h-12 w-12 text-design-neutral" />
+                  <p className="text-[13px]">No tasks</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -203,7 +203,7 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
                       <Card
                         key={task.id}
                         className={cn(
-                          "cursor-pointer transition-all hover:shadow-md",
+                          "cursor-pointer",
                           selectedTaskId === task.id && "ring-2 ring-brand-500",
                         )}
                         onClick={() => void loadTaskDetail(task.id)}
@@ -212,18 +212,18 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
                           <div className="flex items-start justify-between">
                             <div className="min-w-0 flex-1">
                               <div className="mb-1 flex items-center gap-2">
-                                <Badge className={cn("text-xs", status.color)}>
+                                <Badge className={cn("text-[12px]", status.color)}>
                                   <span className="mr-1">{status.icon}</span>
                                   {status.label}
                                 </Badge>
-                                <span className="text-xs text-slate-400">
+                                <span className="text-[12px] text-design-neutral">
                                   {task.type === "batch" ? "Batch" : task.type === "scheduled" ? "Scheduled" : "Single"}
                                 </span>
                               </div>
-                              <div className="text-sm text-slate-600">
+                              <div className="text-[13px] text-design-textSecondary">
                                 {`${task.articleIds.length} articles -> ${task.accountConfigs.length} accounts`}
                               </div>
-                              <div className="mt-1 text-xs text-slate-400">
+                              <div className="mt-1 text-[12px] text-design-neutral">
                                 {formatTime(task.createdAt)}
                                 {task.scheduleTime && (
                                   <span className="ml-2 text-amber-600">
@@ -245,22 +245,22 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
                                     void handleCancel(task.id);
                                   }}
                                 >
-                                  <X className="h-4 w-4 text-slate-400" />
+                                  <X className="h-4 w-4 text-design-neutral" />
                                 </Button>
                               )}
-                              <ChevronRight className="h-4 w-4 text-slate-300" />
+                              <ChevronRight className="h-4 w-4 text-design-neutral" />
                             </div>
                           </div>
 
                           {task.status === "processing" && (
                             <div className="mt-2">
-                              <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                              <div className="h-1.5 overflow-hidden rounded-full bg-design-background">
                                 <div
                                   className="h-full bg-brand-500 transition-all duration-500"
                                   style={{ width: `${getProgressRatio(task.currentStep, task.totalSteps) * 100}%` }}
                                 />
                               </div>
-                              <div className="mt-1 text-xs text-slate-400">
+                              <div className="mt-1 text-[12px] text-design-neutral">
                                 {formatProgressPair(task.currentStep, task.totalSteps)} steps
                               </div>
                             </div>
@@ -278,7 +278,7 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
             {selectedTask ? (
               <>
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <h3 className="flex items-center gap-2 text-[13px] font-medium text-design-textSecondary">
                     <RotateCcw className="h-4 w-4" />
                     Details
                   </h3>
@@ -289,13 +289,13 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
 
                 {isLoadingDetail ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                    <Loader2 className="h-6 w-6 animate-spin text-design-neutral" />
                   </div>
                 ) : (
                   <ScrollArea className="flex-1 pr-2">
                     <div className="space-y-3">
                       {steps.length === 0 ? (
-                        <div className="py-8 text-center text-sm text-slate-400">No step records</div>
+                        <div className="py-8 text-center text-[13px] text-design-neutral">No step records</div>
                       ) : (
                         steps.map((step, index) => {
                           const status = stepStatusConfig[step.status] || stepStatusConfig.pending;
@@ -320,7 +320,7 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
                           return (
                             <div key={step.id} className="relative pb-4 pl-6 last:pb-0">
                               {index < steps.length - 1 && (
-                                <div className="absolute bottom-0 left-2 top-6 w-0.5 bg-slate-200" />
+                                <div className="absolute bottom-0 left-2 top-6 w-0.5 bg-design-border" />
                               )}
                               <div
                                 className={cn(
@@ -328,31 +328,31 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
                                   step.status === "completed" && "border-emerald-500 bg-emerald-500",
                                   step.status === "running" && "animate-pulse border-blue-500 bg-blue-500",
                                   step.status === "failed" && "border-red-500 bg-red-500",
-                                  step.status === "pending" && "border-slate-300 bg-white",
+                                  step.status === "pending" && "border-design-border bg-white",
                                   step.status === "skipped" && "border-amber-500 bg-amber-500",
                                 )}
                               />
-                              <div className="rounded-lg bg-slate-50 p-3">
+                              <div className="rounded-lg bg-design-background p-3">
                                 <div className="mb-1 flex items-center justify-between">
-                                  <span className="text-sm font-medium text-slate-700">{stepLabel}</span>
-                                  <Badge variant="outline" className={cn("text-xs", status.color)}>
+                                  <span className="text-[13px] font-medium text-design-textSecondary">{stepLabel}</span>
+                                  <Badge variant="outline" className={cn("text-[12px]", status.color)}>
                                     {status.label}
                                   </Badge>
                                 </div>
-                                <div className="text-xs text-slate-500">
+                                <div className="text-[12px] text-design-textSecondary">
                                   {step.platform}
                                   {step.articleId && ` -> ${step.articleId.slice(0, 8)}...`}
                                 </div>
                                 {step.duration != null && (
-                                  <div className="mt-1 text-xs text-slate-400">Duration: {formatDuration(step.duration)}</div>
+                                  <div className="mt-1 text-[12px] text-design-neutral">Duration: {formatDuration(step.duration)}</div>
                                 )}
                                 {traceMessage && (
-                                  <div className="mt-2 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700">
+                                  <div className="mt-2 rounded border border-design-border bg-white px-2 py-1 text-[12px] text-design-textSecondary">
                                     {traceMessage}
                                   </div>
                                 )}
                                 {step.errorMessage && (
-                                  <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">{step.errorMessage}</div>
+                                  <div className="mt-2 rounded bg-red-50 p-2 text-[12px] text-red-600">{step.errorMessage}</div>
                                 )}
                               </div>
                             </div>
@@ -364,15 +364,15 @@ export function PublishStatusPanel({ open, onOpenChange }: PublishStatusPanelPro
                 )}
               </>
             ) : (
-              <div className="flex flex-1 flex-col items-center justify-center text-slate-400">
-                <Layers className="mb-3 h-12 w-12 text-slate-300" />
-                <p className="text-sm">Select a task to inspect</p>
+              <div className="flex flex-1 flex-col items-center justify-center text-design-neutral">
+                <Layers className="mb-3 h-12 w-12 text-design-neutral" />
+                <p className="text-[13px]">Select a task to inspect</p>
               </div>
             )}
           </div>
         </div>
 
-        {error && <div className="text-xs text-red-600">{error}</div>}
+        {error && <div className="text-[12px] text-red-600">{error}</div>}
       </DialogContent>
     </Dialog>
   );

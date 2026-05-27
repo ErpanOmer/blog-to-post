@@ -7,13 +7,13 @@ export function ProviderStatusPanel({ status }: { status: ProviderStatus | null 
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-slate-900">模型服务提供方</p>
-          <p className="text-xs text-slate-500">{status?.provider ?? "未配置"}</p>
+          <p className="font-display text-[14px] font-semibold text-design-text">模型服务提供方</p>
+          <p className="text-[12px] text-design-textSecondary">{status?.provider ?? "未配置"}</p>
         </div>
         <Switch checked={status?.ready ?? false} disabled />
       </div>
       <Separator />
-      <div className="text-xs text-slate-500">
+      <div className="text-[12px] leading-5 text-design-textSecondary">
         <p>最近检测: {status ? new Date(status.lastCheckedAt).toLocaleString("zh-CN") : "-"}</p>
         <p>说明: {status?.message ?? "等待服务端返回"}</p>
       </div>

@@ -19,9 +19,9 @@ export function PromptTemplateManager({ templates, onChange, onSave }: {
 	return (
 		<div className="space-y-5">
 			{templates.map((template) => (
-				<div key={template.key} className="rounded-xl border border-slate-200 bg-white p-4">
+				<div key={template.key} className="rounded-xl border border-design-border bg-white p-4">
 					<div className="mb-2 flex items-center justify-between">
-						<h3 className="text-sm font-semibold text-slate-900">{labels[template.key]}</h3>
+						<h3 className="font-display text-base font-semibold text-design-text">{labels[template.key]}</h3>
 						<Button size="sm" variant="secondary" onClick={() => onSave(template)} type="button">保存模板</Button>
 					</div>
 					<Textarea
@@ -33,6 +33,7 @@ export function PromptTemplateManager({ templates, onChange, onSave }: {
 								),
 							)
 						}
+						className="font-mono text-[13px] leading-5"
 					/>
 				</div>
 			))}

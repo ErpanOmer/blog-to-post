@@ -79,25 +79,25 @@ export function ArticleEditorPage({
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-slate-50 page-enter flex-1">
+    <div className="flex h-full w-full flex-1 flex-col bg-design-background page-enter">
       {/* 沉浸式顶部栏 */}
-      <div className="shrink-0 border-b border-slate-200/60 bg-white/80 px-4 py-2.5 backdrop-blur-xl md:px-5">
+      <div className="shrink-0 border-b border-design-border bg-white/85 px-4 py-2.5 backdrop-blur-xl md:px-5">
         <div className="mx-auto flex w-full items-center justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <Button variant="ghost" size="sm" type="button" onClick={handleBackClick} className="gap-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100/60">
+            <Button variant="ghost" size="sm" type="button" onClick={handleBackClick} className="gap-1.5 text-design-textSecondary hover:bg-design-background hover:text-design-text">
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden md:inline">返回</span>
             </Button>
 
-            <div className="h-4 w-px bg-slate-200" />
+            <div className="h-4 w-px bg-design-border" />
 
             <div className="icon-tile flex h-8 w-8 items-center justify-center rounded-lg">
               <Sparkles className="h-4 w-4" />
             </div>
 
             <div className="min-w-0">
-              <h1 className="text-[14px] font-semibold text-slate-900 leading-tight">文章编辑工作台</h1>
-              <p className="text-[11px] text-slate-400">
+              <h1 className="text-[14px] font-semibold leading-tight text-design-text">文章编辑工作台</h1>
+              <p className="text-[12px] text-design-neutral">
                 {hasTitle ? "正在编辑并准备分发" : "请先输入一个好标题"}
                 {hasUnsavedChanges && <span className="ml-2 text-amber-500 font-medium">* 有未保存的更改</span>}
                 <span className="ml-2 text-emerald-500">实时备份已开启</span>
@@ -112,7 +112,7 @@ export function ArticleEditorPage({
               onClick={() => setShowAISettings(true)}
               disabled={isGenerating}
               type="button"
-              className="gap-1.5 border-slate-200 bg-white shadow-sm hover:bg-slate-50"
+              className="gap-1.5"
             >
               <Settings2 className="h-3.5 w-3.5" />
               <span className="hidden md:inline">AI 设置</span>
@@ -124,7 +124,7 @@ export function ArticleEditorPage({
               onClick={() => void handleSaveClick()}
               disabled={!isFormValid || isSaving || isGenerating}
               type="button"
-              className="gap-1.5 border-slate-200 bg-white shadow-sm hover:bg-slate-50"
+              className="gap-1.5"
             >
               {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
               <span className="hidden md:inline">保存草稿</span>
@@ -136,7 +136,7 @@ export function ArticleEditorPage({
               onClick={onQuickPublish}
               disabled={!isFormValid || isSaving || isGenerating}
               type="button"
-              className="gap-1.5 shadow-sm"
+              className="gap-1.5"
             >
               <Rocket className="h-3.5 w-3.5" />
               快速发布
@@ -147,14 +147,14 @@ export function ArticleEditorPage({
 
       {/* Editor layout */}
       <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[clamp(380px,20vw,450px)_minmax(0,1fr)]">
-        <aside className="border-r border-slate-200/60 bg-gradient-to-b from-slate-50 via-white to-slate-50 p-4 overflow-y-auto custom-scrollbar">
+        <aside className="overflow-y-auto border-r border-design-border bg-design-background p-4 custom-scrollbar">
             <div className="space-y-3">
             <TitleGenerator title={draft?.title ?? ""} onTitleChange={handleTitle} disabled={isGenerating} hideAIActions />
             </div>
             <GenerationPanel article={draft} onArticleUpdate={handleUpdate} disabled={isGenerating} />
         </aside>
 
-        <section className="min-w-0 bg-white p-4 lg:p-5 xl:p-6 overflow-y-auto custom-scrollbar shadow-[-4px_0_24px_rgba(0,0,0,0.02)]">
+        <section className="min-w-0 overflow-y-auto bg-white p-4 lg:p-5 xl:p-6 custom-scrollbar">
           <ArticleEditor article={draft} onChange={(article) => handleUpdate(article)} disabled={isGenerating} hideAIActions />
         </section>
       </div>

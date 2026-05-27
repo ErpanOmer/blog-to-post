@@ -17,9 +17,9 @@ import "./App.css";
 
 function EmptyState({ title, description, backTo }: { title: string; description: string; backTo: string }) {
   return (
-    <div className="rounded-xl border border-slate-200/60 bg-white px-6 py-10 text-center shadow-sm page-enter">
-      <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-      <p className="mt-1.5 text-[13px] text-slate-500">{description}</p>
+    <div className="rounded-xl border border-design-border bg-white px-6 py-10 text-center page-enter">
+      <h2 className="font-display text-base font-semibold text-design-text">{title}</h2>
+      <p className="mt-1.5 text-[13px] text-design-textSecondary">{description}</p>
       <Link to={backTo} className="mt-3 inline-flex text-[13px] font-medium text-brand-500 hover:text-brand-600 transition-colors">
         返回
       </Link>

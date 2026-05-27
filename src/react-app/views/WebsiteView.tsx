@@ -171,7 +171,7 @@ function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bot className="h-4 w-4" />
@@ -185,7 +185,7 @@ function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOp
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
               <div className="space-y-2 md:col-span-2">
-                <Label>模型</Label>
+                <Label className="text-[13px] text-design-text">模型</Label>
                 <Select
                   value={settings.model.trim() || "__global__"}
                   onValueChange={(value) => setSettings((prev) => prev ? { ...prev, model: value === "__global__" ? "" : value } : prev)}
@@ -206,25 +206,25 @@ function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOp
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>超时秒数</Label>
+                <Label className="text-[13px] text-design-text">超时秒数</Label>
                 <Input type="number" value={settings.requestTimeoutSec} onChange={(event) => setSettings((prev) => prev ? { ...prev, requestTimeoutSec: Number(event.target.value) } : prev)} />
               </div>
               <div className="space-y-2">
-                <Label>maxTokens</Label>
+                <Label className="text-[13px] text-design-text">maxTokens</Label>
                 <Input type="number" value={settings.maxTokens} onChange={(event) => setSettings((prev) => prev ? { ...prev, maxTokens: Number(event.target.value) } : prev)} />
               </div>
               <div className="space-y-2">
-                <Label>temperature</Label>
+                <Label className="text-[13px] text-design-text">temperature</Label>
                 <Input type="number" step="0.05" value={settings.temperature} onChange={(event) => setSettings((prev) => prev ? { ...prev, temperature: Number(event.target.value) } : prev)} />
               </div>
               <div className="space-y-2">
-                <Label>topP</Label>
+                <Label className="text-[13px] text-design-text">topP</Label>
                 <Input type="number" step="0.05" value={settings.topP} onChange={(event) => setSettings((prev) => prev ? { ...prev, topP: Number(event.target.value) } : prev)} />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Prompt</Label>
-              <Textarea value={settings.systemPrompt} onChange={(event) => setSettings((prev) => prev ? { ...prev, systemPrompt: event.target.value } : prev)} className="min-h-[220px] font-mono text-xs" />
+              <Label className="text-[13px] text-design-text">Prompt</Label>
+              <Textarea value={settings.systemPrompt} onChange={(event) => setSettings((prev) => prev ? { ...prev, systemPrompt: event.target.value } : prev)} className="min-h-[220px] font-mono text-[13px] leading-5" />
             </div>
             <div className="flex justify-end">
               <Button onClick={save} disabled={saving}>
@@ -235,7 +235,7 @@ function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOp
           </div>
         ) : (
           <div className="flex justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-slate-300" />
+            <Loader2 className="h-5 w-5 animate-spin text-design-neutral" />
           </div>
         )}
       </DialogContent>
@@ -364,24 +364,24 @@ export function WebsiteView() {
   return (
     <div className="space-y-4 page-enter">
       <Card>
-        <CardHeader className="border-b border-slate-100">
+        <CardHeader className="border-b border-design-border">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Globe2 className="h-5 w-5 text-brand-500" />
                 个人网站文章
               </CardTitle>
-              <p className="mt-1 text-[13px] text-slate-500">
+              <p className="mt-1 text-[13px] leading-5 text-design-textSecondary">
                 当前连接 {getWebsiteSourceBaseUrl(source)}，这里仅维护个人网站已有文章；新文章请从 /articles/new 创建后分发到个人网站。
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
-              <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1 text-xs shadow-sm">
+              <div className="inline-flex h-[38px] items-center rounded-lg border border-design-border bg-design-background p-1 text-[13px]">
                 {isLocalWebsiteDashboard() ? (
                   <button
                     type="button"
                     onClick={() => setSource("local")}
-                    className={`rounded-full px-3 py-1.5 transition-colors ${source === "local" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                    className={`h-7 rounded-md px-3 font-medium transition-colors ${source === "local" ? "bg-brand-500 text-white" : "text-design-textSecondary hover:bg-white hover:text-design-text"}`}
                   >
                     本地
                   </button>
@@ -389,12 +389,12 @@ export function WebsiteView() {
                 <button
                   type="button"
                   onClick={() => setSource("remote")}
-                  className={`rounded-full px-3 py-1.5 transition-colors ${source === "remote" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                  className={`h-7 rounded-md px-3 font-medium transition-colors ${source === "remote" ? "bg-brand-500 text-white" : "text-design-textSecondary hover:bg-white hover:text-design-text"}`}
                 >
                   线上
                 </button>
               </div>
-              <Button variant="outline" onClick={() => setSlugSettingsOpen(true)} className="gap-1.5">
+              <Button variant="outline" onClick={() => setSlugSettingsOpen(true)} className="h-[38px] gap-1.5 bg-white px-3.5 text-[13px]">
                 <Settings2 className="h-4 w-4" />
                 Slug 配置
               </Button>
@@ -402,56 +402,58 @@ export function WebsiteView() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 p-4">
-          <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_180px_200px_auto] lg:items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索标题、摘要或标签"
-                className="pl-9"
-              />
+          <div className="rounded-lg border border-design-border bg-design-background p-3">
+            <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_180px_200px_auto] lg:items-center">
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-design-neutral" />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="搜索标题、摘要或标签"
+                  className="bg-white pl-10 text-[13px]"
+                />
+              </div>
+              <Select value={status} onValueChange={(value) => setStatus(value as WebsiteStatusFilter)}>
+                <SelectTrigger className="bg-white text-[13px]">
+                  <SelectValue placeholder="文章状态" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部文章</SelectItem>
+                  <SelectItem value="draft">草稿</SelectItem>
+                  <SelectItem value="published">已发布</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sort} onValueChange={(value) => setSort(value as WebsiteSortValue)}>
+                <SelectTrigger className="bg-white text-[13px]">
+                  <SelectValue placeholder="排序" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="createdAt:desc">创建时间倒序</SelectItem>
+                  <SelectItem value="createdAt:asc">创建时间正序</SelectItem>
+                  <SelectItem value="updatedAt:desc">修改时间倒序</SelectItem>
+                  <SelectItem value="updatedAt:asc">修改时间正序</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" onClick={() => loadPosts(0, false)} disabled={loading} className="h-[38px] gap-1.5 bg-white px-3.5 text-[13px]">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                刷新
+              </Button>
             </div>
-            <Select value={status} onValueChange={(value) => setStatus(value as WebsiteStatusFilter)}>
-              <SelectTrigger>
-                <SelectValue placeholder="文章状态" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部文章</SelectItem>
-                <SelectItem value="draft">草稿</SelectItem>
-                <SelectItem value="published">已发布</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={sort} onValueChange={(value) => setSort(value as WebsiteSortValue)}>
-              <SelectTrigger>
-                <SelectValue placeholder="排序" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="createdAt:desc">创建时间倒序</SelectItem>
-                <SelectItem value="createdAt:asc">创建时间正序</SelectItem>
-                <SelectItem value="updatedAt:desc">修改时间倒序</SelectItem>
-                <SelectItem value="updatedAt:asc">修改时间正序</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" onClick={() => loadPosts(0, false)} disabled={loading} className="gap-1.5">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              刷新
-            </Button>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="flex flex-col gap-1 text-[13px] text-design-neutral sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <span>{filteredCountText}</span>
             <span>分页每次加载 {PAGE_SIZE} 条，状态与排序会自动保留。</span>
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-200 py-20">
-              <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+            <div className="flex items-center justify-center rounded-xl border border-dashed border-design-border bg-design-background py-20">
+              <Loader2 className="h-6 w-6 animate-spin text-design-neutral" />
             </div>
           ) : posts.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-16 text-center">
-              <p className="text-sm font-medium text-slate-700">{loadError ? "加载失败" : "暂无个人网站文章"}</p>
-              <p className="mx-auto mt-1 max-w-xl text-xs text-slate-500">
+            <div className="rounded-xl border border-dashed border-design-border bg-design-background px-6 py-16 text-center">
+              <p className="text-[13px] font-medium text-design-text">{loadError ? "加载失败" : "暂无个人网站文章"}</p>
+              <p className="mx-auto mt-1 max-w-xl text-[13px] leading-5 text-design-textSecondary">
                 {loadError
                   ? `当前数据源为 ${source === "local" ? "本地" : "线上"}，错误信息：${loadError}`
                   : "请确认个人网站 Admin API 已启动，或先从文章分发流程发布到个人网站。"}
@@ -464,39 +466,42 @@ export function WebsiteView() {
               ) : null}
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <div className="grid grid-cols-[minmax(0,1fr)_140px_120px_190px] items-center border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-500">
+            <div className="overflow-hidden rounded-xl border border-design-border bg-white">
+              <div className="hidden grid-cols-[minmax(0,1fr)_140px_120px_190px] items-center border-b border-design-border bg-design-background px-4 py-2.5 text-[12px] font-medium text-design-textSecondary md:grid">
                 <span>文章</span>
                 <span>发布时间</span>
                 <span>状态</span>
                 <span className="text-right">操作</span>
               </div>
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-design-border">
                 {visiblePosts.map((post) => {
                   const busy = updatingSlug === post.slug;
                   return (
-                    <div key={post.slug} className="grid grid-cols-[minmax(0,1fr)_140px_120px_190px] items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70">
+                    <div key={post.slug} className="grid grid-cols-1 gap-3 px-4 py-3 transition-colors hover:bg-design-background md:grid-cols-[minmax(0,1fr)_140px_120px_190px] md:items-center">
                       <div className="min-w-0">
                         <div className="flex min-w-0 items-center gap-2">
-                          <h3 className="truncate text-sm font-semibold text-slate-900">{post.title}</h3>
-                          <Badge variant={post.draft ? "secondary" : "default"}>{post.draft ? "草稿" : "已发布"}</Badge>
+                          <h3 className="truncate text-[14px] font-semibold text-design-text">{post.title}</h3>
+                          <Badge variant={post.draft ? "secondary" : "default"} className="shrink-0 whitespace-nowrap">{post.draft ? "草稿" : "已发布"}</Badge>
                         </div>
-                        <p className="mt-1 line-clamp-1 text-xs text-slate-500">{post.description || "暂无摘要"}</p>
-                        <p className="mt-1 truncate font-mono text-[11px] text-slate-400">{post.slug}</p>
+                        <p className="mt-1 line-clamp-1 text-[13px] text-design-textSecondary">{post.description || "暂无摘要"}</p>
+                        <p className="mt-1 truncate font-mono text-[12px] text-design-neutral">{post.slug}</p>
                       </div>
-                      <div className="inline-flex items-center gap-1 text-xs text-slate-500">
+                      <div className="inline-flex items-center gap-1 text-[13px] text-design-textSecondary">
+                        <span className="font-medium text-design-neutral md:hidden">发布时间</span>
                         <CalendarDays className="h-3.5 w-3.5" />
                         {post.pubDate?.slice(0, 10) || "-"}
                       </div>
                       <div className="flex items-center gap-2">
+                        <span className="font-medium text-design-neutral md:hidden">状态</span>
                         <Switch
                           checked={!post.draft}
                           disabled={busy}
                           onCheckedChange={(checked) => handleToggleDraft(post, !checked)}
                         />
-                        <span className="text-xs text-slate-500">{post.draft ? "草稿" : "正式"}</span>
+                        <span className="text-[13px] text-design-textSecondary">{post.draft ? "草稿" : "正式"}</span>
                       </div>
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center justify-start gap-1.5 md:justify-end">
+                        <span className="mr-auto text-[13px] font-medium text-design-neutral md:hidden">操作</span>
                         <Button variant="ghost" size="sm" asChild title="查看文章">
                           <a href={resolvePostUrl(post)} target="_blank" rel="noreferrer">
                             <ExternalLink className="h-4 w-4" />
@@ -516,7 +521,7 @@ export function WebsiteView() {
             </div>
           )}
 
-          <div ref={sentinelRef} className="flex min-h-10 items-center justify-center text-xs text-slate-400">
+          <div ref={sentinelRef} className="flex min-h-10 items-center justify-center text-[13px] text-design-neutral">
             {loadingMore ? (
               <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />加载更多文章...</span>
             ) : hasMore ? "继续向下滚动加载更多" : posts.length > 0 ? "已经到底了" : null}

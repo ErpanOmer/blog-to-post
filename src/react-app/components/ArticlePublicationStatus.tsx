@@ -14,7 +14,7 @@ interface ArticlePublicationStatusProps {
 const statusConfig = {
 	pending: {
 		label: "等待中",
-		color: "bg-slate-50 text-slate-500 border-slate-200",
+		color: "border-design-border bg-design-background text-design-textSecondary",
 		icon: Clock,
 	},
 	draft_created: {
@@ -39,7 +39,7 @@ const statusConfig = {
 	},
 	cancelled: {
 		label: "已取消",
-		color: "bg-slate-50 text-slate-500 border-slate-200",
+		color: "border-design-border bg-design-background text-design-textSecondary",
 		icon: XCircle,
 	},
 } as const;
@@ -151,17 +151,17 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 		return (
 			<div
 				key={publication.id}
-				className="rounded-lg border border-slate-200/80 bg-white px-3 py-2 shadow-[0_1px_0_0_rgba(148,163,184,0.08)]"
+				className="rounded-lg border border-design-border bg-white px-3 py-2"
 			>
 				<div className="mb-1 flex items-center justify-between gap-2">
-					<div className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+					<div className="inline-flex items-center gap-1 text-[12px] text-design-textSecondary">
 						<span>#{sequence}</span>
 						<StatusIcon className={cn("h-3 w-3", publication.status === "publishing" && "animate-spin")} />
 					</div>
 					<Badge className={cn("text-[10px]", status.color)}>{status.label}</Badge>
 				</div>
-				<div className="text-[12px] text-slate-600">{accountName}</div>
-				<div className="mt-0.5 text-[11px] text-slate-400">{new Date(publication.updatedAt).toLocaleString("zh-CN")}</div>
+				<div className="text-[13px] text-design-textSecondary">{accountName}</div>
+				<div className="mt-0.5 text-[12px] text-design-neutral">{new Date(publication.updatedAt).toLocaleString("zh-CN")}</div>
 				<div className="mt-1">
 					<a
 						href={publication.publishedUrl ?? undefined}
@@ -174,7 +174,7 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 					</a>
 				</div>
 				{publication.publishId && (
-					<div className="mt-1 truncate text-[10px] text-slate-400" title={publication.publishId}>
+					<div className="mt-1 truncate text-[11px] text-design-neutral" title={publication.publishId}>
 						ID: {publication.publishId}
 					</div>
 				)}
@@ -185,7 +185,7 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 
 	if (isLoading) {
 		return (
-			<div className="flex items-center gap-1 text-[11px] text-slate-400">
+			<div className="flex items-center gap-1 text-[12px] text-design-neutral">
 				<Loader2 className="h-3 w-3 animate-spin" />
 				<span>加载中...</span>
 			</div>
@@ -194,20 +194,20 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 
 	if (linkPublications.length === 0) {
 		if (publications.length > 0) {
-			return <div className="text-[11px] text-slate-400">存在分发记录，但暂无可访问链接</div>;
+			return <div className="text-[12px] text-design-neutral">存在分发记录，但暂无可访问链接</div>;
 		}
-		return <div className="text-[11px] text-slate-400">尚未分发到任何平台</div>;
+		return <div className="text-[12px] text-design-neutral">尚未分发到任何平台</div>;
 	}
 
 	return (
 		<div className="flex flex-wrap items-center gap-1.5">
-			<span className="text-[11px] font-medium text-slate-500">分发链接</span>
-			<span className="mr-1 text-[11px] text-slate-400">{linkPublications.length} 条</span>
-			{isCheckingLinks ? <Loader2 className="h-3 w-3 animate-spin text-slate-300" /> : null}
+			<span className="text-[12px] font-medium text-design-textSecondary">分发链接</span>
+			<span className="mr-1 text-[12px] text-design-neutral">{linkPublications.length} 条</span>
+			{isCheckingLinks ? <Loader2 className="h-3 w-3 animate-spin text-design-neutral" /> : null}
 			{platformGroups.map(({ platform, entries }) => {
 				const isActive = activePlatform === platform;
 				const singlePublication = entries.length === 1 ? entries[0].publication : null;
-				const triggerClassName = "inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] text-slate-600 transition-colors hover:border-brand-200 hover:bg-brand-50";
+				const triggerClassName = "inline-flex shrink-0 items-center gap-1 rounded-md border border-design-border bg-white px-1.5 py-0.5 text-[12px] text-design-textSecondary transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700";
 
 				return (
 					<div
@@ -232,28 +232,28 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 								onClick={(event) => event.stopPropagation()}
 							>
 								<PlatformBadge platform={platform} size="xs" className="border-0 bg-transparent px-0" />
-								<span className="rounded bg-slate-100 px-1 py-0 text-[10px] text-slate-500">{entries.length}</span>
+								<span className="rounded bg-design-background px-1 py-0 text-[11px] text-design-textSecondary">{entries.length}</span>
 								<ExternalLink className="h-3 w-3" />
 							</a>
 						) : (
 							<button type="button" className={triggerClassName}>
 								<PlatformBadge platform={platform} size="xs" className="border-0 bg-transparent px-0" />
-								<span className="rounded bg-slate-100 px-1 py-0 text-[10px] text-slate-500">{entries.length}</span>
+								<span className="rounded bg-design-background px-1 py-0 text-[11px] text-design-textSecondary">{entries.length}</span>
 							</button>
 						)}
 						<div
 							className={cn(
-								"absolute left-0 top-full z-50 w-[min(360px,calc(100vw-48px))] pt-2 transition-all duration-150",
+								"absolute right-0 top-full z-50 w-[min(360px,calc(100vw-48px))] pt-2 transition-all duration-150",
 								isActive ? "pointer-events-auto visible opacity-100" : "pointer-events-none invisible opacity-0",
 							)}
 						>
-							<div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+							<div className="rounded-xl border border-design-border bg-white p-3 shadow-elevated">
 								<div className="mb-2 flex items-center justify-between gap-2">
 									<div className="flex items-center gap-2">
 										<PlatformBadge platform={platform} size="xs" />
-										<span className="text-xs font-semibold text-slate-700">发布记录</span>
+										<span className="text-[13px] font-semibold text-design-text">发布记录</span>
 									</div>
-									<span className="text-[11px] text-slate-400">{entries.length} 条</span>
+									<span className="text-[12px] text-design-neutral">{entries.length} 条</span>
 								</div>
 								<div className="max-h-72 space-y-2 overflow-y-auto pr-1">
 									{entries.map((entry) => renderPublicationLink(entry))}

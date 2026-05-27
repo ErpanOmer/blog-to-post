@@ -14,14 +14,14 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-10 w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3.5 text-sm text-slate-900 shadow-sm focus:outline-none focus-visible:border-brand-500 focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
+      "flex h-[38px] w-full items-center justify-between rounded-md border border-design-border bg-white px-3.5 text-sm text-design-text focus:outline-none focus-visible:border-brand-500 focus-visible:ring-[3px] focus-visible:ring-brand-500/10 disabled:cursor-not-allowed disabled:bg-design-background disabled:text-design-neutral",
       className,
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 text-slate-500" />
+      <ChevronDown className="h-4 w-4 text-design-textSecondary" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));
@@ -35,7 +35,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "z-50 min-w-[8rem] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 text-slate-900 shadow-xl",
+        "z-50 min-w-[8rem] overflow-hidden rounded-lg border border-design-border bg-white p-1.5 text-design-text shadow-lg",
         position === "popper" && "translate-y-1",
         className,
       )}
@@ -54,8 +54,8 @@ const SelectItem = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
-    className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-2.5 pl-9 pr-3 text-sm outline-none transition-colors focus:bg-brand-50 focus:text-brand-900",
+      className={cn(
+      "relative flex w-full cursor-pointer select-none items-center rounded-md py-2.5 pl-9 pr-3 text-sm outline-none transition-colors focus:bg-brand-50 focus:text-brand-900",
       className,
     )}
     {...props}

@@ -230,35 +230,35 @@ export function WebsiteEditorView() {
   if (isLoading || !draft) {
     return (
       <div className="flex min-h-[calc(100vh-80px)] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-slate-300" />
+        <Loader2 className="h-7 w-7 animate-spin text-design-neutral" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-full w-full flex-col bg-slate-50 page-enter flex-1">
-      <div className="shrink-0 border-b border-slate-200/60 bg-white/80 px-4 py-2.5 backdrop-blur-xl md:px-5">
+    <div className="flex h-full w-full flex-col bg-design-background page-enter flex-1">
+      <div className="shrink-0 border-b border-design-border bg-white/85 px-4 py-2.5 backdrop-blur-xl md:px-5">
         <div className="mx-auto flex w-full items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <Button variant="ghost" size="sm" type="button" onClick={() => navigate("/website")} className="gap-1.5 text-slate-500 hover:text-slate-900">
+            <Button variant="ghost" size="sm" type="button" onClick={() => navigate("/website")} className="gap-1.5 text-design-textSecondary hover:text-design-text">
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden md:inline">返回列表</span>
             </Button>
-            <div className="h-4 w-px bg-slate-200" />
+            <div className="h-4 w-px bg-design-border" />
             <div className="min-w-0">
-              <h1 className="truncate text-[14px] font-semibold text-slate-900">{draft.title || "编辑个人网站文章"}</h1>
-              <p className="truncate text-[11px] text-slate-400">slug 固定为 {draft.slug}，当前编辑 {source === "local" ? "本地" : "线上"}个人网站文章。</p>
+              <h1 className="truncate text-[14px] font-semibold text-design-text">{draft.title || "编辑个人网站文章"}</h1>
+              <p className="truncate text-[12px] text-design-neutral">slug 固定为 {draft.slug}，当前编辑 {source === "local" ? "本地" : "线上"}个人网站文章。</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Badge
               variant={saveState === "error" ? "destructive" : "outline"}
-              className="hidden max-w-[240px] truncate rounded-full bg-white px-3 py-1.5 text-xs font-normal text-slate-600 md:inline-flex"
+              className="hidden max-w-[240px] truncate rounded-full bg-white px-3 py-1.5 text-[12px] font-normal text-design-textSecondary md:inline-flex"
             >
               {isSaving || isStatusUpdating ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : null}
               {statusMessage}
             </Badge>
-            <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 shadow-sm md:flex">
+            <div className="hidden items-center gap-2 rounded-lg border border-design-border bg-white px-3 py-1.5 text-[13px] text-design-textSecondary md:flex">
               {isStatusUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-500" /> : null}
               <span>{draft.draft ? "草稿" : "正式"}</span>
               <Switch checked={!draft.draft} disabled={isMutating} onCheckedChange={(checked) => void handleToggleDraft(!checked)} />
@@ -285,20 +285,20 @@ export function WebsiteEditorView() {
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[clamp(380px,20vw,450px)_minmax(0,1fr)]">
-        <aside className="space-y-3 overflow-y-auto border-r border-slate-200/60 bg-gradient-to-b from-slate-50 via-white to-slate-50 p-4 custom-scrollbar">
+        <aside className="space-y-3 overflow-y-auto border-r border-design-border bg-design-background p-4 custom-scrollbar">
           <div className="space-y-2">
             <Label>标题</Label>
             <Textarea disabled={isMutating} value={draft.title} onChange={(event) => setDraft((prev) => prev ? { ...prev, title: event.target.value } : prev)} className="min-h-[72px]" />
           </div>
-          <div className="space-y-2 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-card">
+          <div className="space-y-2 rounded-xl border border-design-border bg-white p-3.5">
             <div className="mb-2 flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 ring-1 ring-brand-100">
                   <Image className="h-4 w-4" />
                 </div>
-                <Label className="text-[15px] font-semibold text-slate-950">封面图</Label>
+                <Label className="text-[14px] font-semibold text-design-text">封面图</Label>
               </div>
-              <Button variant="secondary" size="sm" disabled={isUploadingCover} type="button" className="h-8 gap-1.5 rounded-full border border-slate-200 bg-white px-3 text-xs shadow-soft" onClick={openCoverPicker}>
+              <Button variant="secondary" size="sm" disabled={isUploadingCover} type="button" className="h-8 gap-1.5 rounded-md px-3 text-[12px]" onClick={openCoverPicker}>
                 {isUploadingCover ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                 上传
               </Button>
@@ -315,30 +315,30 @@ export function WebsiteEditorView() {
               type="button"
               disabled={isMutating}
               onClick={openCoverPicker}
-              className="group relative mt-2 block aspect-[21/9] w-full overflow-hidden rounded-xl border border-dashed border-slate-300 bg-slate-100 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/40 disabled:cursor-not-allowed"
+              className="group relative mt-2 block aspect-[21/9] w-full overflow-hidden rounded-xl border border-dashed border-design-border bg-design-background text-left transition-colors hover:border-brand-300 hover:bg-brand-50/40 disabled:cursor-not-allowed"
             >
               {draft.cover ? (
                 <>
                   <img src={draft.cover} alt="封面预览" className="h-full w-full object-contain" />
-                  <div className="absolute inset-0 flex items-center justify-center bg-slate-950/0 text-xs font-medium text-white opacity-0 transition-all group-hover:bg-slate-950/35 group-hover:opacity-100">
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-950/0 text-[13px] font-medium text-white opacity-0 transition-all group-hover:bg-slate-950/35 group-hover:opacity-100">
                     点击更换封面
                   </div>
                 </>
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-slate-500">
-                  {isUploadingCover ? <Loader2 className="h-5 w-5 animate-spin text-brand-500" /> : <Upload className="h-5 w-5 text-slate-400 transition-colors group-hover:text-brand-500" />}
+                <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-[13px] text-design-textSecondary">
+                  {isUploadingCover ? <Loader2 className="h-5 w-5 animate-spin text-brand-500" /> : <Upload className="h-5 w-5 text-design-neutral transition-colors group-hover:text-brand-500" />}
                   <span>{isUploadingCover ? "封面上传中..." : "点击上传本地图片"}</span>
                 </div>
               )}
             </button>
             {coverMessage ? (
-              <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+              <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-700">
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 {coverMessage}
               </div>
             ) : null}
             {coverError ? (
-              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
                 封面上传失败: {coverError}
               </div>
             ) : null}
@@ -351,9 +351,9 @@ export function WebsiteEditorView() {
             <Label>标签</Label>
             <EditableTagInput tags={draft.tags} disabled={isMutating} onChange={(tags) => setDraft((prev) => prev ? { ...prev, tags } : prev)} />
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
+          <div className="rounded-lg border border-design-border bg-white px-3 py-2 text-[13px] leading-5 text-design-textSecondary">
             <p>发布时间由个人网站分发成功时自动写入，编辑页不再手动修改。</p>
-            <p className="mt-1">Slug 固定：<span className="font-mono text-slate-700">{draft.slug}</span></p>
+            <p className="mt-1">Slug 固定：<span className="font-mono text-design-text">{draft.slug}</span></p>
           </div>
         </aside>
 

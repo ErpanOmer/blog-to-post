@@ -47,7 +47,7 @@ export function ArticleEditorSheet({
                 }}
             >
                 <DialogContent
-                    className="flex flex-col h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none overflow-hidden border-slate-200/60 bg-white/95 backdrop-blur-xl p-0 gap-0"
+                    className="flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none flex-col gap-0 overflow-hidden border-design-border bg-white/95 p-0 backdrop-blur-xl"
                     hideClose
                     onPointerDownOutside={(e) => {
                         if (isGenerating) e.preventDefault();
@@ -57,15 +57,15 @@ export function ArticleEditorSheet({
                     }}
                 >
                 {/* Header */}
-                <DialogHeader className="flex-shrink-0 border-b border-slate-200/60 px-6 py-4 pr-4">
+                <DialogHeader className="flex-shrink-0 border-b border-design-border px-6 py-4 pr-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-lg shadow-brand-500/25">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-brand-500 text-white">
                                 <Sparkles className="h-5 w-5" />
                             </div>
                             <div>
-                                <DialogTitle className="text-xl font-bold">文章编辑</DialogTitle>
-                                <p className="text-sm text-slate-500">填写标题、生成正文、完善元信息后保存</p>
+                                <DialogTitle className="font-display text-xl font-semibold text-design-text">文章编辑</DialogTitle>
+                                <p className="text-[13px] text-design-textSecondary">填写标题、生成正文、完善元信息后保存</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -122,9 +122,9 @@ export function ArticleEditorSheet({
 
                 {/* Content */}
                 <div className="relative flex flex-1 overflow-hidden">
-                    <div className="absolute inset-y-0 left-0 w-[400px] overflow-y-auto border-r border-slate-200/60 bg-slate-50/50">
+                    <div className="absolute inset-y-0 left-0 w-[400px] overflow-y-auto border-r border-design-border bg-design-background">
                         <div className="space-y-4 p-4">
-                            <div className="rounded-xl border border-slate-200/60 bg-white p-4">
+                            <div className="rounded-xl border border-design-border bg-white p-4">
                                 <TitleGenerator
                                     title={draft?.title ?? ""}
                                     onTitleChange={onTitleChange}

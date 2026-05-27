@@ -35,31 +35,31 @@ export function MainLayout({ isPublishing, isGenerating, onOpenEditor, children 
 
       {isPublishing && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white p-6 shadow-elevated animate-in">
+          <div className="mx-4 w-full max-w-sm rounded-xl border border-design-border bg-white p-6 shadow-elevated animate-in">
             <div className="flex flex-col items-center text-center">
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-brand text-white">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-brand-500 text-white">
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
-              <h3 className="mb-1.5 text-base font-semibold text-slate-900">发布任务执行中</h3>
-              <p className="text-[13px] leading-relaxed text-slate-500">系统正在后台执行分发流程，请稍候查看结果。</p>
+              <h3 className="mb-1.5 font-display text-lg font-semibold text-design-text">发布任务执行中</h3>
+              <p className="text-[13px] leading-relaxed text-design-textSecondary">系统正在后台执行分发流程，请稍候查看结果。</p>
             </div>
           </div>
         </div>
       )}
 
-      <div className="min-h-screen text-slate-900 flex flex-col bg-slate-50/50">
+      <div className="flex min-h-screen flex-col bg-design-background text-design-text">
         <GlobalLoadingOverlay isLoading={isGenerating} />
 
         {!isEditorPage && (
-          <header className="sticky top-0 z-40 shrink-0 border-b border-slate-200/60 bg-white/80 backdrop-blur-xl">
-            <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2.5 lg:px-6">
+          <header className="sticky top-0 z-40 h-14 shrink-0 border-b border-design-border bg-white/85 backdrop-blur-xl">
+            <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-4 px-4 lg:px-6">
               <NavLink to="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
-                <div className="icon-tile h-8 w-8 rounded-lg">
+                <div className="icon-tile h-8 w-8">
                   <Sparkles className="h-3.5 w-3.5" />
                 </div>
                 <div className="hidden min-w-0 sm:block">
-                  <p className="text-sm font-semibold text-slate-900">Blog-to-Post</p>
-                  <p className="text-[11px] text-slate-400">多平台内容分发</p>
+                  <p className="font-display text-sm font-semibold text-design-text">Blog-to-Post</p>
+                  <p className="text-[12px] text-design-neutral">多平台内容分发</p>
                 </div>
               </NavLink>
 
@@ -76,16 +76,16 @@ export function MainLayout({ isPublishing, isGenerating, onOpenEditor, children 
                         key={item.to}
                         to={item.to}
                         className={cn(
-                          "relative inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-200",
+                          "relative inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors duration-200",
                           isActive
-                            ? "text-brand-600"
-                            : "text-slate-500 hover:text-slate-900 hover:bg-slate-100/60",
+                            ? "bg-brand-50 text-brand-600"
+                            : "text-design-textSecondary hover:bg-design-background hover:text-design-text",
                         )}
                       >
                         <Icon className="h-4 w-4" />
                         <span className="hidden md:inline">{item.label}</span>
                         {isActive && (
-                          <span className="absolute bottom-0 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-brand-500" />
+                          <span className="absolute -bottom-1.5 left-1/2 h-0.5 w-5 -translate-x-1/2 rounded-full bg-brand-500" />
                         )}
                       </NavLink>
                     );

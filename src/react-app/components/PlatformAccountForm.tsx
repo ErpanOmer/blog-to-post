@@ -9,7 +9,8 @@ import {
 	PUBLISHABLE_PLATFORMS,
 	isPublishablePlatform,
 } from "@/shared/platform-settings";
-import { PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
+import { PlatformLogo } from "@/react-app/components/PlatformBrand";
+import { getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 import type { PlatformPublishSettingsMap, PublishablePlatformType } from "@/shared/types";
 import { Eye, EyeOff, Loader2, Shield, ShieldCheck, ShieldX } from "lucide-react";
 
@@ -282,16 +283,16 @@ export function PlatformAccountForm({
 									className={`flex flex-col items-center gap-1 rounded-lg border p-3 transition-all ${
 										formData.platform === option.value
 											? "border-brand-500 bg-brand-50 text-brand-700"
-											: "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+											: "border-design-border hover:border-brand-200 hover:bg-brand-50/40"
 									} ${isPlatformLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
 								>
 									<PlatformLogo platform={option.value} size="sm" className="ring-0 shadow-none" />
-									<span className="text-xs font-medium">{option.label}</span>
+									<span className="text-[12px] font-medium">{option.label}</span>
 								</button>
 							))}
 						</div>
 						{!isEditing && enabledPlatformOptions.length === 0 ? (
-							<p className="text-xs text-amber-600">所有平台都已禁用，请先到设置中启用至少一个平台。</p>
+							<p className="text-[12px] text-amber-600">所有平台都已禁用，请先到设置中启用至少一个平台。</p>
 						) : null}
 					</div>
 
@@ -304,7 +305,7 @@ export function PlatformAccountForm({
 									value={formData.appId}
 									onChange={(event) => setFormData((prev) => ({ ...prev, appId: event.target.value }))}
 									placeholder="例如: wx17a5eee31cf8394c"
-									className="font-mono text-sm"
+									className="font-mono text-[13px]"
 									disabled={readOnly}
 								/>
 							</div>
@@ -315,7 +316,7 @@ export function PlatformAccountForm({
 									<button
 										type="button"
 										onClick={() => setShowAppSecret((prev) => !prev)}
-										className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+										className="flex items-center gap-1 text-[12px] text-design-neutral hover:text-design-textSecondary"
 									>
 										{showAppSecret ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
 										{showAppSecret ? "隐藏" : "显示"}
@@ -327,19 +328,19 @@ export function PlatformAccountForm({
 									value={formData.appSecret}
 									onChange={(event) => setFormData((prev) => ({ ...prev, appSecret: event.target.value }))}
 									placeholder="输入公众号 appSecret"
-									className="font-mono text-sm"
+									className="font-mono text-[13px]"
 									disabled={readOnly}
 								/>
-								<p className="text-xs text-slate-500">推荐使用 appId + appSecret 接入微信官方 API。</p>
+								<p className="text-[13px] text-design-textSecondary">推荐使用 appId + appSecret 接入微信官方 API。</p>
 							</div>
 
-							<div className="space-y-2 rounded-lg border border-slate-200 p-3">
+							<div className="space-y-2 rounded-lg border border-design-border bg-design-background p-3">
 								<div className="flex items-center justify-between">
 									<Label htmlFor="authToken">兼容模式 authToken（可选）</Label>
 									<button
 										type="button"
 										onClick={() => setShowAuthToken((prev) => !prev)}
-										className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+										className="flex items-center gap-1 text-[12px] text-design-neutral hover:text-design-textSecondary"
 									>
 										{showAuthToken ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
 										{showAuthToken ? "隐藏" : "显示"}
@@ -351,7 +352,7 @@ export function PlatformAccountForm({
 										value={formData.authToken}
 										onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
 										placeholder="可选：JSON 或旧凭证内容"
-										className="min-h-[90px] font-mono text-sm"
+										className="min-h-[90px] font-mono text-[13px] leading-5"
 										disabled={readOnly}
 									/>
 								) : (
@@ -361,7 +362,7 @@ export function PlatformAccountForm({
 										value={formData.authToken}
 										onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
 										placeholder="可选：兼容模式凭证"
-										className="font-mono text-sm"
+										className="font-mono text-[13px]"
 										disabled={readOnly}
 									/>
 								)}
@@ -377,7 +378,7 @@ export function PlatformAccountForm({
 										value={formData.baseUrl}
 										onChange={(event) => setFormData((prev) => ({ ...prev, baseUrl: event.target.value }))}
 										placeholder="http://localhost:4321 或 https://erpanomer.nurverse.com"
-										className="font-mono text-sm"
+										className="font-mono text-[13px]"
 										disabled={readOnly}
 									/>
 								</div>
@@ -399,7 +400,7 @@ export function PlatformAccountForm({
 									<button
 										type="button"
 										onClick={() => setShowAuthToken((prev) => !prev)}
-										className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+										className="flex items-center gap-1 text-[12px] text-design-neutral hover:text-design-textSecondary"
 									>
 										{showAuthToken ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
 										{showAuthToken ? "隐藏" : "显示"}
@@ -411,19 +412,19 @@ export function PlatformAccountForm({
 									value={formData.adminToken}
 									onChange={(event) => setFormData((prev) => ({ ...prev, adminToken: event.target.value }))}
 									placeholder="个人站 WEBSITE_ADMIN_TOKEN"
-									className="font-mono text-sm"
+									className="font-mono text-[13px]"
 									disabled={readOnly}
 								/>
-								<p className="text-xs text-slate-500">本地测试可使用个人站约定的 dev token；线上使用 Cloudflare secret 中的 WEBSITE_ADMIN_TOKEN。</p>
+								<p className="text-[13px] text-design-textSecondary">本地测试可使用个人站约定的 dev token；线上使用 Cloudflare secret 中的 WEBSITE_ADMIN_TOKEN。</p>
 							</div>
 
-							<div className="space-y-2 rounded-lg border border-slate-200 p-3">
+							<div className="space-y-2 rounded-lg border border-design-border bg-design-background p-3">
 								<div className="flex items-center justify-between">
 									<Label htmlFor="authToken">兼容模式 JSON 凭证（可选）</Label>
 									<button
 										type="button"
 										onClick={() => setShowAuthToken((prev) => !prev)}
-										className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+										className="flex items-center gap-1 text-[12px] text-design-neutral hover:text-design-textSecondary"
 									>
 										{showAuthToken ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
 										{showAuthToken ? "隐藏" : "显示"}
@@ -435,7 +436,7 @@ export function PlatformAccountForm({
 										value={formData.authToken}
 										onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
 										placeholder='{"baseUrl":"http://localhost:4321","adminToken":"dev-website-admin-token","author":"ErpanOmer"}'
-										className="min-h-[90px] font-mono text-sm"
+										className="min-h-[90px] font-mono text-[13px] leading-5"
 										disabled={readOnly}
 									/>
 								) : (
@@ -445,7 +446,7 @@ export function PlatformAccountForm({
 										value={formData.authToken}
 										onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
 										placeholder="可选：兼容 JSON 凭证"
-										className="font-mono text-sm"
+										className="font-mono text-[13px]"
 										disabled={readOnly}
 									/>
 								)}
@@ -458,7 +459,7 @@ export function PlatformAccountForm({
 								<button
 									type="button"
 									onClick={() => setShowAuthToken((prev) => !prev)}
-									className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+									className="flex items-center gap-1 text-[12px] text-design-neutral hover:text-design-textSecondary"
 								>
 									{showAuthToken ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
 									{showAuthToken ? "隐藏" : "显示"}
@@ -471,7 +472,7 @@ export function PlatformAccountForm({
 									value={formData.authToken}
 									onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
 									placeholder="输入平台认证凭证"
-									className="min-h-[100px] font-mono text-sm"
+									className="min-h-[100px] font-mono text-[13px] leading-5"
 									disabled={readOnly}
 								/>
 							) : (
@@ -481,12 +482,12 @@ export function PlatformAccountForm({
 									value={formData.authToken}
 									onChange={(event) => setFormData((prev) => ({ ...prev, authToken: event.target.value }))}
 									placeholder="输入平台认证凭证"
-									className="font-mono text-sm"
+									className="font-mono text-[13px]"
 									disabled={readOnly}
 								/>
 							)}
 
-							<p className="text-xs text-slate-500">不同平台认证方式不同，请粘贴可用的登录态凭证。</p>
+							<p className="text-[13px] text-design-textSecondary">不同平台认证方式不同，请粘贴可用的登录态凭证。</p>
 						</div>
 					)}
 
@@ -502,20 +503,20 @@ export function PlatformAccountForm({
 						/>
 					</div>
 
-					{formError ? <p className="text-xs text-rose-500">{formError}</p> : null}
+					{formError ? <p className="text-[13px] text-rose-500">{formError}</p> : null}
 
 					{isEditing && account && (
-						<div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+						<div className="rounded-lg border border-design-border bg-design-background p-3">
 							<div className="flex items-center justify-between">
 								<div className="flex items-center gap-2">
 									{account.isVerified ? (
 										<ShieldCheck className="h-5 w-5 text-emerald-600" />
 									) : (
-										<ShieldX className="h-5 w-5 text-slate-400" />
+										<ShieldX className="h-5 w-5 text-design-neutral" />
 									)}
 									<div>
-										<p className="text-sm font-medium text-slate-900">{account.isVerified ? "已验证" : "未验证"}</p>
-										<p className="text-xs text-slate-500">
+										<p className="text-[13px] font-medium text-design-text">{account.isVerified ? "已验证" : "未验证"}</p>
+										<p className="text-[12px] text-design-textSecondary">
 											{readOnly
 												? "平台已禁用，暂不允许重新验证。"
 												: account.lastVerifiedAt

@@ -6,7 +6,7 @@ import type { ArticleStatus } from "@/react-app/types";
 const statusConfig: Record<ArticleStatus, { label: string; className: string; icon: ReactNode }> = {
   draft: {
     label: "草稿",
-    className: "border-slate-200 bg-slate-50 text-slate-600",
+    className: "border-design-border bg-design-background text-design-textSecondary",
     icon: <FileText className="h-3 w-3" />,
   },
   reviewed: {
@@ -42,7 +42,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium",
+        "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px] font-medium",
         config.className,
         className,
       )}

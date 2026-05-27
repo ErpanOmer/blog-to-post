@@ -217,7 +217,7 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 		if (source === "local") {
 			return <HardDrive className="h-3.5 w-3.5 text-emerald-500" />;
 		}
-		return <Cpu className="h-3.5 w-3.5 text-slate-500" />;
+		return <Cpu className="h-3.5 w-3.5 text-design-textSecondary" />;
 	};
 
 	return (
@@ -248,7 +248,7 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 							<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 								<div className="flex items-center gap-2">
 									<Cpu className="h-4 w-4 text-brand-500" />
-									<CardTitle className="text-sm">模型服务与模型选择</CardTitle>
+									<CardTitle className="text-base">模型服务与模型选择</CardTitle>
 								</div>
 								<div className="flex items-center gap-2">
 									<Button
@@ -275,20 +275,20 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 							<CardDescription>AI 能力统一使用一个模型，按需切换即可。</CardDescription>
 						</CardHeader>
 						<CardContent className="space-y-3">
-							<div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+							<div className="flex items-center justify-between rounded-lg border border-design-border bg-design-background p-3">
 								<div>
-									<p className="text-[13px] font-medium text-slate-800">当前服务提供方</p>
-									<p className="mt-0.5 text-[12px] text-slate-400">{providerStatus?.provider || "未配置"}</p>
+									<p className="text-[13px] font-medium text-design-text">当前服务提供方</p>
+									<p className="mt-0.5 text-[13px] text-design-textSecondary">{providerStatus?.provider || "未配置"}</p>
 								</div>
-								<Badge variant={providerStatus?.ready ? "default" : "destructive"} className="text-[10px]">
+								<Badge variant={providerStatus?.ready ? "default" : "destructive"} className="text-[12px]">
 									{providerStatus?.ready ? "可用" : "异常"}
 								</Badge>
 							</div>
 
-							{providerStatus?.message && <p className="text-[12px] text-slate-400">{providerStatus.message}</p>}
+							{providerStatus?.message && <p className="text-[13px] text-design-textSecondary">{providerStatus.message}</p>}
 
 							<div className="space-y-1.5">
-								<Label className="text-[12px]">统一模型</Label>
+								<Label className="text-[13px] text-design-text">统一模型</Label>
 								<Select
 									value={aiSettings?.defaultModel ?? ""}
 									onValueChange={(value) => updateAIField("defaultModel", value)}
@@ -320,7 +320,7 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 				<TabsContent value="prompts" className="space-y-4">
 					{isLoadingPrompts ? (
 						<div className="flex items-center justify-center py-12">
-							<RefreshCw className="h-5 w-5 animate-spin text-slate-300" />
+							<RefreshCw className="h-5 w-5 animate-spin text-design-neutral" />
 						</div>
 					) : (
 						<div className="grid gap-4">
@@ -341,15 +341,15 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 												<div className="flex items-center gap-2.5">
 													<div className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-50 text-brand-500">{desc.icon}</div>
 													<div>
-														<CardTitle className="text-sm">{desc.title}</CardTitle>
+														<CardTitle className="text-base">{desc.title}</CardTitle>
 														<CardDescription className="mt-0.5">{desc.description}</CardDescription>
 													</div>
 												</div>
 
 												<div className="flex items-center gap-1.5">
-													{changed && <Badge variant="outline" className="text-[10px]">已修改</Badge>}
+													{changed && <Badge variant="outline" className="text-[12px]">已修改</Badge>}
 													{isSaved && (
-														<Badge variant="outline" className="gap-1 border-emerald-200/60 bg-emerald-50 text-emerald-600 text-[10px]">
+														<Badge variant="outline" className="gap-1 border-emerald-200/60 bg-emerald-50 text-emerald-600 text-[12px]">
 															<CheckCircle2 className="h-3 w-3" />
 															已保存
 														</Badge>
@@ -365,7 +365,7 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 											<Textarea
 												value={editedTemplates[template.key] || ""}
 												onChange={(event) => handleTemplateChange(template.key, event.target.value)}
-												className="min-h-[180px] font-mono text-[12px]"
+												className="min-h-[180px] font-mono text-[13px] leading-5"
 											/>
 										</CardContent>
 									</Card>
@@ -379,18 +379,18 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 					<Card>
 						<CardHeader className="pb-3">
 							<div className="flex items-center gap-2">
-								<Database className="h-4 w-4 text-slate-500" />
-								<CardTitle className="text-sm">存储配置</CardTitle>
+								<Database className="h-4 w-4 text-design-textSecondary" />
+								<CardTitle className="text-base">存储配置</CardTitle>
 							</div>
 						</CardHeader>
 						<CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
 							<div className="space-y-1.5">
-								<Label className="text-[12px]">数据库</Label>
-								<Input value="D1 (SQLite)" disabled className="bg-slate-50 text-[13px]" />
+								<Label className="text-[13px] text-design-text">数据库</Label>
+								<Input value="D1 (SQLite)" disabled className="bg-design-background text-[13px]" />
 							</div>
 							<div className="space-y-1.5">
-								<Label className="text-[12px]">缓存</Label>
-								<Input value="KV" disabled className="bg-slate-50 text-[13px]" />
+								<Label className="text-[13px] text-design-text">缓存</Label>
+								<Input value="KV" disabled className="bg-design-background text-[13px]" />
 							</div>
 						</CardContent>
 					</Card>
@@ -398,15 +398,15 @@ export function PlatformSettings({ providerStatus }: PlatformSettingsProps) {
 					<Card>
 						<CardHeader className="pb-3">
 							<div className="flex items-center gap-2">
-								<Key className="h-4 w-4 text-slate-500" />
-								<CardTitle className="text-sm">密钥管理</CardTitle>
+								<Key className="h-4 w-4 text-design-textSecondary" />
+								<CardTitle className="text-base">密钥管理</CardTitle>
 							</div>
 						</CardHeader>
 						<CardContent className="space-y-3">
 							<div className="space-y-1.5">
-								<Label className="text-[12px]">接口密钥</Label>
+								<Label className="text-[13px] text-design-text">接口密钥</Label>
 								<div className="flex gap-2">
-									<Input type="password" value="************************" disabled className="flex-1 bg-slate-50 text-[13px]" />
+									<Input type="password" value="************************" disabled className="flex-1 bg-design-background text-[13px]" />
 									<Button variant="outline" size="xs">重置</Button>
 								</div>
 							</div>

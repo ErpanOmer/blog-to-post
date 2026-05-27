@@ -137,7 +137,7 @@ export function ArticleAISettingsDialog({
 		if (source === "local") {
 			return <HardDrive className="h-3.5 w-3.5 text-emerald-500" />;
 		}
-		return <Settings2 className="h-3.5 w-3.5 text-slate-500" />;
+		return <Settings2 className="h-3.5 w-3.5 text-design-textSecondary" />;
 	};
 
 	const updateActiveField = <K extends keyof ArticleAIFeatureSettings>(
@@ -184,7 +184,7 @@ export function ArticleAISettingsDialog({
 				</DialogHeader>
 
 				{isLoading || !settings || !activeFeatureSettings ? (
-					<div className="flex items-center justify-center py-10 text-slate-500">
+					<div className="flex items-center justify-center py-10 text-design-textSecondary">
 						<Loader2 className="mr-2 h-4 w-4 animate-spin" />
 						加载中...
 					</div>
@@ -214,7 +214,7 @@ export function ArticleAISettingsDialog({
 
 							{enabledTabKeys.map((tabKey) => (
 								<TabsContent key={tabKey} value={tabKey} className="space-y-4">
-									<p className="text-xs text-slate-500">
+									<p className="text-[13px] text-design-textSecondary">
 										{tabItems.find((item) => item.key === tabKey)?.description}
 									</p>
 
@@ -311,11 +311,11 @@ export function ArticleAISettingsDialog({
 									</div>
 
 									<div className="space-y-1.5">
-										<Label className="text-[12px]">
+										<Label className="text-[13px] text-design-text">
 											{tabKey === "summary" ? "摘要 Prompt" : "标签 Prompt"}
 										</Label>
 										<Textarea
-											className="min-h-[140px] font-mono text-[12px]"
+											className="min-h-[140px] font-mono text-[13px] leading-5"
 											value={settings[tabKey].prompt}
 											onChange={(event) => {
 												if (activeTab !== tabKey) return;
@@ -327,12 +327,12 @@ export function ArticleAISettingsDialog({
 							))}
 						</Tabs>
 
-						<p className="mt-3 text-xs text-slate-500">
+						<p className="mt-3 text-[13px] leading-5 text-design-textSecondary">
 							当前已启用：摘要、标签。标题、正文、封面 Tab 已预留，后续按你的节奏逐步开放。
 						</p>
 
 						{activeTabMeta && (
-							<p className="mt-1 text-[11px] text-slate-400">
+							<p className="mt-1 text-[12px] text-design-neutral">
 								当前配置项：{activeTabMeta.label}
 							</p>
 						)}
@@ -356,4 +356,3 @@ export function ArticleAISettingsDialog({
 		</Dialog>
 	);
 }
-

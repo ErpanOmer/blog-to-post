@@ -60,13 +60,13 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
   };
 
   return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-card">
+    <section className="rounded-xl border border-design-border bg-white p-3.5">
       <div className="mb-2.5 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 ring-1 ring-brand-100">
             <Type className="h-4 w-4" />
           </div>
-          <p className="min-w-0 truncate text-[15px] font-semibold text-slate-950">文章标题</p>
+          <p className="min-w-0 truncate text-[14px] font-semibold text-design-text">文章标题</p>
         </div>
 
         {!hideAIActions && (
@@ -76,7 +76,7 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
             onClick={handleGenerateTitle}
             disabled={disabled || loading}
             type="button"
-            className="h-8 shrink-0 gap-1.5 rounded-full border-slate-200 bg-white px-3 text-xs shadow-soft"
+            className="h-8 shrink-0 gap-1.5 rounded-md px-3 text-[12px]"
           >
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
             生成
@@ -89,7 +89,7 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
         disabled={disabled}
         onChange={(event) => onTitleChange(event.target.value)}
         placeholder="输入文章标题"
-        className="min-h-[68px] resize-none rounded-xl border-slate-200 bg-white p-3 text-[15px] font-medium leading-6 shadow-inner-soft"
+        className="min-h-[68px] resize-none rounded-md border-design-border bg-white p-3 text-[15px] font-medium leading-6"
         rows={2}
       />
 
@@ -98,7 +98,7 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
           <button
             onClick={() => void handleOpenDialog()}
             disabled={disabled}
-            className="inline-flex items-center gap-1.5 text-xs text-brand-600 transition-colors hover:text-brand-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-[12px] text-brand-600 transition-colors hover:text-brand-700 disabled:opacity-50"
             type="button"
           >
             <ExternalLink className="h-3.5 w-3.5" />
@@ -108,8 +108,8 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
       )}
 
       {!hideAIActions && generatedTitles.length > 0 && (
-        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="mb-2 text-xs text-slate-500">选择一个建议标题，或继续手动调整。</p>
+        <div className="mt-3 rounded-lg border border-design-border bg-design-background p-3">
+          <p className="mb-2 text-[13px] text-design-textSecondary">选择一个建议标题，或继续手动调整。</p>
           <div className="space-y-2">
             {generatedTitles.map((generatedTitle, index) => {
               const selected = selectedTitleIndex === index;
@@ -123,17 +123,17 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
                   className={`flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                     selected
                       ? "border-brand-500 bg-brand-50 text-brand-900"
-                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                      : "border-design-border bg-white text-design-textSecondary hover:border-brand-200"
                   }`}
                 >
                   <span
                     className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded-full border ${
-                      selected ? "border-brand-500 bg-brand-500 text-white" : "border-slate-300 bg-white"
+                      selected ? "border-brand-500 bg-brand-500 text-white" : "border-design-border bg-white"
                     }`}
                   >
                     {selected && <Check className="h-3 w-3" />}
                   </span>
-                  <span className="flex-1 text-sm leading-6">{generatedTitle}</span>
+                  <span className="flex-1 text-[13px] leading-6">{generatedTitle}</span>
                 </button>
               );
             })}
@@ -143,51 +143,51 @@ export function TitleGenerator({ title, onTitleChange, disabled, hideAIActions =
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-h-[86vh] max-w-4xl overflow-hidden p-0">
-          <DialogHeader className="border-b border-slate-200 px-6 py-4">
-            <DialogTitle className="text-base font-semibold text-slate-900">标题参考库</DialogTitle>
+          <DialogHeader className="border-b border-design-border px-6 py-4">
+            <DialogTitle className="text-base font-semibold text-design-text">标题参考库</DialogTitle>
           </DialogHeader>
 
           {dialogLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
-              <span className="ml-3 text-sm text-slate-600">正在加载标题样本...</span>
+              <span className="ml-3 text-[13px] text-design-textSecondary">正在加载标题样本...</span>
             </div>
           ) : (
             <div className="grid max-h-[68vh] grid-cols-1 md:grid-cols-2">
-              <div className="border-b border-slate-200 md:border-b-0 md:border-r">
-                <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-sm font-medium text-slate-800">
+              <div className="border-b border-design-border md:border-b-0 md:border-r">
+                <div className="flex items-center gap-2 border-b border-design-border bg-design-background px-5 py-3 text-[13px] font-medium text-design-text">
                   <Flame className="h-4 w-4 text-orange-500" />
                   掘金热门标题
                 </div>
                 <div className="max-h-[60vh] overflow-y-auto">
                   {titlesData.juejinTitles.slice(0, 20).map((entry, index) => (
-                    <div key={index} className="flex items-start gap-3 border-b border-slate-100 px-5 py-3">
-                      <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-slate-100 text-xs font-medium text-slate-600">
+                    <div key={index} className="flex items-start gap-3 border-b border-design-border px-5 py-3">
+                      <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-design-background text-[12px] font-medium text-design-textSecondary">
                         {index + 1}
                       </span>
-                      <span className="text-sm leading-6 text-slate-700">{entry}</span>
+                      <span className="text-[13px] leading-6 text-design-textSecondary">{entry}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               <div>
-                <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-sm font-medium text-slate-800">
+                <div className="flex items-center gap-2 border-b border-design-border bg-design-background px-5 py-3 text-[13px] font-medium text-design-text">
                   <User className="h-4 w-4 text-brand-500" />
                   你的热门文章
                 </div>
                 <div className="max-h-[60vh] overflow-y-auto">
                   {titlesData.userTitles.length > 0 ? (
                     titlesData.userTitles.slice(0, 50).map((entry, index) => (
-                      <div key={index} className="flex items-start gap-3 border-b border-slate-100 px-5 py-3">
-                        <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-slate-100 text-xs font-medium text-slate-600">
+                      <div key={index} className="flex items-start gap-3 border-b border-design-border px-5 py-3">
+                        <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-design-background text-[12px] font-medium text-design-textSecondary">
                           {index + 1}
                         </span>
-                        <span className="text-sm leading-6 text-slate-700">{entry}</span>
+                        <span className="text-[13px] leading-6 text-design-textSecondary">{entry}</span>
                       </div>
                     ))
                   ) : (
-                    <div className="flex h-full min-h-[260px] items-center justify-center px-6 text-sm text-slate-400">
+                    <div className="flex h-full min-h-[260px] items-center justify-center px-6 text-[13px] text-design-neutral">
                       暂无历史数据。
                     </div>
                   )}

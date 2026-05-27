@@ -60,8 +60,8 @@ const statusConfig = {
 	draft: {
 		label: "草稿",
 		icon: Circle,
-		color: "bg-slate-100 text-slate-600",
-		borderColor: "border-slate-200",
+		color: "bg-design-background text-design-textSecondary",
+		borderColor: "border-design-border",
 	},
 	reviewed: {
 		label: "已审核",
@@ -117,15 +117,15 @@ export function ArticleDetailDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-4xl max-h-[90vh] overflow-visible bg-transparent border-none shadow-none p-0 sm:p-0">
-				<div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] w-full relative">
+			<DialogContent className="max-h-[90vh] max-w-4xl overflow-visible border-none bg-transparent p-0 shadow-none sm:p-0">
+				<div className="relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl border border-design-border bg-white shadow-elevated">
 					<DialogTitle className="sr-only">
 						{article.title || "文章详情"}
 					</DialogTitle>
 					{/* 头部区域 */}
-					<div className="relative">
+					<div>
 						{/* 封面图背景 */}
-						<div className="h-48 w-full overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
+						<div className="h-48 w-full overflow-hidden border-b border-design-border bg-design-background">
 							{article.coverImage ? (
 								<img
 									src={article.coverImage}
@@ -134,18 +134,18 @@ export function ArticleDetailDialog({
 								/>
 							) : (
 								<div className="flex h-full w-full items-center justify-center">
-									<ImageIcon className="h-16 w-16 text-slate-300" />
+									<ImageIcon className="h-16 w-16 text-design-neutral" />
 								</div>
 							)}
 							{/* 渐变遮罩 */}
-							<div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+							
 						</div>
 
 						{/* 标题区域 */}
-						<div className="absolute bottom-0 left-0 right-0 p-6">
+						<div className="border-b border-design-border bg-white p-6">
 							<div className="flex items-start justify-between gap-4">
 								<div className="flex-1">
-									<div className="flex items-center gap-2 mb-2">
+									<div className="mb-2 flex items-center gap-2">
 										<Badge
 											className={cn(
 												"gap-1 px-2 py-0.5",
@@ -159,7 +159,7 @@ export function ArticleDetailDialog({
 											<PlatformBadge platform={article.platform} size="xs" />
 										)}
 									</div>
-									<h1 className="text-2xl font-bold text-white drop-shadow-lg">
+									<h1 className="font-display text-2xl font-semibold text-design-text">
 										{article.title || "未命名文章"}
 									</h1>
 								</div>
@@ -168,8 +168,8 @@ export function ArticleDetailDialog({
 					</div>
 
 					{/* 元信息区域 */}
-					<div className="bg-slate-50/50 px-6 py-3 border-b border-slate-100">
-						<div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+					<div className="border-b border-design-border bg-design-background px-6 py-3">
+						<div className="flex flex-wrap items-center gap-4 text-[12px] text-design-textSecondary">
 							<div className="flex items-center gap-1">
 								<Calendar className="h-3.5 w-3.5" />
 								<span>创建: {formatDateTime(article.createdAt)}</span>
@@ -192,12 +192,12 @@ export function ArticleDetailDialog({
 							{/* 摘要区域 */}
 							{article.summary && (
 								<div className="mb-6">
-									<div className="rounded-lg bg-gradient-to-br from-brand-50 to-violet-50 border border-brand-100 p-4">
-										<h3 className="text-sm font-semibold text-brand-900 mb-2 flex items-center gap-2">
+									<div className="rounded-lg border border-brand-100 bg-brand-50 p-4">
+										<h3 className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-brand-900">
 											<FileText className="h-4 w-4" />
 											文章摘要
 										</h3>
-										<p className="text-sm text-slate-600 leading-relaxed">
+										<p className="text-[13px] leading-relaxed text-design-textSecondary">
 											{article.summary}
 										</p>
 									</div>
@@ -208,13 +208,13 @@ export function ArticleDetailDialog({
 							{article.tags && article.tags.length > 0 && (
 								<div className="mb-6">
 									<div className="flex items-center gap-2">
-										<Hash className="h-4 w-4 text-slate-400" />
+										<Hash className="h-4 w-4 text-design-neutral" />
 										<div className="flex flex-wrap gap-1.5">
 											{article.tags.map((tag, i) => (
 												<Badge
 													key={i}
 													variant="secondary"
-													className="text-xs"
+													className="text-[12px]"
 												>
 													{tag}
 												</Badge>
@@ -244,7 +244,7 @@ export function ArticleDetailDialog({
 								<Button
 									variant="outline"
 									size="icon"
-									className="h-12 w-12 rounded-full border-slate-200 bg-white shadow-lg hover:bg-brand-50 hover:text-brand-600 hover:scale-110 transition-all duration-200"
+									className="h-12 w-12 rounded-full border-design-border bg-white transition-colors hover:bg-brand-50 hover:text-brand-600"
 									onClick={() => {
 										onOpenChange(false);
 										onPublish?.([article]);
@@ -263,7 +263,7 @@ export function ArticleDetailDialog({
 								<Button
 									variant="outline"
 									size="icon"
-									className="h-12 w-12 rounded-full border-slate-200 bg-white shadow-lg hover:bg-blue-50 hover:text-blue-600 hover:scale-110 transition-all duration-200"
+									className="h-12 w-12 rounded-full border-design-border bg-white transition-colors hover:bg-brand-50 hover:text-brand-600"
 									onClick={() => {
 										onOpenChange(false);
 										onEdit?.(article);
@@ -282,7 +282,7 @@ export function ArticleDetailDialog({
 								<Button
 									variant="outline"
 									size="icon"
-									className="h-12 w-12 rounded-full border-slate-200 bg-white shadow-lg hover:bg-red-50 hover:text-red-600 hover:border-red-100 hover:scale-110 transition-all duration-200"
+									className="h-12 w-12 rounded-full border-design-border bg-white transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-600"
 									onClick={() => {
 										// onDelete usually requires confirmation, handle in parent or here?
 										// Parent handler usually has confirm logic.

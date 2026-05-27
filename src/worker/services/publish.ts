@@ -22,6 +22,7 @@ import {
 	getPublishTask,
 	getPublishTaskByIdempotencyKey,
 	updatePublishTask,
+	listPublishTasks,
 	listPublishTaskSteps,
 	getPendingScheduledTasks,
 } from "@/worker/db/publications";
@@ -63,9 +64,42 @@ interface TaskExecutionOptions {
 	env?: Env;
 }
 
+const ADAPTER_OPERATION_TIMEOUT_MS = 3 * 60 * 1000;
+const PROCESSING_TASK_STALE_TIMEOUT_MS = 10 * 60 * 1000;
+
 function errorMessageOf(error: unknown): string {
 	if (error instanceof Error) return error.message;
 	return String(error);
+}
+
+function createTimeoutError(message: string, details?: Record<string, unknown>): PublishServiceError {
+	return new PublishServiceError({
+		code: PublishErrorCodes.PUBLISH_EXECUTION_FAILED,
+		status: 504,
+		message,
+		details,
+	});
+}
+
+async function withTimeout<T>(
+	execute: () => Promise<T>,
+	timeoutMs: number,
+	message: string,
+	details?: Record<string, unknown>,
+): Promise<T> {
+	let timeoutId: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			execute(),
+			new Promise<T>((_, reject) => {
+				timeoutId = setTimeout(() => {
+					reject(createTimeoutError(message, { ...details, timeoutMs }));
+				}, timeoutMs);
+			}),
+		]);
+	} finally {
+		if (timeoutId) clearTimeout(timeoutId);
+	}
 }
 
 function compactRecord(input: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
@@ -157,6 +191,39 @@ async function updateTaskProgress(
 	});
 }
 
+function isProcessingTaskStale(task: PublishTask, now = Date.now()): boolean {
+	return task.status === "processing" && now - task.updatedAt > PROCESSING_TASK_STALE_TIMEOUT_MS;
+}
+
+async function markPublishTaskStale(db: D1Database, task: PublishTask, now = Date.now()): Promise<void> {
+	await updatePublishTask(db, task.id, {
+		status: "failed",
+		completedAt: now,
+		progressData: task.progressData
+			? {
+				...task.progressData,
+				currentStep: "Task failed: no progress for more than 10 minutes",
+			}
+			: null,
+		errorData: {
+			code: PublishErrorCodes.PUBLISH_EXECUTION_FAILED,
+			message: "Publish task timed out after 10 minutes without progress",
+			details: {
+				taskId: task.id,
+				lastUpdatedAt: task.updatedAt,
+				timeoutMs: PROCESSING_TASK_STALE_TIMEOUT_MS,
+			},
+		},
+	});
+}
+
+export async function failStaleProcessingTasks(db: D1Database, now = Date.now()): Promise<number> {
+	const processingTasks = await listPublishTasks(db, { status: "processing", limit: 100 });
+	const staleTasks = processingTasks.filter((task) => isProcessingTaskStale(task, now));
+	await Promise.all(staleTasks.map((task) => markPublishTaskStale(db, task, now)));
+	return staleTasks.length;
+}
+
 async function runTrackedStep<T>(
 	db: D1Database,
 	task: PublishTask,
@@ -166,6 +233,7 @@ async function runTrackedStep<T>(
 		stepType: PublishStepType;
 		stepName: string;
 		inputData?: Record<string, unknown>;
+		timeoutMs?: number;
 		execute: () => Promise<StepExecutionOutput<T>>;
 	},
 ): Promise<T> {
@@ -188,7 +256,19 @@ async function runTrackedStep<T>(
 	});
 
 	try {
-		const result = await params.execute();
+		const result = await withTimeout(
+			params.execute,
+			params.timeoutMs ?? PROCESSING_TASK_STALE_TIMEOUT_MS,
+			`${params.stepName} timed out`,
+			{
+				taskId: params.ctx.taskId,
+				articleId: params.ctx.articleId,
+				accountId: params.ctx.accountId,
+				platform: params.ctx.platform,
+				stepType: params.stepType,
+				stepName: params.stepName,
+			},
+		);
 		const duration = Date.now() - step.startedAt;
 		await updatePublishTaskStep(db, step.id, {
 			status: "completed",
@@ -485,6 +565,19 @@ export async function executePublishTask(
 	}
 
 	if (task.status === "processing") {
+		if (isProcessingTaskStale(task)) {
+			await markPublishTaskStale(db, task);
+			throw new PublishServiceError({
+				code: PublishErrorCodes.PUBLISH_EXECUTION_FAILED,
+				status: 409,
+				message: "Task was stale and has been marked as failed",
+				details: {
+					taskId,
+					lastUpdatedAt: task.updatedAt,
+					timeoutMs: PROCESSING_TASK_STALE_TIMEOUT_MS,
+				},
+			});
+		}
 		throw new PublishServiceError({
 			code: PublishErrorCodes.TASK_ALREADY_PROCESSING,
 			status: 409,
@@ -765,6 +858,7 @@ export async function executePublishTask(
 						ctx: stepCtx,
 						stepType: "create_draft",
 						stepName: "Create platform draft",
+						timeoutMs: ADAPTER_OPERATION_TIMEOUT_MS,
 						inputData: {
 							functionName: "articleDraft",
 							draftOnly: accountConfig.draftOnly,
@@ -816,6 +910,7 @@ export async function executePublishTask(
 							ctx: stepCtx,
 							stepType: "publish_article",
 							stepName: "Publish article",
+							timeoutMs: ADAPTER_OPERATION_TIMEOUT_MS,
 							inputData: {
 								functionName: "articlePublish",
 								draftId,

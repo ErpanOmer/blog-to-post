@@ -3,7 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "@/lib/utils";
 import type { PlatformAccount } from "@/react-app/api";
-import { PlatformBadge, PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
+import { PlatformBadge, PlatformLogo } from "@/react-app/components/PlatformBrand";
+import { getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 import { isPublishablePlatform } from "@/shared/platform-settings";
 import type { PlatformPublishSettingsMap } from "@/shared/types";
 import { CheckCircle2, Clock, Eye, Key, Pencil, Shield, ShieldX, Trash2 } from "lucide-react";
@@ -25,12 +26,12 @@ function isAccountPlatformDisabled(
 export function PlatformAccountList({ accounts, onEdit, onDelete, platformSettings }: PlatformAccountListProps) {
 	if (accounts.length === 0) {
 		return (
-			<div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-16 text-center">
-				<div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
+			<div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-design-border bg-design-background py-16 text-center">
+				<div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-design-text text-white">
 					<Shield className="h-5 w-5" />
 				</div>
-				<h3 className="text-base font-semibold text-slate-900">还没有平台账号</h3>
-				<p className="mt-1 max-w-sm text-[13px] text-slate-500">先补齐常用平台的认证账号，后续分发时才能直接选择目标。</p>
+				<h3 className="font-display text-lg font-semibold text-design-text">还没有平台账号</h3>
+				<p className="mt-1 max-w-sm text-[13px] text-design-textSecondary">先补齐常用平台的认证账号，后续分发时才能直接选择目标。</p>
 			</div>
 		);
 	}
@@ -45,11 +46,11 @@ export function PlatformAccountList({ accounts, onEdit, onDelete, platformSettin
 				return (
 					<article
 						key={account.id}
-						className="rounded-xl border border-slate-200/80 bg-white p-4 transition-all duration-200 hover:shadow-card-hover"
+						className="rounded-xl border border-design-border bg-white p-4"
 					>
 						<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 							<div className="flex min-w-0 flex-1 items-start gap-3">
-								<Avatar className="h-10 w-10 border border-slate-100">
+								<Avatar className="h-10 w-10 border border-design-border">
 									<AvatarImage
 										src={account.avatar || undefined}
 										alt={account.userName || ""}
@@ -62,14 +63,14 @@ export function PlatformAccountList({ accounts, onEdit, onDelete, platformSettin
 
 								<div className="min-w-0 flex-1">
 									<div className="flex flex-wrap items-center gap-1.5">
-										<h3 className="truncate text-[14px] font-semibold text-slate-900">{account.userName || label}</h3>
+										<h3 className="truncate text-[14px] font-semibold text-design-text">{account.userName || label}</h3>
 										{account.isVerified ? (
 											<Badge className="gap-1 border-emerald-200/60 bg-emerald-50 text-emerald-600 text-[10px]">
 												<CheckCircle2 className="h-3 w-3" />
 												已验证
 											</Badge>
 										) : (
-											<Badge variant="outline" className="gap-1 text-slate-400 text-[10px]">
+											<Badge variant="outline" className="gap-1 text-[10px] text-design-neutral">
 												<ShieldX className="h-3 w-3" />
 												未验证
 											</Badge>
@@ -85,20 +86,20 @@ export function PlatformAccountList({ accounts, onEdit, onDelete, platformSettin
 									<div className="mt-1.5 flex flex-wrap items-center gap-1.5">
 										<PlatformBadge platform={account.platform} size="xs" />
 										{account.userId && (
-											<span className="rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-mono text-slate-400">
+											<span className="rounded-md bg-design-background px-1.5 py-0.5 font-mono text-[10px] text-design-neutral">
 												{account.userId.slice(0, 12)}...
 											</span>
 										)}
 									</div>
 
-									<div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+									<div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px] text-design-neutral">
 										{maskedToken && (
-											<span className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-1.5 py-0.5">
+											<span className="inline-flex items-center gap-1 rounded-md bg-design-background px-1.5 py-0.5">
 												<Key className="h-3 w-3" />
 												<span className="font-mono">{maskedToken}</span>
 											</span>
 										)}
-										<span className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-1.5 py-0.5">
+										<span className="inline-flex items-center gap-1 rounded-md bg-design-background px-1.5 py-0.5">
 											<Clock className="h-3 w-3" />
 											{format(account.createdAt)}
 										</span>
@@ -109,12 +110,12 @@ export function PlatformAccountList({ accounts, onEdit, onDelete, platformSettin
 										)}
 									</div>
 
-									{account.description && <p className="mt-2 text-[13px] text-slate-500">{account.description}</p>}
+									{account.description && <p className="mt-2 text-[13px] text-design-textSecondary">{account.description}</p>}
 								</div>
 							</div>
 
 							<div className="flex items-center gap-1.5">
-								<Button variant="ghost" size="xs" className="gap-1 text-slate-500" onClick={() => onEdit(account)}>
+								<Button variant="ghost" size="xs" className="gap-1 text-design-textSecondary" onClick={() => onEdit(account)}>
 									{disabledByPlatform ? <Eye className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
 									{disabledByPlatform ? "查看" : "编辑"}
 								</Button>

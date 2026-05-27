@@ -33,9 +33,9 @@ const notificationConfig: Record<NotificationType, { icon: ReactNode; bgColor: s
   },
   loading: {
     icon: <Loader2 className="h-4 w-4 animate-spin" />,
-    bgColor: "bg-slate-50",
-    borderColor: "border-slate-200",
-    textColor: "text-slate-700",
+    bgColor: "bg-design-background",
+    borderColor: "border-design-border",
+    textColor: "text-design-textSecondary",
   },
 };
 

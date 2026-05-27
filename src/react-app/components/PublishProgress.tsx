@@ -6,7 +6,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { Article } from "@/react-app/types";
 import type { PublishTask, PublishTaskStep } from "@/react-app/types/publications";
-import { PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
+import { PlatformLogo } from "@/react-app/components/PlatformBrand";
+import { getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 
 interface PublishProgressProps {
   task: PublishTask;
@@ -61,7 +62,7 @@ export function PublishProgress({ task, steps, article, onClose, onViewDetails }
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
-      <div className="border-b border-slate-200 px-6 py-5">
+      <div className="border-b border-design-border px-6 py-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
@@ -75,10 +76,10 @@ export function PublishProgress({ task, steps, article, onClose, onViewDetails }
             </div>
 
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-slate-900">
+              <h2 className="font-display text-lg font-semibold text-design-text">
                 {isCompleted ? "发布完成" : isFailed ? "发布失败" : "正在执行发布任务"}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-[13px] leading-5 text-design-textSecondary">
                 {isCompleted
                   ? "任务已经执行完成，可以查看详细日志确认每个平台的结果。"
                   : isFailed
@@ -88,20 +89,20 @@ export function PublishProgress({ task, steps, article, onClose, onViewDetails }
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="rounded-xl border border-design-border bg-design-background px-4 py-3">
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 overflow-hidden rounded-lg bg-slate-200">
+              <div className="h-12 w-12 overflow-hidden rounded-lg bg-white">
                 {article.coverImage ? (
                   <img src={article.coverImage} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-slate-400">
+                  <div className="flex h-full items-center justify-center text-design-neutral">
                     <FileText className="h-4 w-4" />
                   </div>
                 )}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-slate-900">{article.title || "未命名文章"}</p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="truncate text-[13px] font-medium text-design-text">{article.title || "未命名文章"}</p>
+                <p className="mt-1 text-[12px] text-design-textSecondary">
                   正文长度 {article.content.length} 字{article.tags?.[0] ? ` · ${article.tags[0]}` : ""}
                 </p>
               </div>
@@ -110,13 +111,13 @@ export function PublishProgress({ task, steps, article, onClose, onViewDetails }
         </div>
 
         <div className="mt-5">
-          <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
+          <div className="mb-2 flex items-center justify-between text-[12px] font-medium text-design-textSecondary">
             <span>总体进度</span>
             <span>
               {task.currentStep} / {task.totalSteps}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-2 overflow-hidden rounded-full bg-design-background">
             <div className="h-full rounded-full bg-brand-600 transition-all duration-300" style={{ width: `${percent}%` }} />
           </div>
         </div>
@@ -138,7 +139,7 @@ export function PublishProgress({ task, steps, article, onClose, onViewDetails }
                     isRunning && "border-brand-200 bg-brand-50",
                     isStepCompleted && "border-emerald-200 bg-emerald-50",
                     isStepFailed && "border-red-200 bg-red-50",
-                    !isRunning && !isStepCompleted && !isStepFailed && "border-slate-200 bg-white",
+                    !isRunning && !isStepCompleted && !isStepFailed && "border-design-border bg-white",
                   )}
                 >
                   <div className="flex items-start gap-3">
@@ -148,7 +149,7 @@ export function PublishProgress({ task, steps, article, onClose, onViewDetails }
                         isRunning && "border-brand-300 text-brand-600",
                         isStepCompleted && "border-emerald-300 text-emerald-600",
                         isStepFailed && "border-red-300 text-red-600",
-                        !isRunning && !isStepCompleted && !isStepFailed && "border-slate-200 text-slate-400",
+                        !isRunning && !isStepCompleted && !isStepFailed && "border-design-border text-design-neutral",
                       )}
                     >
                       {isRunning ? (
@@ -164,23 +165,23 @@ export function PublishProgress({ task, steps, article, onClose, onViewDetails }
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-900">
+                        <p className="inline-flex items-center gap-1.5 text-[13px] font-medium text-design-text">
                           <PlatformLogo platform={step.platform} size="xs" className="ring-0 shadow-none" />
                           {getPlatformDisplayName(step.platform)} · {stepTypeLabels[step.stepType] || step.stepType}
                         </p>
-                        <Badge variant="outline" className="text-[11px]">
+                        <Badge variant="outline" className="text-[12px]">
                           步骤 #{step.stepNumber}
                         </Badge>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">{getStepDescription(step)}</p>
-                      {step.errorMessage && <p className="mt-2 text-xs text-red-600">{step.errorMessage}</p>}
+                      <p className="mt-1 text-[13px] text-design-textSecondary">{getStepDescription(step)}</p>
+                      {step.errorMessage && <p className="mt-2 text-[13px] text-red-600">{step.errorMessage}</p>}
                     </div>
                   </div>
                 </div>
               );
             })
           ) : (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+            <div className="rounded-xl border border-design-border bg-design-background px-4 py-4 text-[13px] text-design-textSecondary">
               <div className="flex items-center gap-2">
                 <ClipboardList className="h-4 w-4" />
                 正在初始化任务步骤，请稍候...
@@ -190,7 +191,7 @@ export function PublishProgress({ task, steps, article, onClose, onViewDetails }
         </div>
       </ScrollArea>
 
-      <div className="flex items-center gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+      <div className="flex items-center gap-3 border-t border-design-border bg-design-background px-6 py-4">
         {!isCompleted && !isFailed ? (
           <Button variant="outline" className="w-full" onClick={onClose}>
             关闭并后台继续

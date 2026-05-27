@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 import type { Article, PlatformType } from "@/react-app/types";
 import type { ArticlePublication } from "@/react-app/types/publications";
 import { ArticlePublicationStatus } from "./ArticlePublicationStatus";
-import { PlatformBadge, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
+import { PlatformBadge } from "@/react-app/components/PlatformBrand";
+import { getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 import { PUBLISHABLE_PLATFORMS, isPublishablePlatform } from "@/shared/platform-settings";
 import {
   Calendar,
@@ -232,13 +233,13 @@ export function ArticleList({
 
   if (articles.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-20 text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-brand shadow-glow">
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-design-border bg-design-background px-6 py-20 text-center">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-md bg-brand-500 text-white">
           <FileText className="h-7 w-7 text-white" />
         </div>
-        <h3 className="text-lg font-semibold text-slate-900">还没有文章</h3>
-        <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-slate-500">点击右上角的新建文章开始积累内容。</p>
-        <div className="mt-4 flex items-center gap-1.5 rounded-md border border-brand-200/60 bg-brand-50 px-3 py-1.5 text-[11px] font-medium text-brand-600">
+        <h3 className="font-display text-lg font-semibold text-design-text">还没有文章</h3>
+        <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-design-textSecondary">点击右上角的新建文章开始积累内容。</p>
+        <div className="mt-4 flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-[11px] font-medium text-brand-600">
           <Sparkles className="h-3 w-3" />
           支持草稿保存、快速发布和多平台分发
         </div>
@@ -248,19 +249,19 @@ export function ArticleList({
 
   return (
     <div className="space-y-3">
-      <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5">
+      <div className="space-y-3 rounded-xl border border-design-border bg-white p-3.5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-[13px] font-medium text-slate-700">
-              共 <span className="tabular-nums text-slate-900">{filteredArticles.length}</span> 篇文章
-              {filteredArticles.length !== articles.length ? <span className="ml-1 text-slate-400">/ 全部 {articles.length}</span> : null}
+            <p className="text-[13px] font-medium text-design-textSecondary">
+              共 <span className="tabular-nums text-design-text">{filteredArticles.length}</span> 篇文章
+              {filteredArticles.length !== articles.length ? <span className="ml-1 text-design-neutral">/ 全部 {articles.length}</span> : null}
             </p>
-            <p className="mt-0.5 text-[11px] text-slate-400">默认按创建时间倒序，每次加载 20 篇。</p>
+            <p className="mt-0.5 text-[12px] text-design-neutral">默认按创建时间倒序，每次加载 20 篇。</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] text-slate-500 shadow-sm">
-              <SortDesc className="h-3.5 w-3.5 text-slate-400" />
+            <div className="inline-flex items-center gap-1.5 rounded-md border border-design-border bg-white px-2.5 py-1.5 text-[12px] text-design-textSecondary">
+              <SortDesc className="h-3.5 w-3.5 text-design-neutral" />
               <select
                 value={sortValue}
                 onChange={(event) => {
@@ -268,7 +269,7 @@ export function ArticleList({
                   setSelectedIds(new Set());
                   setSortValue(event.target.value as SortValue);
                 }}
-                className="bg-transparent text-[12px] font-medium text-slate-700 outline-none"
+                className="bg-transparent text-[12px] font-medium text-design-textSecondary outline-none"
               >
                 <option value="createdAt:desc">创建时间倒序</option>
                 <option value="createdAt:asc">创建时间正序</option>
@@ -305,8 +306,8 @@ export function ArticleList({
 
                 {selectedArticles.length > 0 && (
                   <>
-                    <span className="text-[11px] text-slate-400">
-                      已选 <span className="font-medium text-slate-700">{selectedArticles.length}</span> 篇
+                    <span className="text-[12px] text-design-neutral">
+                      已选 <span className="font-medium text-design-textSecondary">{selectedArticles.length}</span> 篇
                     </span>
                     <Button variant="default" size="xs" onClick={handleBatchPublish} className="gap-1.5">
                       <Layers className="h-3.5 w-3.5" />
@@ -324,8 +325,8 @@ export function ArticleList({
         </div>
 
         {platformOptions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-            <span className="inline-flex items-center gap-1 text-[12px] font-medium text-slate-500">
+          <div className="flex flex-wrap items-center gap-2 border-t border-design-border pt-3">
+            <span className="inline-flex items-center gap-1 text-[12px] font-medium text-design-textSecondary">
               <Filter className="h-3.5 w-3.5" />
               平台筛选
             </span>
@@ -338,12 +339,12 @@ export function ArticleList({
                   className={cn(
                     "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
                     active
-                      ? "border-brand-300 bg-brand-50 text-brand-600"
-                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700",
+                      ? "border-brand-500 bg-brand-500 text-white"
+                      : "border-design-border bg-white text-design-textSecondary hover:bg-design-background hover:text-design-text",
                   )}
                   onClick={() => togglePlatform(item.platform)}
                 >
-                  {item.label} <span className="ml-0.5 text-slate-400">{item.count}</span>
+                  {item.label} <span className={cn("ml-0.5", active ? "text-white/80" : "text-design-neutral")}>{item.count}</span>
                 </button>
               );
             })}
@@ -356,7 +357,7 @@ export function ArticleList({
                   setSelectedIds(new Set());
                   setSelectedPlatforms(new Set());
                 }}
-                className="h-7 text-slate-400"
+                className="h-7 text-design-neutral"
               >
                 清空筛选
               </Button>
@@ -366,7 +367,7 @@ export function ArticleList({
       </div>
 
       {filteredArticles.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-16 text-center text-[13px] text-slate-400">
+        <div className="rounded-xl border border-dashed border-design-border bg-design-background px-6 py-16 text-center text-[13px] text-design-neutral">
           当前筛选下没有文章
         </div>
       ) : (
@@ -378,8 +379,8 @@ export function ArticleList({
               <article
                 key={article.id}
                 className={cn(
-                  "group relative overflow-visible rounded-xl border border-slate-200/80 bg-white p-4 transition-all duration-200",
-                  "hover:border-slate-300/80 hover:shadow-card-hover",
+                  "group relative z-0 overflow-visible rounded-xl border border-design-border bg-white p-4",
+                  "hover:z-30 focus-within:z-30",
                   isBatchMode && isSelected && "border-brand-300 bg-brand-50/30 ring-2 ring-brand-500/20",
                 )}
               >
@@ -399,14 +400,14 @@ export function ArticleList({
                       <img
                         src={article.coverImage}
                         alt={article.title}
-                        className="h-44 w-full object-cover transition-transform duration-500 group-hover:scale-[1.02] md:h-full"
+                        className="h-44 w-full object-cover md:h-full"
                         onError={(event) => {
                           (event.target as HTMLImageElement).style.display = "none";
                         }}
                       />
                     ) : (
-                      <div className="flex h-44 w-full items-center justify-center bg-slate-50 md:h-full">
-                        <ImageIcon className="h-8 w-8 text-slate-200" />
+                      <div className="flex h-44 w-full items-center justify-center bg-design-background md:h-full">
+                        <ImageIcon className="h-8 w-8 text-design-neutral" />
                       </div>
                     )}
                   </button>
@@ -418,13 +419,13 @@ export function ArticleList({
                           {isKnownPlatform(article.platform) && (
                             <PlatformBadge platform={article.platform} size="xs" />
                           )}
-                          <span className="text-[11px] text-slate-400">更新于 {getRelativeTime(article.updatedAt)}</span>
-                          <span className="text-[11px] text-slate-300">创建 {formatDateTime(article.createdAt)}</span>
+                          <span className="text-[12px] text-design-neutral">更新于 {getRelativeTime(article.updatedAt)}</span>
+                          <span className="text-[12px] text-design-neutral">创建 {formatDateTime(article.createdAt)}</span>
                         </div>
 
                         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                           <h3
-                            className="line-clamp-2 min-w-0 flex-1 cursor-pointer text-base font-semibold leading-snug text-slate-900 transition-colors group-hover:text-brand-600"
+                            className="line-clamp-2 min-w-0 flex-1 cursor-pointer text-base font-semibold leading-snug text-design-text transition-colors hover:text-brand-600"
                             onClick={() => !isBatchMode && onViewDetail(article)}
                           >
                             {article.title || "未命名文章"}
@@ -435,14 +436,14 @@ export function ArticleList({
                               {article.tags.slice(0, 3).map((tag, index) => (
                                 <span
                                   key={`${tag}-${index}`}
-                                  className="inline-flex items-center gap-0.5 rounded-md border border-slate-200/60 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500"
+                                  className="inline-flex items-center gap-0.5 rounded-md border border-design-border bg-design-background px-2 py-0.5 text-[11px] font-medium text-design-textSecondary"
                                 >
-                                  <Hash className="h-2.5 w-2.5 text-slate-400" />
+                                  <Hash className="h-2.5 w-2.5 text-design-neutral" />
                                   {tag}
                                 </span>
                               ))}
                               {article.tags.length > 3 && (
-                                <span className="rounded-md bg-slate-50 px-2 py-0.5 text-[10px] text-slate-400">
+                                <span className="rounded-md bg-design-background px-2 py-0.5 text-[11px] text-design-neutral">
                                   +{article.tags.length - 3}
                                 </span>
                               )}
@@ -450,7 +451,7 @@ export function ArticleList({
                           ) : null}
                         </div>
 
-                        {article.summary && <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-slate-500">{article.summary}</p>}
+                        {article.summary && <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-design-textSecondary">{article.summary}</p>}
                       </div>
                     </div>
 
@@ -463,7 +464,7 @@ export function ArticleList({
                       </div>
                     )}
 
-                    <div className="mt-3 border-t border-slate-100 pt-3">
+                    <div className="mt-3 border-t border-design-border pt-3">
                       <div className="min-w-0">
                         <ArticlePublicationStatus articleId={article.id} refreshKey={publicationRefreshKey} />
                       </div>
@@ -475,12 +476,12 @@ export function ArticleList({
                             发布
                           </Button>
 
-                          <Button variant="ghost" size="xs" className="gap-1 text-slate-500" onClick={() => onViewDetail(article)}>
+                          <Button variant="ghost" size="xs" className="gap-1 text-design-textSecondary" onClick={() => onViewDetail(article)}>
                             <Eye className="h-3 w-3" />
                             查看
                           </Button>
 
-                          <Button variant="ghost" size="xs" className="gap-1 text-slate-500" onClick={() => onEdit?.(article)}>
+                          <Button variant="ghost" size="xs" className="gap-1 text-design-textSecondary" onClick={() => onEdit?.(article)}>
                             <Pencil className="h-3 w-3" />
                             编辑
                           </Button>
@@ -505,7 +506,7 @@ export function ArticleList({
               </Button>
             </div>
           ) : (
-            <div className="py-3 text-center text-[11px] text-slate-400">已经到底了</div>
+            <div className="py-3 text-center text-[12px] text-design-neutral">已经到底了</div>
           )}
         </>
       )}

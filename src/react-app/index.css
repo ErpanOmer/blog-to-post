@@ -1,22 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-	--font-sans: "Inter", "Segoe UI Variable Display", "PingFang SC", "Microsoft YaHei UI", sans-serif;
-	--font-display: var(--font-sans);
+	--font-sans: "DM Sans", "Segoe UI Variable Display", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+	--font-display: "General Sans", var(--font-sans);
+	--font-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", monospace;
 	font-family: var(--font-sans);
 	line-height: 1.5;
 	font-weight: 400;
-	color: #0f172a;
-	background-color: #f8f9fc;
+	color: #0a0a0a;
+	background-color: #fafafa;
 	font-synthesis: none;
 	text-rendering: optimizeLegibility;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
-	--radius: 0.75rem;
+	--radius: 0.5rem;
 }
 
 * {
@@ -24,7 +26,7 @@
 }
 
 html {
-	background: #f8f9fc;
+	background: #fafafa;
 }
 
 body {
@@ -32,12 +34,9 @@ body {
 	min-height: 100vh;
 	position: relative;
 	overflow-x: hidden;
-	background:
-		radial-gradient(ellipse 80% 60% at 10% 0%, rgba(99, 102, 241, 0.05), transparent 50%),
-		radial-gradient(ellipse 60% 50% at 90% 100%, rgba(244, 114, 182, 0.04), transparent 50%),
-		linear-gradient(180deg, #f8f9fc 0%, #f1f3f9 100%);
+	background: #fafafa;
 	background-attachment: fixed;
-	color: #0f172a;
+	color: #0a0a0a;
 }
 
 body::before {
@@ -56,24 +55,24 @@ body::after {
 
 @layer base {
   :root {
-		--background: 225 20% 97%;
-		--foreground: 224 71% 4%;
+		--background: 0 0% 98%;
+		--foreground: 0 0% 4%;
 		--card: 0 0% 100%;
-		--card-foreground: 224 71% 4%;
+		--card-foreground: 0 0% 4%;
 		--popover: 0 0% 100%;
-		--popover-foreground: 224 71% 4%;
+		--popover-foreground: 0 0% 4%;
 		--primary: 239 84% 67%;
 		--primary-foreground: 0 0% 100%;
-		--secondary: 220 14% 96%;
-		--secondary-foreground: 220 9% 46%;
-		--muted: 220 14% 96%;
-		--muted-foreground: 220 9% 46%;
-		--accent: 220 14% 96%;
-		--accent-foreground: 224 71% 4%;
+		--secondary: 0 0% 96%;
+		--secondary-foreground: 0 0% 42%;
+		--muted: 0 0% 96%;
+		--muted-foreground: 0 0% 42%;
+		--accent: 0 0% 96%;
+		--accent-foreground: 0 0% 4%;
 		--destructive: 0 84% 60%;
 		--destructive-foreground: 0 0% 100%;
-		--border: 220 13% 91%;
-		--input: 220 13% 91%;
+		--border: 240 11% 92%;
+		--input: 240 11% 92%;
 		--ring: 239 84% 67%;
 		--chart-1: 239 84% 67%;
 		--chart-2: 160 60% 45%;
@@ -121,7 +120,7 @@ body::after {
 	h3,
 	[data-display="true"] {
 		font-family: var(--font-display);
-		letter-spacing: -0.02em;
+		letter-spacing: 0;
 	}
 	::selection {
 		background: rgba(99, 102, 241, 0.15);
@@ -131,20 +130,19 @@ body::after {
 
 @layer components {
 	.surface-panel {
-		@apply rounded-2xl border border-slate-200/80 bg-white shadow-sm;
+		@apply rounded-xl border border-design-border bg-white;
 	}
 
 	.surface-subtle {
-		@apply rounded-xl border border-slate-200/60 bg-slate-50/60;
+		@apply rounded-lg border border-design-border bg-design-background;
 	}
 
 	.icon-tile {
-		@apply flex items-center justify-center rounded-xl text-white shadow-sm;
-		background: linear-gradient(135deg, #6366f1, #818cf8);
+		@apply flex items-center justify-center rounded-md bg-brand-500 text-white;
 	}
 
 	.eyebrow-label {
-		@apply text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400/80;
+		@apply text-[11px] font-semibold uppercase tracking-normal text-design-neutral;
 	}
 
 	/* Stat card shimmer effect */
@@ -155,7 +153,7 @@ body::after {
 		content: '';
 		position: absolute;
 		inset: 0;
-		background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.4) 50%, transparent 60%);
+		background: transparent;
 		opacity: 0;
 		transition: opacity 0.4s;
 	}
@@ -167,16 +165,15 @@ body::after {
 /* Custom utility classes */
 @layer utilities {
 	.text-gradient {
-		@apply bg-clip-text text-transparent;
-		background-image: linear-gradient(135deg, #6366f1, #8b5cf6);
+		color: #0a0a0a;
 	}
 	
 	.bg-gradient-brand {
-		background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+		background: #6366f1;
 	}
 	
 	.bg-gradient-soft {
-		background: linear-gradient(180deg, #ffffff 0%, #f8f9fc 100%);
+		background: #ffffff;
 	}
 	
 	.border-gradient {
@@ -186,16 +183,15 @@ body::after {
 	}
 	
 	.hover-lift {
-		@apply transition-all duration-300 ease-out;
+		@apply transition-colors duration-200 ease-out;
 	}
 	
 	.hover-lift:hover {
-		@apply -translate-y-0.5;
-		box-shadow: 0 12px 28px -8px rgba(15, 23, 42, 0.12), 0 4px 12px -4px rgba(15, 23, 42, 0.06);
+		@apply bg-design-background;
 	}
 	
 	.glass-effect {
-		@apply bg-white/80 backdrop-blur-xl border-white/20;
+		@apply border-design-border bg-white/90 backdrop-blur-xl;
 	}
 	
 	.glass-dark {
@@ -205,7 +201,7 @@ body::after {
 
 /* ByteMD Editor Customization */
 .bytemd {
-	@apply overflow-hidden rounded-xl border border-slate-200/80 bg-white;
+	@apply overflow-hidden rounded-xl border border-design-border bg-white;
 }
 
 .bytemd-editor {
@@ -214,7 +210,7 @@ body::after {
 
 .bytemd-toolbar,
 .bytemd-status {
-	@apply border-slate-200/80 bg-slate-50/80;
+	@apply border-design-border bg-design-background;
 }
 
 .bytemd-toolbar-icon:hover,
@@ -232,8 +228,8 @@ body::after {
 .bytemd-preview h2,
 .bytemd-preview h3 {
 	font-family: var(--font-display);
-	letter-spacing: -0.02em;
-	color: #0f172a;
+	letter-spacing: 0;
+	color: #0a0a0a;
 }
 
 .bytemd-preview blockquote {
@@ -267,7 +263,7 @@ body::after {
 
 /* Focus styles */
 *:focus-visible {
-	@apply outline-none ring-2 ring-indigo-500/30 ring-offset-2 ring-offset-background;
+	@apply outline-none ring-[3px] ring-brand-500/10 ring-offset-0;
 }
 
 /* Animation utilities */

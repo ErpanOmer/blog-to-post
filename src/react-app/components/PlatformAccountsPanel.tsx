@@ -21,7 +21,8 @@ import {
   isPublishablePlatform,
   normalizePlatformPublishSettings,
 } from "@/shared/platform-settings";
-import { PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
+import { PlatformLogo } from "@/react-app/components/PlatformBrand";
+import { getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 import type { PlatformPublishSettingsMap } from "@/shared/types";
 
 const platformFilters: { value: PlatformType | "all"; label: string }[] = [
@@ -183,7 +184,7 @@ export function PlatformAccountsPanel() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <p className="text-[13px] text-slate-500">管理分发所需的平台认证信息</p>
+        <p className="text-[13px] text-design-textSecondary">管理分发所需的平台认证信息</p>
         <Button variant="default" size="sm" onClick={() => setFormOpen(true)} className="gap-1.5 self-start md:self-auto">
           <Plus className="h-3.5 w-3.5" />
           新增账号
@@ -198,20 +199,20 @@ export function PlatformAccountsPanel() {
             onClick={() => setFilter(item.value)}
             className={`rounded-md px-2.5 py-1 text-[12px] font-medium transition-all duration-200 ${
               filter === item.value
-                ? "bg-slate-900 text-white shadow-sm"
-                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                ? "bg-brand-500 text-white"
+                : "text-design-textSecondary hover:bg-design-background hover:text-design-text"
             }`}
           >
             {item.value !== "all" ? <PlatformLogo platform={item.value} size="xs" className="mr-1 inline-flex ring-0 shadow-none" /> : null}
             {item.label}
           </button>
         ))}
-        <span className="ml-auto text-[11px] text-slate-400">{filteredAccounts.length} 个账号</span>
+        <span className="ml-auto text-[12px] text-design-neutral">{filteredAccounts.length} 个账号</span>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+        <div className="flex items-center justify-center rounded-xl border border-dashed border-design-border bg-design-background py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-design-neutral" />
         </div>
       ) : (
         <PlatformAccountList

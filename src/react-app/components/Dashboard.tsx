@@ -20,7 +20,8 @@ import { cn } from "@/lib/utils";
 import { getAccountStatistics, getPlatformAccounts, getPublications, getPublishTasks } from "@/react-app/api";
 import type { Article, PlatformAccount, PlatformType } from "@/react-app/types";
 import type { AccountStatistics, ArticlePublication, PublicationStatus, PublishTask } from "@/react-app/types/publications";
-import { PlatformBadge, PlatformLogo, getPlatformBrand, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
+import { PlatformBadge, PlatformLogo } from "@/react-app/components/PlatformBrand";
+import { getPlatformBrand, getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 import { PUBLISHABLE_PLATFORMS, isPublishablePlatform } from "@/shared/platform-settings";
 import type { PublishablePlatformType } from "@/shared/types";
 
@@ -105,7 +106,7 @@ function getStatusTone(status: PublicationStatus | string): string {
   if (status === "draft_created") return "border-amber-200 bg-amber-50 text-amber-700";
   if (status === "failed") return "border-rose-200 bg-rose-50 text-rose-700";
   if (status === "publishing") return "border-blue-200 bg-blue-50 text-blue-700";
-  return "border-slate-200 bg-slate-50 text-slate-500";
+  return "border-design-border bg-design-background text-design-textSecondary";
 }
 
 function getArticleTitle(articleId: string, articles: Article[]): string {
@@ -292,7 +293,6 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
       detail: "本地工作台已保存的文章",
       icon: FileText,
       color: "text-blue-600",
-      bg: "from-blue-50 to-white",
     },
     {
       label: "正式发布",
@@ -300,7 +300,6 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
       detail: `草稿成功 ${summary.totalDraftPublished} · 总成功 ${summary.totalSuccessful}`,
       icon: Send,
       color: "text-emerald-600",
-      bg: "from-emerald-50 to-white",
     },
     {
       label: "活跃平台",
@@ -308,7 +307,6 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
       detail: `可用账号 ${summary.verifiedAccounts}/${summary.totalAccounts}`,
       icon: Users,
       color: "text-orange-600",
-      bg: "from-orange-50 to-white",
     },
     {
       label: "失败记录",
@@ -316,7 +314,6 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
       detail: `平均任务耗时 ${formatDuration(summary.averageTaskDuration)}`,
       icon: AlertCircle,
       color: "text-rose-600",
-      bg: "from-rose-50 to-white",
     },
   ];
 
@@ -327,42 +324,56 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
 
   return (
     <div className="space-y-4 page-enter">
-      <section className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,_#dbeafe,_transparent_35%),linear-gradient(135deg,_#ffffff,_#f8fafc)] p-5 shadow-sm">
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-blue-100/50 blur-3xl" />
-        <div className="absolute -bottom-12 left-10 h-36 w-36 rounded-full bg-emerald-100/40 blur-3xl" />
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-3xl">
-            <Badge variant="outline" className="mb-3 border-blue-100 bg-white/70 text-blue-700">
+      <section className="rounded-xl border border-design-border bg-white p-4 sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <Badge variant="outline" className="mb-3 border-brand-200 bg-brand-50 text-brand-700">
               <Sparkles className="mr-1 h-3 w-3" />
               内容分发驾驶舱
             </Badge>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">内容分发工作台</h1>
-            <p className="mt-2 text-[13px] leading-6 text-slate-500">
+            <h1 className="font-display text-2xl font-semibold tracking-normal text-design-text">内容分发工作台</h1>
+            <p className="mt-2 text-[13px] leading-6 text-design-textSecondary">
               聚焦最近分发趋势、正式发布成果和平台健康状态，把真正需要看的信息放在第一屏。
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" className="w-fit gap-1.5 bg-white/80" onClick={() => onNavigate?.("articles")}>文章列表</Button>
-            <Button variant="outline" size="sm" className="w-fit gap-1.5 bg-white/80" onClick={() => onNavigate?.("distribution")}>
-              查看分发任务
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center xl:justify-end">
+            <div className="grid grid-cols-3 gap-2 rounded-lg border border-design-border bg-design-background p-2 text-center">
+              <div className="min-w-16 px-2">
+                <p className="text-[10px] text-design-neutral">成功</p>
+                <p className="text-[15px] font-semibold tabular-nums text-design-text">{summary.totalSuccessful}</p>
+              </div>
+              <div className="min-w-16 border-x border-design-border px-2">
+                <p className="text-[10px] text-design-neutral">平台</p>
+                <p className="text-[15px] font-semibold tabular-nums text-design-text">{summary.activePlatforms}</p>
+              </div>
+              <div className="min-w-16 px-2">
+                <p className="text-[10px] text-design-neutral">失败</p>
+                <p className="text-[15px] font-semibold tabular-nums text-rose-600">{summary.totalFailed}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <Button variant="outline" size="sm" className="w-fit gap-1.5 bg-white" onClick={() => onNavigate?.("articles")}>文章列表</Button>
+              <Button variant="outline" size="sm" className="w-fit gap-1.5 bg-white" onClick={() => onNavigate?.("distribution")}>
+                查看分发任务
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
       </section>
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
-            <Card key={card.label} className={cn("overflow-hidden border-slate-200/70 bg-gradient-to-br shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md", card.bg)}>
+            <Card key={card.label} className="overflow-hidden border-design-border bg-white">
               <CardContent className="flex items-start justify-between p-4">
                 <div className="min-w-0">
-                  <p className="text-[12px] font-medium text-slate-400">{card.label}</p>
-                  <p className="mt-1.5 text-2xl font-semibold tabular-nums text-slate-950">{card.value}</p>
-                  <p className="mt-1.5 text-[11px] text-slate-400">{card.detail}</p>
+                  <p className="text-[12px] font-medium text-design-neutral">{card.label}</p>
+                  <p className="mt-1.5 text-2xl font-semibold tabular-nums text-design-text">{card.value}</p>
+                  <p className="mt-1.5 line-clamp-1 text-[11px] text-design-textSecondary">{card.detail}</p>
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-design-border bg-white">
                   <Icon className={cn("h-4 w-4", card.color)} />
                 </div>
               </CardContent>
@@ -371,8 +382,8 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.85fr)]">
-        <Card className="border-slate-200/70 shadow-sm">
+      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(420px,0.8fr)]">
+        <Card className="border-design-border bg-white">
           <CardHeader className="space-y-3 pb-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -390,7 +401,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
                 ))}
               </div>
             </div>
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
+            <div className="flex flex-wrap gap-1.5">
               {platformFilterOptions.map((item) => (
                 <button
                   key={item.value}
@@ -398,7 +409,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
                   onClick={() => setTrendPlatform(item.value)}
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                    trendPlatform === item.value ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+                    trendPlatform === item.value ? "border-brand-500 bg-brand-500 text-white" : "border-design-border bg-white text-design-textSecondary hover:bg-design-background",
                   )}
                 >
                   {item.value !== "all" ? <PlatformLogo platform={item.value} size="xs" className="ring-0 shadow-none" /> : null}
@@ -409,7 +420,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 lg:grid-cols-[1fr_180px]">
-              <div className="flex h-56 items-end gap-1.5 rounded-xl border border-slate-100 bg-slate-50/60 p-3 sm:gap-2">
+              <div className="flex h-56 items-end gap-1.5 rounded-xl border border-design-border bg-design-background p-3 sm:gap-2">
                 {summary.trend.days.map((day) => {
                   const total = day.published + day.drafts + day.failed;
                   const height = total > 0 ? Math.max(12, (total / summary.trend.max) * 100) : 5;
@@ -417,7 +428,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
                   return (
                     <div key={day.key} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
                       <div
-                        className="flex w-full max-w-8 flex-col justify-end overflow-hidden rounded-t-lg bg-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
+                        className="flex w-full max-w-8 flex-col justify-end overflow-hidden rounded-t-lg bg-design-border shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
                         style={{ height: `${height}%` }}
                         title={`${day.label}: 正式 ${day.published} / 草稿 ${day.drafts} / 失败 ${day.failed}`}
                       >
@@ -425,7 +436,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
                         {day.drafts > 0 ? <div className="bg-amber-400" style={{ height: `${(day.drafts / Math.max(total, 1)) * 100}%` }} /> : null}
                         {day.published > 0 ? <div className="bg-emerald-500" style={{ height: `${(day.published / Math.max(total, 1)) * 100}%` }} /> : null}
                       </div>
-                      {!compact || day.key.endsWith("01") || day.label.endsWith("01") ? <span className="text-[10px] text-slate-400">{day.label}</span> : null}
+                      {!compact || day.key.endsWith("01") || day.label.endsWith("01") ? <span className="text-[10px] text-design-neutral">{day.label}</span> : null}
                     </div>
                   );
                 })}
@@ -448,7 +459,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/70 shadow-sm">
+        <Card className="border-design-border bg-white">
           <CardHeader className="space-y-3 pb-3">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -460,7 +471,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
               </div>
               <Badge variant="outline" className="text-[10px]">{summary.recentPublishedLinks.length} 条</Badge>
             </div>
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
+            <div className="flex flex-wrap gap-1.5">
               {platformFilterOptions.map((item) => (
                 <button
                   key={item.value}
@@ -468,7 +479,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
                   onClick={() => setLinkPlatform(item.value)}
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors",
-                    linkPlatform === item.value ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+                    linkPlatform === item.value ? "border-brand-500 bg-brand-500 text-white" : "border-design-border bg-white text-design-textSecondary hover:bg-design-background",
                   )}
                 >
                   {item.value !== "all" ? <PlatformLogo platform={item.value} size="xs" className="ring-0 shadow-none" /> : null}
@@ -480,21 +491,21 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
           <CardContent>
             <div className="max-h-[332px] space-y-2 overflow-y-auto pr-1">
               {summary.recentPublishedLinks.length === 0 ? (
-                <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 text-[13px] text-slate-400">暂无正式发布链接</div>
+                <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-design-border bg-design-background text-[13px] text-design-neutral">暂无正式发布链接</div>
               ) : summary.recentPublishedLinks.map((publication) => (
-                <div key={publication.id} className="group rounded-xl border border-slate-100 bg-white p-3 transition-all hover:-translate-y-0.5 hover:bg-slate-50/80 hover:shadow-sm">
+                <div key={publication.id} className="group rounded-xl border border-design-border bg-white p-3">
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <PlatformBadge platform={publication.platform} size="xs" />
-                    <span className="text-[10px] text-slate-400">{getRelativeTime(publication.completedAt || publication.updatedAt)}</span>
+                    <span className="text-[11px] text-design-neutral">{getRelativeTime(publication.completedAt || publication.updatedAt)}</span>
                   </div>
-                  <p className="line-clamp-2 text-[13px] font-medium leading-snug text-slate-800">{publication.articleTitle}</p>
+                  <p className="line-clamp-2 text-[13px] font-medium leading-snug text-design-text">{publication.articleTitle}</p>
                   <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-[10px] text-slate-400">{publication.publishedUrl}</span>
+                    <span className="min-w-0 truncate text-[11px] text-design-neutral">{publication.publishedUrl}</span>
                     <div className="flex shrink-0 items-center gap-1 opacity-80 transition-opacity group-hover:opacity-100">
                       <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="复制链接" onClick={() => copyText(publication.publishedUrl)}>
                         <Clipboard className="h-3.5 w-3.5" />
                       </Button>
-                      <a href={publication.publishedUrl ?? undefined} target="_blank" rel="noopener noreferrer" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-white hover:text-blue-600" title="打开链接">
+                      <a href={publication.publishedUrl ?? undefined} target="_blank" rel="noopener noreferrer" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-design-textSecondary transition-colors hover:bg-brand-50 hover:text-brand-600" title="打开链接">
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     </div>
@@ -507,7 +518,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <Card className="border-slate-200/70 shadow-sm">
+        <Card className="border-design-border bg-white">
           <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
             <div>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -523,30 +534,30 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 text-[13px] text-slate-400">正在加载统计数据...</div>
+              <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-design-border bg-design-background text-[13px] text-design-neutral">正在加载统计数据...</div>
             ) : (
               <div className="grid gap-2 md:grid-cols-2">
                 {summary.platformRows.map((row) => {
                   const brand = getPlatformBrand(row.platform);
                   return (
-                    <div key={row.platform} className="rounded-xl border border-slate-100 bg-white p-3 transition-all hover:-translate-y-0.5 hover:shadow-sm">
+                    <div key={row.platform} className="rounded-xl border border-design-border bg-white p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-2">
                           <PlatformLogo platform={row.platform} size="sm" />
                           <div className="min-w-0">
-                            <p className="truncate text-[13px] font-semibold text-slate-900">{getPlatformDisplayName(row.platform)}</p>
-                            <p className="text-[10px] text-slate-400">账号 {row.verifiedAccounts}/{row.accounts} · {getRelativeTime(row.lastPublishedAt)}</p>
+                            <p className="truncate text-[13px] font-semibold text-design-text">{getPlatformDisplayName(row.platform)}</p>
+                            <p className="text-[11px] text-design-neutral">账号 {row.verifiedAccounts}/{row.accounts} · {getRelativeTime(row.lastPublishedAt)}</p>
                           </div>
                         </div>
-                        <span className="text-[12px] font-semibold text-slate-500">{row.successRate}%</span>
+                        <span className="text-[12px] font-semibold text-design-textSecondary">{row.successRate}%</span>
                       </div>
                       <div className="mb-2 flex flex-wrap gap-1">
                         <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">正式 {row.published}</span>
                         <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">草稿 {row.drafts}</span>
                         <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600">失败 {row.failed}</span>
                       </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                        <div className={cn("h-full rounded-full transition-all duration-700", brand?.logoClass ?? "bg-slate-700")} style={{ width: `${Math.max(3, row.successRate)}%` }} />
+                      <div className="h-1.5 overflow-hidden rounded-full bg-design-background">
+                        <div className={cn("h-full rounded-full transition-all duration-700", brand?.logoClass ?? "bg-design-text")} style={{ width: `${Math.max(3, row.successRate)}%` }} />
                       </div>
                     </div>
                   );
@@ -556,7 +567,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/70 shadow-sm">
+        <Card className="border-design-border bg-white">
           <CardHeader className="space-y-3 pb-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -575,15 +586,15 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
           <CardContent>
             <div className="max-h-[500px] space-y-2 overflow-y-auto pr-1">
               {summary.recentActivity.length === 0 ? (
-                <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 text-[13px] text-slate-400">当前筛选下暂无动态</div>
+                <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-design-border bg-design-background text-[13px] text-design-neutral">当前筛选下暂无动态</div>
               ) : summary.recentActivity.map((activity) => (
-                <div key={activity.id} className="rounded-xl border border-slate-100 bg-white p-3 transition-all hover:-translate-y-0.5 hover:bg-slate-50/80 hover:shadow-sm">
+                <div key={activity.id} className="rounded-xl border border-design-border bg-white p-3">
                   <div className="flex items-start gap-2.5">
                     <PlatformLogo platform={activity.platform} size="sm" />
                     <div className="min-w-0 flex-1">
                       <div className="mb-1 flex flex-wrap items-center gap-1.5">
                         <Badge variant="outline" className={cn("text-[10px]", getStatusTone(activity.status))}>{getStatusLabel(activity.status)}</Badge>
-                        <span className="text-[11px] text-slate-400">{getRelativeTime(activity.time)}</span>
+                        <span className="text-[12px] text-design-neutral">{getRelativeTime(activity.time)}</span>
                         {activity.publishedUrl ? (
                           <a href={activity.publishedUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700">
                             链接
@@ -591,7 +602,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
                           </a>
                         ) : null}
                       </div>
-                      <p className="line-clamp-2 text-[13px] font-medium leading-snug text-slate-800">{activity.articleTitle}</p>
+                      <p className="line-clamp-2 text-[13px] font-medium leading-snug text-design-text">{activity.articleTitle}</p>
                       {activity.errorMessage ? <p className="mt-1 line-clamp-1 text-[11px] text-rose-500">{activity.errorMessage}</p> : null}
                     </div>
                   </div>

@@ -85,8 +85,8 @@ export function EditableTagInput({
 	return (
 		<div
 			className={cn(
-				"rounded-2xl border border-brand-200 bg-white p-2.5 shadow-inner-soft transition-colors",
-				disabled ? "opacity-60" : "focus-within:border-brand-400 focus-within:shadow-glow",
+				"rounded-xl border border-design-border bg-white p-2.5 transition-colors",
+				disabled ? "opacity-60" : "focus-within:border-brand-400 focus-within:ring-[3px] focus-within:ring-brand-500/10",
 			)}
 		>
 			<div className="flex flex-wrap gap-2">
@@ -111,13 +111,13 @@ export function EditableTagInput({
 									cancelEdit();
 								}
 							}}
-							className="h-8 w-32 rounded-full bg-white px-3 text-xs"
+							className="h-8 w-32 rounded-full bg-white px-3 text-[12px]"
 						/>
 					) : (
 						<Badge
 							key={`${tag}-${index}`}
 							variant="secondary"
-							className={cn("group gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm", colorClass)}
+							className={cn("group gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium", colorClass)}
 						>
 							<button
 								type="button"
@@ -141,7 +141,7 @@ export function EditableTagInput({
 					);
 				})}
 
-				<div className="flex min-w-0 basis-full flex-col gap-2 rounded-xl bg-slate-50 p-1.5 sm:flex-row sm:items-center">
+				<div className="flex min-w-0 basis-full flex-col gap-2 rounded-xl bg-design-background p-1.5 sm:flex-row sm:items-center">
 					<Input
 						disabled={disabled}
 						value={draft}
@@ -163,7 +163,7 @@ export function EditableTagInput({
 							}
 						}}
 						placeholder={value.length ? "继续添加标签" : placeholder}
-						className="h-8 min-w-0 flex-1 rounded-full border-0 bg-white px-3 text-xs shadow-sm focus-visible:ring-1 focus-visible:ring-brand-200"
+						className="h-8 min-w-0 flex-1 rounded-md border-0 bg-white px-3 text-[12px] focus-visible:ring-[3px] focus-visible:ring-brand-500/10"
 					/>
 					<Button
 						type="button"
@@ -171,14 +171,14 @@ export function EditableTagInput({
 						variant="ghost"
 						disabled={disabled || !draft.trim()}
 						onClick={commitDraft}
-						className="h-8 shrink-0 gap-1 rounded-full px-3 text-xs text-slate-600 hover:bg-white"
+						className="h-8 shrink-0 gap-1 rounded-md px-3 text-[12px] text-design-textSecondary hover:bg-white"
 					>
 						<Plus className="h-3.5 w-3.5" />
 						添加
 					</Button>
 				</div>
 			</div>
-			<p className="mt-2 px-1 text-[11px] leading-5 text-slate-400">
+			<p className="mt-2 px-1 text-[12px] leading-5 text-design-neutral">
 				支持 Enter、逗号、粘贴多标签添加；点击已有标签可修改。
 			</p>
 		</div>

@@ -9,6 +9,14 @@ import highlight from "@bytemd/plugin-highlight";
 import math from "@bytemd/plugin-math";
 import { AlertCircle, CloudUpload, FileText, Loader2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { generateContent } from "@/react-app/api";
 import { createAlignPlugin } from "@/react-app/components/bytemd/align-plugin";
 import { uploadImagesToImageHosting } from "@/react-app/services/image-hosting";
@@ -30,6 +38,7 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
   const content = article?.content ?? "";
   const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [blockingUploadError, setBlockingUploadError] = useState<string | null>(null);
 
   const handleGenerateContent = async () => {
     if (!article) return;
@@ -57,6 +66,7 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
     } catch (error) {
       const message = error instanceof Error ? error.message : "图片上传失败";
       setUploadError(message);
+      setBlockingUploadError(message);
       toast.error(message);
       throw error;
     } finally {
@@ -72,15 +82,15 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
             <FileText className="h-4 w-4" />
           </div>
           <div className="flex justify-between w-full">
-            <h3 className="text-[14px] font-semibold text-slate-900 leading-tight">正文编辑区</h3>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+            <h3 className="text-[14px] font-semibold leading-tight text-design-text">正文编辑区</h3>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-design-textSecondary">
               <span>Markdown 编辑器</span>
-              <span className="text-slate-300">|</span>
+              <span className="text-design-border">|</span>
               <span className="inline-flex items-center gap-1">
                 <CloudUpload className="h-3 w-3" />
                 图床: image-hosting
               </span>
-              <span className="text-slate-300">|</span>
+              <span className="text-design-border">|</span>
               <span>字数: {content.length}</span>
               {isUploadingImages && <span className="text-brand-600 ml-1">图片上传中...</span>}
             </div>
@@ -94,7 +104,7 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
             onClick={handleGenerateContent}
             disabled={!article || !article.title?.trim() || disabled || isUploadingImages}
             type="button"
-            className="gap-2 shrink-0 border border-slate-200/60 shadow-sm"
+            className="shrink-0 gap-2"
           >
             {disabled || isUploadingImages ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
             <span className="text-[12px]">智能补全正文</span>
@@ -102,7 +112,7 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200/60 shadow-sm bg-white">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-design-border bg-white">
         <div className={`bytemd-container flex h-full flex-col ${disabled ? "pointer-events-none opacity-55" : ""}`}>
           <Editor
             value={content}
@@ -128,6 +138,28 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
           图片上传失败: {uploadError}
         </div>
       )}
+
+      <Dialog open={Boolean(blockingUploadError)} onOpenChange={(open) => !open && setBlockingUploadError(null)}>
+        <DialogContent className="max-w-md" hideClose>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <AlertCircle className="h-5 w-5 text-rose-500" />
+              图片上传失败
+            </DialogTitle>
+            <DialogDescription className="pt-1 text-[13px] text-design-textSecondary">
+              {blockingUploadError}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-5 text-amber-700">
+            请更换小于 5MB 的图片后再上传，避免发布到部分平台时被拒绝。
+          </div>
+          <DialogFooter>
+            <Button type="button" onClick={() => setBlockingUploadError(null)}>
+              知道了
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

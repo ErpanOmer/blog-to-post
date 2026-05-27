@@ -4,6 +4,7 @@ import type { Env, PlatformType } from "@/worker/types";
 import type { AccountConfig, PublicationStatus, PublishTaskStatus } from "@/worker/types/publications";
 import {
 	createPublishTaskService,
+	failStaleProcessingTasks,
 	getPublishTaskStatus,
 	cancelPublishTask,
 	quickPublish,
@@ -200,6 +201,7 @@ app.get("/tasks", async (c) => {
 	const requestId = createRequestId();
 	try {
 		await deletePublishTasksOlderThan(c.env.DB, Date.now() - PUBLISH_TASK_RETENTION_MS);
+		await failStaleProcessingTasks(c.env.DB);
 		const status = parseTaskStatus(c.req.query("status"));
 		const limitRaw = c.req.query("limit");
 		const offsetRaw = c.req.query("offset");
@@ -231,6 +233,7 @@ app.get("/tasks", async (c) => {
 app.delete("/tasks", async (c) => {
 	const requestId = createRequestId();
 	try {
+		await failStaleProcessingTasks(c.env.DB);
 		const status = parseTaskStatus(c.req.query("status"));
 		const clearAll = c.req.query("clear") === "1" || c.req.query("clear") === "true";
 		let ids: string[] = [];
@@ -258,6 +261,7 @@ app.delete("/tasks", async (c) => {
 app.get("/tasks/:id", async (c) => {
 	const requestId = createRequestId();
 	try {
+		await failStaleProcessingTasks(c.env.DB);
 		const { task, steps } = await getPublishTaskStatus(c.env.DB, c.req.param("id"));
 		return c.json({ task, steps });
 	} catch (error) {
@@ -269,6 +273,7 @@ app.get("/tasks/:id", async (c) => {
 app.delete("/tasks/:id", async (c) => {
 	const requestId = createRequestId();
 	try {
+		await failStaleProcessingTasks(c.env.DB);
 		const success = await deletePublishTask(c.env.DB, c.req.param("id"));
 		if (!success) {
 			throw new PublishServiceError({
@@ -304,6 +309,7 @@ app.get("/history", async (c) => {
 app.post("/tasks/:id/cancel", async (c) => {
 	const requestId = createRequestId();
 	try {
+		await failStaleProcessingTasks(c.env.DB);
 		const result = await cancelPublishTask(c.env.DB, c.req.param("id"));
 		const statusCode = result.success ? 200 : 400;
 		return c.json(result, statusCode as 200 | 400);
@@ -316,6 +322,7 @@ app.post("/tasks/:id/cancel", async (c) => {
 app.get("/tasks/:id/steps", async (c) => {
 	const requestId = createRequestId();
 	try {
+		await failStaleProcessingTasks(c.env.DB);
 		const steps = await listPublishTaskSteps(c.env.DB, c.req.param("id"));
 		return c.json(steps);
 	} catch (error) {

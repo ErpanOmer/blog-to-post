@@ -31,7 +31,8 @@ import {
   getPublishTaskSteps,
   getPublishTasks,
 } from "@/react-app/api";
-import { PlatformBadge, PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
+import { PlatformBadge, PlatformLogo } from "@/react-app/components/PlatformBrand";
+import { getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 import type { Article } from "@/react-app/types";
 import type { PublishTask, PublishTaskStatus, PublishTaskStep } from "@/react-app/types/publications";
 
@@ -62,20 +63,20 @@ const stepTypeLabels: Record<string, string> = {
 };
 
 const stepStatusConfig: Record<string, { label: string; icon: ReactNode; className: string }> = {
-  pending: { label: "待执行", icon: <Clock className="h-3.5 w-3.5" />, className: "text-slate-400" },
+  pending: { label: "待执行", icon: <Clock className="h-3.5 w-3.5" />, className: "text-design-neutral" },
   running: { label: "执行中", icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, className: "text-blue-500" },
   completed: { label: "已完成", icon: <CheckCircle2 className="h-3.5 w-3.5" />, className: "text-emerald-500" },
   failed: { label: "失败", icon: <XCircle className="h-3.5 w-3.5" />, className: "text-red-500" },
   skipped: { label: "已跳过", icon: <SkipForward className="h-3.5 w-3.5" />, className: "text-amber-500" },
-  cancelled: { label: "已取消", icon: <XCircle className="h-3.5 w-3.5" />, className: "text-slate-400" },
+  cancelled: { label: "已取消", icon: <XCircle className="h-3.5 w-3.5" />, className: "text-design-neutral" },
 };
 
 const taskStatusConfig: Record<string, { label: string; badgeClass: string; dotClass: string }> = {
-  pending: { label: "待执行", badgeClass: "border-slate-200 bg-slate-50 text-slate-600", dotClass: "bg-slate-400" },
+  pending: { label: "待执行", badgeClass: "border-design-border bg-design-background text-design-textSecondary", dotClass: "bg-design-neutral" },
   processing: { label: "执行中", badgeClass: "border-blue-200 bg-blue-50 text-blue-700", dotClass: "bg-blue-500" },
   completed: { label: "已完成", badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700", dotClass: "bg-emerald-500" },
   failed: { label: "失败", badgeClass: "border-red-200 bg-red-50 text-red-700", dotClass: "bg-red-500" },
-  cancelled: { label: "已取消", badgeClass: "border-slate-200 bg-slate-50 text-slate-500", dotClass: "bg-slate-400" },
+  cancelled: { label: "已取消", badgeClass: "border-design-border bg-design-background text-design-textSecondary", dotClass: "bg-design-neutral" },
 };
 
 function formatDateTime(timestamp: number): string {
@@ -301,23 +302,23 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
   }), [tasks]);
 
   const summaryCards = [
-    { label: "当前加载", value: summary.total, icon: Layers, color: "text-slate-500", bg: "from-slate-50 to-white" },
-    { label: "运行中", value: summary.running, icon: PlayCircle, color: "text-blue-600", bg: "from-blue-50 to-white" },
-    { label: "已完成", value: summary.completed, icon: CheckCircle2, color: "text-emerald-600", bg: "from-emerald-50 to-white" },
-    { label: "需处理", value: summary.failed, icon: AlertTriangle, color: "text-red-600", bg: "from-red-50 to-white" },
+    { label: "当前加载", value: summary.total, icon: Layers, color: "text-design-textSecondary" },
+    { label: "运行中", value: summary.running, icon: PlayCircle, color: "text-blue-600" },
+    { label: "已完成", value: summary.completed, icon: CheckCircle2, color: "text-emerald-600" },
+    { label: "需处理", value: summary.failed, icon: AlertTriangle, color: "text-red-600" },
   ];
 
   return (
     <div className="space-y-5 page-enter">
-      <section className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,_#eff6ff,_transparent_32%),linear-gradient(135deg,_#ffffff,_#f8fafc)] p-5 shadow-sm">
+      <section className="rounded-xl border border-design-border bg-white p-5">
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white/80 px-2.5 py-1 text-[11px] font-medium text-blue-700 shadow-sm">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-[11px] font-medium text-brand-700">
               <CircleDotDashed className="h-3.5 w-3.5" />
               自动保留最近 7 天任务，旧任务会在进入页面时清理
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">分发任务中心</h1>
-            <p className="mt-1.5 max-w-2xl text-[13px] leading-6 text-slate-500">
+            <h1 className="font-display text-2xl font-semibold tracking-normal text-design-text">分发任务中心</h1>
+            <p className="mt-1.5 max-w-2xl text-[13px] leading-6 text-design-textSecondary">
               快速确认每一次文章分发投递到哪些平台、用了哪些账号，以及当前执行到哪一步。
             </p>
           </div>
@@ -339,14 +340,14 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
         {summaryCards.map((card) => {
           const Icon = card.icon;
           return (
-            <Card key={card.label} className={cn("overflow-hidden border-slate-200/70 bg-gradient-to-br shadow-sm", card.bg)}>
+            <Card key={card.label} className="overflow-hidden border-design-border bg-white">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{card.label}</p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{card.value}</p>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-design-neutral">{card.label}</p>
+                    <p className="mt-1 text-2xl font-semibold tabular-nums text-design-text">{card.value}</p>
                   </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-design-border bg-white">
                     <Icon className={cn("h-5 w-5", card.color)} />
                   </div>
                 </div>
@@ -356,7 +357,7 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
         })}
       </div>
 
-      <Card className="border-slate-200/70 shadow-sm">
+      <Card className="border-design-border bg-white">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Layers className="h-4 w-4 text-blue-600" />
@@ -379,13 +380,13 @@ export function DistributionStatus({ initialTaskId, onDeepLinkHandled }: Distrib
           </Tabs>
 
           {isLoading && tasks.length === 0 ? (
-            <div className="flex items-center justify-center py-16 text-[13px] text-slate-400">
+            <div className="flex items-center justify-center py-16 text-[13px] text-design-neutral">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               正在加载任务...
             </div>
           ) : tasks.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-16 text-center text-[13px] text-slate-400">
-              <Layers className="mx-auto mb-2 h-9 w-9 text-slate-200" />
+            <div className="rounded-xl border border-dashed border-design-border bg-design-background px-4 py-16 text-center text-[13px] text-design-neutral">
+              <Layers className="mx-auto mb-2 h-9 w-9 text-design-neutral" />
               当前筛选下暂无任务
             </div>
           ) : (
@@ -439,7 +440,7 @@ function TaskCard(props: {
   const deletable = isTaskDeletable(task);
 
   return (
-    <article className="group rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md">
+    <article className="group rounded-xl border border-design-border bg-white p-4">
       <div className="flex gap-3">
         <div
           role="button"
@@ -460,8 +461,8 @@ function TaskCard(props: {
                   <span className={cn("mr-1.5 h-1.5 w-1.5 rounded-full", status.dotClass, task.status === "processing" && "animate-pulse")} />
                   {status.label}
                 </Badge>
-                <span className="text-[11px] text-slate-400">创建于 {formatDateTime(task.createdAt)}</span>
-                <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]", task.status === "processing" ? "bg-blue-50 text-blue-700" : "bg-slate-50 text-slate-500")}>
+                <span className="text-[12px] text-design-neutral">创建于 {formatDateTime(task.createdAt)}</span>
+                <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px]", task.status === "processing" ? "bg-blue-50 text-blue-700" : "bg-design-background text-design-textSecondary")}>
                   <Timer className="h-3 w-3" />
                   {task.status === "processing" ? "已运行" : "总耗时"} {formatTaskDuration(task, now)}
                 </span>
@@ -479,21 +480,21 @@ function TaskCard(props: {
                 ))}
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 text-[12px] text-slate-500">
-                <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5 text-slate-300" />{task.articleIds.length} 篇文章</span>
-                <span className="inline-flex items-center gap-1"><User className="h-3.5 w-3.5 text-slate-300" />{accountIds.length} 个账号</span>
-                <span className="inline-flex items-center gap-1"><Layers className="h-3.5 w-3.5 text-slate-300" />{platformIds.length} 个平台</span>
-                <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-slate-300" />{formatProgressPair(done, task.totalSteps || 0)}</span>
+              <div className="flex flex-wrap items-center gap-3 text-[12px] text-design-textSecondary">
+                <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5 text-design-neutral" />{task.articleIds.length} 篇文章</span>
+                <span className="inline-flex items-center gap-1"><User className="h-3.5 w-3.5 text-design-neutral" />{accountIds.length} 个账号</span>
+                <span className="inline-flex items-center gap-1"><Layers className="h-3.5 w-3.5 text-design-neutral" />{platformIds.length} 个平台</span>
+                <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-design-neutral" />{formatProgressPair(done, task.totalSteps || 0)}</span>
               </div>
 
               <div className="mt-3">
-                <div className="mb-1.5 flex items-center justify-between text-[11px] text-slate-400">
+                <div className="mb-1.5 flex items-center justify-between text-[12px] text-design-neutral">
                   <span className="line-clamp-1">{task.progressData?.currentStep || "等待执行"}</span>
                   <span className="tabular-nums">{progress}%</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-2 overflow-hidden rounded-full bg-design-background">
                   <div
-                    className={cn("h-full rounded-full transition-all duration-500", task.status === "failed" ? "bg-red-400" : task.status === "completed" ? "bg-emerald-500" : "bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-600", task.status === "processing" && "animate-pulse")}
+                    className={cn("h-full rounded-full transition-all duration-500", task.status === "failed" ? "bg-red-400" : task.status === "completed" ? "bg-emerald-500" : "bg-brand-500", task.status === "processing" && "animate-pulse")}
                     style={{ width: `${Math.max(progress, task.status === "processing" ? 8 : 0)}%` }}
                   />
                 </div>
@@ -501,10 +502,10 @@ function TaskCard(props: {
             </div>
 
             <div className="flex items-center gap-1 xl:pt-1" onClick={(event) => event.stopPropagation()}>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" disabled={!deletable || isMutating} onClick={() => void onDelete(task.id)} title={deletable ? "删除任务" : "运行中的任务不能直接删除"}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-design-neutral hover:text-red-600" disabled={!deletable || isMutating} onClick={() => void onDelete(task.id)} title={deletable ? "删除任务" : "运行中的任务不能直接删除"}>
                 <Trash2 className="h-4 w-4" />
               </Button>
-              <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5" />
+              <ChevronRight className="h-4 w-4 flex-shrink-0 text-design-neutral" />
             </div>
           </div>
         </div>
@@ -526,7 +527,7 @@ function TaskDetailDialog(props: {
       <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col overflow-hidden p-0">
         {task && (
           <>
-            <DialogHeader className="border-b border-slate-100 bg-slate-50/60 px-5 py-4">
+            <DialogHeader className="border-b border-design-border bg-design-background px-5 py-4">
               <DialogTitle className="flex items-center gap-2 text-base">
                 <Layers className="h-4 w-4 text-blue-600" />
                 任务详情
@@ -543,18 +544,18 @@ function TaskDetailDialog(props: {
                     </Badge>
                   </InfoBox>
                   <InfoBox label="Progress">
-                    <p className="mt-2 text-lg font-semibold tabular-nums text-slate-900">{formatProgressPair(task.currentStep, task.totalSteps)}</p>
+                    <p className="mt-2 text-lg font-semibold tabular-nums text-design-text">{formatProgressPair(task.currentStep, task.totalSteps)}</p>
                   </InfoBox>
                   <InfoBox label="Duration">
-                    <p className="mt-2 text-lg font-semibold tabular-nums text-slate-900">{formatTaskDuration(task, now)}</p>
+                    <p className="mt-2 text-lg font-semibold tabular-nums text-design-text">{formatTaskDuration(task, now)}</p>
                   </InfoBox>
                   <InfoBox label="Updated">
-                    <p className="mt-2 text-[13px] font-medium text-slate-700">{formatDateTime(task.updatedAt)}</p>
+                    <p className="mt-2 text-[13px] font-medium text-design-textSecondary">{formatDateTime(task.updatedAt)}</p>
                   </InfoBox>
                 </div>
 
-                <div className="rounded-xl border border-slate-100 bg-white p-3.5 shadow-sm">
-                  <h4 className="text-[13px] font-semibold text-slate-800">投递范围</h4>
+                <div className="rounded-xl border border-design-border bg-white p-3.5">
+                  <h4 className="text-[13px] font-semibold text-design-text">投递范围</h4>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {getUniquePlatforms(task).map((platform) => (
                       <PlatformBadge key={platform} platform={platform} size="sm" />
@@ -563,9 +564,9 @@ function TaskDetailDialog(props: {
                 </div>
 
                 {task.progressData && (
-                  <div className="rounded-xl border border-slate-100 bg-white p-3.5 shadow-sm">
-                    <h4 className="text-[13px] font-semibold text-slate-800">实时进度</h4>
-                    <div className="mt-2.5 grid gap-1.5 text-[12px] text-slate-500 md:grid-cols-2">
+                  <div className="rounded-xl border border-design-border bg-white p-3.5">
+                    <h4 className="text-[13px] font-semibold text-design-text">实时进度</h4>
+                    <div className="mt-2.5 grid gap-1.5 text-[12px] text-design-textSecondary md:grid-cols-2">
                       <div>当前步骤：{task.progressData.currentStep}</div>
                       <div>步骤统计：完成 {task.progressData.completedSteps} / 失败 {task.progressData.failedSteps} / 跳过 {task.progressData.skippedSteps}</div>
                       <div>文章进度：{formatProgressPair(task.progressData.currentArticleIndex + 1, task.progressData.totalArticles)}</div>
@@ -575,7 +576,7 @@ function TaskDetailDialog(props: {
                 )}
 
                 {!task.steps ? (
-                  <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-12 text-[13px] text-slate-400">
+                  <div className="flex items-center justify-center rounded-xl border border-dashed border-design-border bg-design-background py-12 text-[13px] text-design-neutral">
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     正在加载步骤...
                   </div>
@@ -607,8 +608,8 @@ function TaskDetailDialog(props: {
 
 function InfoBox({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
+    <div className="rounded-xl border border-design-border bg-white p-3">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-design-neutral">{label}</p>
       {children}
     </div>
   );
@@ -631,16 +632,16 @@ function StepCard({ step, task }: { step: PublishTaskStep; task: TaskWithDetails
     : stepTypeLabels[step.stepType] || step.stepType;
 
   return (
-    <div className="rounded-xl border border-slate-100 bg-white p-3.5 shadow-sm">
+    <div className="rounded-xl border border-design-border bg-white p-3.5">
       <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
         <Badge variant="outline" className="text-[10px]">#{step.stepNumber}</Badge>
         <span className={cn("inline-flex items-center gap-1 text-[12px] font-medium", status.className)}>
           {status.icon}
           {status.label}
         </span>
-        <span className="text-[12px] text-slate-600">{stepLabel}</span>
+        <span className="text-[12px] text-design-textSecondary">{stepLabel}</span>
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+      <div className="flex flex-wrap items-center gap-2 text-[12px] text-design-neutral">
         <span className="inline-flex items-center gap-1">
           <PlatformLogo platform={step.platform} size="xs" className="ring-0 shadow-none" />
           {getPlatformDisplayName(step.platform)}
@@ -648,7 +649,7 @@ function StepCard({ step, task }: { step: PublishTaskStep; task: TaskWithDetails
         {step.articleId ? <span>文章：{task.articleTitles?.get(step.articleId) || "未知文章"}</span> : null}
         {step.duration != null ? <span>耗时：{formatDuration(step.duration)}</span> : null}
       </div>
-      {traceMessage ? <div className="mt-2 rounded-md border border-slate-100 bg-slate-50/70 px-2.5 py-1.5 text-[11px] text-slate-600">{traceMessage}</div> : null}
+      {traceMessage ? <div className="mt-2 rounded-md border border-design-border bg-design-background px-2.5 py-1.5 text-[12px] text-design-textSecondary">{traceMessage}</div> : null}
       {step.errorMessage ? (
         <div className="mt-2 rounded-md border border-red-100 bg-red-50/70 px-2.5 py-1.5 text-[11px] text-red-600">
           <AlertCircle className="mr-1 inline h-3 w-3" />
@@ -656,15 +657,15 @@ function StepCard({ step, task }: { step: PublishTaskStep; task: TaskWithDetails
         </div>
       ) : null}
       {inputData && (
-        <details className="mt-2 rounded-md border border-slate-100 bg-slate-50/70 p-2.5">
-          <summary className="cursor-pointer text-[11px] font-medium text-slate-500">输入数据</summary>
-          <pre className="mt-1.5 overflow-x-auto text-[10px] text-slate-600">{safeStringify(inputData)}</pre>
+        <details className="mt-2 rounded-md border border-design-border bg-design-background p-2.5">
+          <summary className="cursor-pointer text-[12px] font-medium text-design-textSecondary">输入数据</summary>
+          <pre className="mt-1.5 overflow-x-auto text-[11px] text-design-textSecondary">{safeStringify(inputData)}</pre>
         </details>
       )}
       {outputData && (
-        <details className="mt-2 rounded-md border border-slate-100 bg-slate-50/70 p-2.5">
-          <summary className="cursor-pointer text-[11px] font-medium text-slate-500">输出数据</summary>
-          <pre className="mt-1.5 overflow-x-auto text-[10px] text-slate-600">{safeStringify(outputData)}</pre>
+        <details className="mt-2 rounded-md border border-design-border bg-design-background p-2.5">
+          <summary className="cursor-pointer text-[12px] font-medium text-design-textSecondary">输出数据</summary>
+          <pre className="mt-1.5 overflow-x-auto text-[11px] text-design-textSecondary">{safeStringify(outputData)}</pre>
         </details>
       )}
     </div>

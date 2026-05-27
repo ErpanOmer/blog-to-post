@@ -33,7 +33,8 @@ import {
 } from "@/react-app/api";
 import { PublishProgress } from "./PublishProgress";
 import { PlatformPublishSettingsDialog } from "./PlatformPublishSettingsDialog";
-import { PlatformLogo, getPlatformDisplayName } from "@/react-app/components/PlatformBrand";
+import { PlatformLogo } from "@/react-app/components/PlatformBrand";
+import { getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 import type { Article } from "@/react-app/types";
 import type { AccountConfig, PublishTask, PublishTaskStep } from "@/react-app/types/publications";
 import {
@@ -357,19 +358,19 @@ export function PublishDialog({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="flex max-h-[90vh] max-w-4xl flex-col overflow-hidden p-0">
-				<DialogHeader className="border-b border-slate-100 px-5 py-4">
+				<DialogHeader className="border-b border-design-border px-5 py-4">
 					<div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 						<div>
 							<DialogTitle className="flex items-center gap-2 text-base">
 								{isQuickPublish ? <Rocket className="h-4 w-4 text-brand-500" /> : <Upload className="h-4 w-4 text-brand-500" />}
 								{isSingleArticle ? "发布文章" : `批量发布 ${articles.length} 篇文章`}
 							</DialogTitle>
-							<DialogDescription className="mt-1 text-[13px] text-slate-500">
+							<DialogDescription className="mt-1 text-[13px] text-design-textSecondary">
 								选择投递账号。草稿、HEADER_SLOT 和 FOOTER_SLOT 会继承全局发布设置，点击 ⚙ 可仅为本次任务调整。
 							</DialogDescription>
 						</div>
 
-						<Badge variant="secondary" className="w-fit text-[10px]">
+						<Badge variant="secondary" className="w-fit text-[12px]">
 							已选 {articles.length} 篇
 						</Badge>
 					</div>
@@ -377,39 +378,39 @@ export function PublishDialog({
 
 				<div className="flex-1 overflow-y-auto px-6 py-5">
 					<div className="space-y-5">
-						<Card className="border-slate-200">
+						<Card className="border-design-border">
 							<button
 								onClick={() => setShowArticles((prev) => !prev)}
-								className="flex w-full items-center justify-between bg-slate-50 px-4 py-3 text-left transition-colors hover:bg-slate-100"
+								className="flex w-full items-center justify-between bg-design-background px-4 py-3 text-left transition-colors hover:bg-brand-50/50"
 								type="button"
 							>
 								<div className="flex items-center gap-2">
-									<FileText className="h-4 w-4 text-slate-500" />
-									<span className="text-sm font-medium text-slate-700">待发布文章</span>
-									<Badge variant="outline" className="text-[11px]">
+									<FileText className="h-4 w-4 text-design-textSecondary" />
+									<span className="text-[13px] font-medium text-design-text">待发布文章</span>
+									<Badge variant="outline" className="text-[12px]">
 										{articles.length} 篇
 									</Badge>
 								</div>
-								{showArticles ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+								{showArticles ? <ChevronUp className="h-4 w-4 text-design-neutral" /> : <ChevronDown className="h-4 w-4 text-design-neutral" />}
 							</button>
 
 							{showArticles && (
 								<CardContent className="p-0">
 									<ScrollArea className="max-h-[240px] overflow-y-auto">
-										<div className="divide-y divide-slate-100">
+										<div className="divide-y divide-design-border">
 											{articles.map((article, index) => (
 												<div key={article.id} className="flex items-center gap-3 px-4 py-3">
-													<span className="w-6 text-xs text-slate-400">{index + 1}</span>
+													<span className="w-6 text-[12px] text-design-neutral">{index + 1}</span>
 													{article.coverImage ? (
 														<img src={article.coverImage} alt="" className="h-10 w-10 rounded-lg object-cover" />
 													) : (
-														<div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
-															<ImageIcon className="h-4 w-4 text-slate-300" />
+														<div className="flex h-10 w-10 items-center justify-center rounded-lg bg-design-background">
+															<ImageIcon className="h-4 w-4 text-design-neutral" />
 														</div>
 													)}
 													<div className="min-w-0 flex-1">
-														<p className="truncate text-sm font-medium text-slate-800">{article.title || "未命名文章"}</p>
-														<div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+														<p className="truncate text-[13px] font-medium text-design-text">{article.title || "未命名文章"}</p>
+														<div className="mt-1 flex items-center gap-2 text-[12px] text-design-textSecondary">
 															<span>{articleStatusLabels[article.status] || article.status}</span>
 															{article.tags?.length ? (
 																<span className="inline-flex items-center gap-1">
@@ -428,10 +429,10 @@ export function PublishDialog({
 							)}
 						</Card>
 
-						<section className="rounded-xl border border-slate-200 bg-white p-4">
+						<section className="rounded-xl border border-design-border bg-white p-4">
 							<div className="mb-3 flex items-center gap-2">
-								<Calendar className="h-4 w-4 text-slate-500" />
-								<Label className="text-sm font-semibold text-slate-800">发布方式</Label>
+								<Calendar className="h-4 w-4 text-design-textSecondary" />
+								<Label className="text-[13px] font-semibold text-design-text">发布方式</Label>
 							</div>
 
 							<div className="grid gap-3 md:grid-cols-2">
@@ -442,14 +443,14 @@ export function PublishDialog({
 										"rounded-xl border px-4 py-4 text-left transition-colors",
 										publishMode === "immediate"
 											? "border-brand-500 bg-brand-50"
-											: "border-slate-200 bg-white hover:border-slate-300",
+											: "border-design-border bg-white hover:border-brand-200",
 									)}
 								>
-									<div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+									<div className="flex items-center gap-2 text-[13px] font-medium text-design-text">
 										<Rocket className="h-4 w-4 text-brand-600" />
 										立即发布
 									</div>
-									<p className="mt-1 text-xs text-slate-500">创建任务后立刻开始执行，适合常规分发。</p>
+									<p className="mt-1 text-[13px] text-design-textSecondary">创建任务后立刻开始执行，适合常规分发。</p>
 								</button>
 
 								<button
@@ -459,19 +460,19 @@ export function PublishDialog({
 										"rounded-xl border px-4 py-4 text-left transition-colors",
 										publishMode === "scheduled"
 											? "border-brand-500 bg-brand-50"
-											: "border-slate-200 bg-white hover:border-slate-300",
+											: "border-design-border bg-white hover:border-brand-200",
 									)}
 								>
-									<div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+									<div className="flex items-center gap-2 text-[13px] font-medium text-design-text">
 										<Clock className="h-4 w-4 text-brand-600" />
 										定时发布
 									</div>
-									<p className="mt-1 text-xs text-slate-500">指定未来时间执行，适合排期运营场景。</p>
+									<p className="mt-1 text-[13px] text-design-textSecondary">指定未来时间执行，适合排期运营场景。</p>
 								</button>
 							</div>
 
 							{publishMode === "scheduled" && (
-								<div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[1fr_180px]">
+								<div className="mt-4 grid gap-3 rounded-lg border border-design-border bg-design-background p-4 md:grid-cols-[1fr_180px]">
 									<Input
 										type="date"
 										value={scheduleDate}
@@ -483,12 +484,12 @@ export function PublishDialog({
 							)}
 						</section>
 
-						<section className="rounded-xl border border-slate-200 bg-white p-4">
+						<section className="rounded-xl border border-design-border bg-white p-4">
 							<div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 								<div className="flex items-center gap-2">
-									<Layers className="h-4 w-4 text-slate-500" />
-									<Label className="text-sm font-semibold text-slate-800">选择发布账号</Label>
-									<Badge variant="outline" className="text-[11px]">
+									<Layers className="h-4 w-4 text-design-textSecondary" />
+									<Label className="text-[13px] font-semibold text-design-text">选择发布账号</Label>
+									<Badge variant="outline" className="text-[12px]">
 										已选 {selectedAccounts.size} 个
 									</Badge>
 								</div>
@@ -504,15 +505,15 @@ export function PublishDialog({
 							</div>
 
 							{isLoading ? (
-								<div className="flex items-center justify-center py-12 text-sm text-slate-500">
+								<div className="flex items-center justify-center py-12 text-[13px] text-design-textSecondary">
 									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
 									正在加载可用账号...
 								</div>
 							) : accounts.length === 0 ? (
-								<div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-									<User className="mx-auto mb-3 h-10 w-10 text-slate-300" />
-									<p className="text-sm font-medium text-slate-700">暂无可用账号</p>
-									<p className="mt-1 text-xs text-slate-500">请先完成账号新增、校验，并确认对应平台已在发布设置中启用。</p>
+								<div className="rounded-xl border border-dashed border-design-border bg-design-background px-4 py-10 text-center">
+									<User className="mx-auto mb-3 h-10 w-10 text-design-neutral" />
+									<p className="text-[13px] font-medium text-design-text">暂无可用账号</p>
+									<p className="mt-1 text-[13px] text-design-textSecondary">请先完成账号新增、校验，并确认对应平台已在发布设置中启用。</p>
 								</div>
 							) : (
 								<div className="space-y-4">
@@ -523,8 +524,8 @@ export function PublishDialog({
 										const platformDisabled = !setting?.enabled;
 
 										return (
-											<div key={platform} className={cn("overflow-hidden rounded-xl border border-slate-200", platformDisabled && "opacity-65")}>
-												<div className="flex items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+											<div key={platform} className={cn("overflow-hidden rounded-xl border border-design-border", platformDisabled && "opacity-65")}>
+												<div className="flex items-center gap-3 border-b border-design-border bg-design-background px-4 py-3">
 													<Checkbox
 														checked={platformSelected}
 														disabled={platformDisabled}
@@ -533,11 +534,11 @@ export function PublishDialog({
 													/>
 													<PlatformLogo platform={platform} size="sm" className="ring-0" />
 													<div className="min-w-0 flex-1">
-														<p className="text-sm font-medium text-slate-900">{getPlatformDisplayName(platform)}</p>
-														<p className="text-xs text-slate-500">{platformAccounts.length} 个可用账号</p>
+														<p className="text-[13px] font-medium text-design-text">{getPlatformDisplayName(platform)}</p>
+														<p className="text-[12px] text-design-textSecondary">{platformAccounts.length} 个可用账号</p>
 													</div>
 													{setting ? (
-														<Badge variant="outline" className="hidden border-slate-200 bg-white text-[10px] text-slate-500 sm:inline-flex">
+														<Badge variant="outline" className="hidden border-design-border bg-white text-[12px] text-design-textSecondary sm:inline-flex">
 															{setting.enabled ? getPlatformBadgeText(setting) : "本次禁用"}
 														</Badge>
 													) : null}
@@ -545,7 +546,7 @@ export function PublishDialog({
 														type="button"
 														variant="ghost"
 														size="icon"
-														className="h-8 w-8 text-base text-slate-500"
+														className="h-8 w-8 text-base text-design-textSecondary"
 														onClick={() => openPlatformSettings(platform)}
 														aria-label="平台发布设置"
 													>
@@ -553,7 +554,7 @@ export function PublishDialog({
 													</Button>
 												</div>
 
-												<div className="divide-y divide-slate-100">
+												<div className="divide-y divide-design-border">
 													{platformAccounts.map((account) => {
 														const config = buildAccountConfig(account, platformSettings) ?? accountConfigs.get(account.id);
 														const isSelected = selectedAccounts.has(account.id);
@@ -567,7 +568,7 @@ export function PublishDialog({
 																key={account.id}
 																className={cn(
 																	"flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center",
-																	isSelected ? "bg-white" : "bg-slate-50/70",
+																	isSelected ? "bg-white" : "bg-design-background",
 																)}
 															>
 																<div className="flex min-w-0 flex-1 items-center gap-3">
@@ -576,24 +577,24 @@ export function PublishDialog({
 																	{account.avatar ? (
 																		<img src={account.avatar} alt={account.userName || ""} className="h-9 w-9 rounded-full object-cover" />
 																	) : (
-																		<div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
+																		<div className="flex h-9 w-9 items-center justify-center rounded-full bg-design-background text-[12px] font-semibold text-design-textSecondary">
 																			{account.userName?.[0] || "?"}
 																		</div>
 																	)}
 
 																	<div className="min-w-0">
-																		<p className="truncate text-sm font-medium text-slate-900">{account.userName || "未命名账号"}</p>
-																		<p className="truncate text-xs text-slate-500">
+																		<p className="truncate text-[13px] font-medium text-design-text">{account.userName || "未命名账号"}</p>
+																		<p className="truncate text-[12px] text-design-textSecondary">
 																			{account.description || "已验证，可直接用于文章分发"}
 																		</p>
 																	</div>
 																</div>
 
-																<div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-																	<Badge variant="outline" className="border-slate-200 bg-slate-50 text-[10px] text-slate-500">
+																<div className="flex flex-wrap items-center gap-2 text-[12px] text-design-textSecondary">
+																	<Badge variant="outline" className="border-design-border bg-design-background text-[12px] text-design-textSecondary">
 																		{draftOnly ? "仅草稿" : "正式发布"}
 																	</Badge>
-																	<Badge variant="outline" className="border-slate-200 bg-slate-50 text-[10px] text-slate-500">
+																	<Badge variant="outline" className="border-design-border bg-design-background text-[12px] text-design-textSecondary">
 																		{headerUsesCover ? "封面作为 HEADER" : headerSlot.trim() ? "自定义 HEADER" : "无 HEADER"}
 																	</Badge>
 																</div>
@@ -609,14 +610,14 @@ export function PublishDialog({
 						</section>
 
 						{error && (
-							<div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+							<div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
 								<AlertCircle className="h-4 w-4 flex-shrink-0" />
 								{error}
 							</div>
 						)}
 
 						{success && (
-							<div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+							<div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700">
 								<CheckCircle2 className="h-4 w-4 flex-shrink-0" />
 								{success}
 							</div>
@@ -630,7 +631,7 @@ export function PublishDialog({
 					</div>
 				)}
 
-				<DialogFooter className="gap-2 border-t border-slate-100 bg-slate-50/50 px-5 py-3">
+				<DialogFooter className="gap-2 border-t border-design-border bg-design-background px-5 py-3">
 					<Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
 						取消
 					</Button>
