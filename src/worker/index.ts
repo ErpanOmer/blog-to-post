@@ -60,7 +60,7 @@ app.onError((err, c) => {
 		error_code: errorCode,
 		message,
 		timestamp: Date.now(),
-	}, statusCode as 400 | 401 | 403 | 404 | 500);
+	}, statusCode as 400 | 401 | 403 | 404 | 409 | 429 | 500 | 502 | 503 | 504);
 });
 
 app.notFound((c) => {

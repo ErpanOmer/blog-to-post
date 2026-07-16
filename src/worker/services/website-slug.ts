@@ -58,15 +58,7 @@ export async function generateWebsiteSlug(
 		contentPreview: (input.content ?? "").slice(0, 1600),
 	});
 
-	const raw = await provider.generateSummary(settings.systemPrompt, userPrompt, {
-		model: settings.model,
-		temperature: settings.temperature,
-		topP: settings.topP,
-		maxTokens: settings.maxTokens,
-		requestTimeoutSec: settings.requestTimeoutSec,
-		format: "json",
-		think: false,
-	});
+	const raw = await provider.generateWebsiteSlug(settings.systemPrompt, userPrompt);
 	const normalized = normalizeWebsiteSlugCandidate(pickSlugFromModelOutput(raw));
 	if (normalized) return normalized;
 

@@ -8,7 +8,7 @@ Current status: active development, updated on 2026-04-27.
 
 ## What It Does
 
-- Generate article titles, markdown content, summaries, tags, and cover prompts through an Ollama-compatible AI provider.
+- Generate article titles, markdown content, summaries, tags, cover prompts, and website slugs through configurable OpenAI-compatible or Anthropic services.
 - Edit articles with a React + ByteMD workflow.
 - Manage platform accounts and verify credentials.
 - Dispatch one article to one or more publishing platforms.
@@ -23,7 +23,7 @@ Current status: active development, updated on 2026-04-27.
 - Worker API: Cloudflare Workers, Hono, TypeScript.
 - Data: Cloudflare D1 SQLite.
 - Storage: Cloudflare R2 for drafts and Cloudflare KV for prompt/settings data.
-- AI: Ollama-compatible `/api/generate` provider, defaulting to `kimi-k2.5:cloud` when no model is configured.
+- AI: Vercel AI SDK with multiple encrypted provider profiles, a global default route, and per-feature model overrides.
 - Syntax highlighting: `highlight.js` for WeChat inline styled HTML and `prismjs` for CSDN tokenized code blocks.
 
 ## Repository Map
@@ -137,19 +137,20 @@ Primary capabilities:
 - `/api/ai/status`
 - `/api/ai/models`
 - `/api/ai/settings`
+- `/api/ai/providers`
+- `/api/ai/routing`
 - `/api/ai/prompts`
 
-Prompt files live in `src/worker/prompts/`. Runtime prompt and model settings are stored through the prompt/settings services, backed by Cloudflare KV.
+Prompt files live in `src/worker/prompts/` and runtime prompt overrides remain in Cloudflare KV. AI provider profiles and routing live in D1. API keys are encrypted with AES-GCM before storage and are never returned to the browser.
 
 Environment variables:
 
 ```txt
-OLLAMA_BASE_URL   # defaults to http://localhost:11434
-OLLAMA_MODEL      # optional fallback model
-OLLAMA_API_KEY    # optional bearer token for hosted Ollama-compatible providers
-ENCRYPTION_KEY    # optional credential encryption key
+ENCRYPTION_KEY    # required 64-character hex key before saving any AI API key
 ENVIRONMENT       # development or production
 ```
+
+Ollama has no dedicated integration. For optional local use, add it as a normal OpenAI-compatible profile with `http://localhost:11434/v1` while `ENVIRONMENT=development`. A deployed Worker cannot reach Ollama running on your computer.
 
 ## Quick Start
 

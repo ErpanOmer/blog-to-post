@@ -73,8 +73,10 @@ export function GenerationPanel({
 
 		try {
 			const featureSettings = getLocalArticleAIFeatureSettings("summary");
-			const requestSettings = toArticleAIRequestSettings("summary", featureSettings);
-			const data = await generateArticleSummary(article.content, requestSettings);
+			const data = await generateArticleSummary(
+				article.content,
+				toArticleAIRequestSettings("summary", featureSettings),
+			);
 			onArticleUpdate({ summary: data.summary });
 		} catch (error) {
 			console.error("Generate summary failed", error);
@@ -89,8 +91,10 @@ export function GenerationPanel({
 
 		try {
 			const featureSettings = getLocalArticleAIFeatureSettings("tags");
-			const requestSettings = toArticleAIRequestSettings("tags", featureSettings);
-			const data = await generateArticleTags(article.content, requestSettings);
+			const data = await generateArticleTags(
+				article.content,
+				toArticleAIRequestSettings("tags", featureSettings),
+			);
 			const normalizedTags = Array.isArray(data.tags)
 				? data.tags.map((item) => String(item).trim()).filter(Boolean)
 				: [];

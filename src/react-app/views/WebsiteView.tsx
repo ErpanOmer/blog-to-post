@@ -13,8 +13,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   deleteWebsitePost,
-  getAIModelSettings,
-  getAIModels,
   getWebsitePosts,
   getWebsiteSlugSettings,
   publishWebsitePost,
@@ -89,33 +87,13 @@ function sortPosts(posts: WebsitePost[], sort: WebsiteSortValue): WebsitePost[] 
   });
 }
 
-function normalizeSlugNumber(value: number, fallback: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return fallback;
-  return Math.min(max, Math.max(min, value));
-}
-
-function normalizeWebsiteSlugSettingsForSave(settings: WebsiteSlugSettings): WebsiteSlugSettings {
-  return {
-    model: settings.model.trim(),
-    temperature: normalizeSlugNumber(settings.temperature, 0.25, 0, 2),
-    topP: normalizeSlugNumber(settings.topP, 0.85, 0, 1),
-    maxTokens: Math.round(normalizeSlugNumber(settings.maxTokens, 128, 16, 512)),
-    requestTimeoutSec: Math.round(normalizeSlugNumber(settings.requestTimeoutSec, 90, 10, 300)),
-    systemPrompt: settings.systemPrompt.trim(),
-  };
-}
-
 function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [settings, setSettings] = useState<WebsiteSlugSettings | null>(null);
-  const [modelOptions, setModelOptions] = useState<string[]>([]);
-  const [globalDefaultModel, setGlobalDefaultModel] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) return;
     setSettings(null);
-    setModelOptions([]);
-    setGlobalDefaultModel("");
     setSaving(false);
   }, [open]);
 
@@ -124,21 +102,9 @@ function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOp
     let cancelled = false;
     void (async () => {
       try {
-        const [data, catalog, globalSettings] = await Promise.all([
-          getWebsiteSlugSettings(),
-          getAIModels(),
-          getAIModelSettings(),
-        ]);
+        const data = await getWebsiteSlugSettings();
         if (!cancelled) {
           setSettings(data);
-          setGlobalDefaultModel(globalSettings.defaultModel);
-          setModelOptions([...new Set([
-            data.model,
-            globalSettings.defaultModel,
-            ...(catalog.models ?? []),
-            ...(catalog.cloudModels ?? []),
-            ...(catalog.localModels ?? []),
-          ].map((model) => model.trim()).filter(Boolean))]);
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "加载 slug 配置失败");
@@ -153,7 +119,7 @@ function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOp
     if (!settings) return;
     setSaving(true);
     try {
-      const payload = normalizeWebsiteSlugSettingsForSave(settings);
+      const payload = { ...settings, systemPrompt: settings.systemPrompt.trim() };
       if (!payload.systemPrompt) {
         toast.error("Prompt 不能为空");
         return;
@@ -178,49 +144,13 @@ function WebsiteSlugSettingsDialog({ open, onOpenChange }: { open: boolean; onOp
             Website Slug AI 配置
           </DialogTitle>
           <DialogDescription>
-            这里仅配置分发到个人网站时的 SEO slug 生成规则，实际 slug 会在 website 适配器发布流程里自动生成。
+            这里单独配置 SEO slug 的 Prompt；服务、模型与生成参数统一使用“设置 → 智能设置”中的全局 AI 配置。
           </DialogDescription>
         </DialogHeader>
         {settings ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-              <div className="space-y-2 md:col-span-2">
-                <Label className="text-[13px] text-design-text">模型</Label>
-                <Select
-                  value={settings.model.trim() || "__global__"}
-                  onValueChange={(value) => setSettings((prev) => prev ? { ...prev, model: value === "__global__" ? "" : value } : prev)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择模型" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__global__">
-                      继承全局模型{globalDefaultModel ? `（${globalDefaultModel}）` : ""}
-                    </SelectItem>
-                    {modelOptions.map((model) => (
-                      <SelectItem key={model} value={model}>
-                        {model}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[13px] text-design-text">超时秒数</Label>
-                <Input type="number" value={settings.requestTimeoutSec} onChange={(event) => setSettings((prev) => prev ? { ...prev, requestTimeoutSec: Number(event.target.value) } : prev)} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[13px] text-design-text">maxTokens</Label>
-                <Input type="number" value={settings.maxTokens} onChange={(event) => setSettings((prev) => prev ? { ...prev, maxTokens: Number(event.target.value) } : prev)} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[13px] text-design-text">temperature</Label>
-                <Input type="number" step="0.05" value={settings.temperature} onChange={(event) => setSettings((prev) => prev ? { ...prev, temperature: Number(event.target.value) } : prev)} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[13px] text-design-text">topP</Label>
-                <Input type="number" step="0.05" value={settings.topP} onChange={(event) => setSettings((prev) => prev ? { ...prev, topP: Number(event.target.value) } : prev)} />
-              </div>
+            <div className="rounded-lg border border-design-border bg-design-background p-3 text-[12px] leading-5 text-design-textSecondary">
+              旧版 Slug 模型和参数字段不再决定实际调用；现有 KV 数据会保留，便于回查。
             </div>
             <div className="space-y-2">
               <Label className="text-[13px] text-design-text">Prompt</Label>

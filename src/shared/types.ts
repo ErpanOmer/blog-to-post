@@ -90,12 +90,106 @@ export interface GenerateCoverInput {
     content: string;
 }
 
+export type AIProviderProtocol = "openai-compatible" | "anthropic";
+export type AIFeature = "title" | "content" | "summary" | "tags" | "cover" | "website_slug";
+export type AIModelRouteFeature = "default" | AIFeature;
+
+export interface AIProviderProfileSummary {
+    id: string;
+    name: string;
+    protocol: AIProviderProtocol;
+    baseUrl: string;
+    defaultModel: string;
+    enabled: boolean;
+    hasApiKey: boolean;
+    lastVerifiedAt?: number | null;
+    lastVerificationStatus?: "success" | "failed" | null;
+    lastVerificationMessage?: string | null;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface CreateAIProviderProfileInput {
+    name: string;
+    protocol: AIProviderProtocol;
+    baseUrl: string;
+    apiKey?: string;
+    defaultModel: string;
+    enabled?: boolean;
+}
+
+export interface UpdateAIProviderProfileInput {
+    name?: string;
+    protocol?: AIProviderProtocol;
+    baseUrl?: string;
+    apiKey?: string;
+    clearApiKey?: boolean;
+    defaultModel?: string;
+    enabled?: boolean;
+}
+
+export interface AIModelRoute {
+    feature: AIModelRouteFeature;
+    providerId: string;
+    providerName?: string;
+    protocol?: AIProviderProtocol;
+    model: string;
+    temperature: number | null;
+    topP: number | null;
+    maxTokens: number | null;
+    requestTimeoutSec: number | null;
+    updatedAt: number;
+}
+
+export type AIModelRouteInput = Omit<AIModelRoute, "providerName" | "protocol" | "updatedAt">;
+
+export interface AIModelRoutingConfig {
+    defaultRoute: AIModelRoute | null;
+    featureRoutes: Partial<Record<AIFeature, AIModelRoute>>;
+}
+
+export interface AIProviderModelsResult {
+    supported: boolean;
+    models: string[];
+    message: string;
+}
+
+export interface AIProviderTestResult {
+    success: true;
+    message: string;
+    provider: {
+        name: string;
+        protocol: AIProviderProtocol;
+        model: string;
+    };
+    testedAt: number;
+}
+
+export interface AIErrorResponse {
+    success: false;
+    error_code:
+        | "AI_PROVIDER_NOT_CONFIGURED"
+        | "AI_AUTH_FAILED"
+        | "AI_MODEL_NOT_FOUND"
+        | "AI_RATE_LIMITED"
+        | "AI_TIMEOUT"
+        | "AI_INVALID_RESPONSE"
+        | "AI_PROVIDER_UNAVAILABLE"
+        | "AI_INVALID_CONFIGURATION";
+    message: string;
+    timestamp: number;
+}
+
 export interface ProviderStatus {
     provider: string;
     ready: boolean;
     lastCheckedAt: number;
     message: string;
     defaultModel?: string;
+    providerId?: string;
+    profileName?: string;
+    protocol?: AIProviderProtocol;
+    model?: string;
 }
 
 export interface PromptTemplate {
@@ -119,11 +213,8 @@ export interface AIModelCatalog {
 }
 
 export interface ArticleAISettings {
-    model: string;
     temperature: number;
     topP: number;
-    maxTokens: number;
-    requestTimeoutSec: number;
     summaryPrompt: string;
     tagsPrompt: string;
 }

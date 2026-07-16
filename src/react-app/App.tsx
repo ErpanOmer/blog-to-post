@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dashboard } from "./components/Dashboard";
@@ -36,23 +36,31 @@ type AppActions = AppController["actions"];
 
 const ArticleNewRoute = ({ state, actions }: { state: AppState; actions: AppActions }) => {
   const navigate = useNavigate();
+  const initializedRef = useRef(false);
+  const openNewArticleEditor = actions.openNewArticleEditor;
 
   useEffect(() => {
-    const draftIsExistingArticle = state.draft
-      ? state.articles.some((article) => article.id === state.draft?.id)
-      : false;
-    if (!state.draft || draftIsExistingArticle) {
-      actions.openNewArticleEditor();
-    }
-  }, [actions, state.articles, state.draft]);
+    if (!state.articlesLoaded || initializedRef.current) return;
+    initializedRef.current = true;
+    openNewArticleEditor();
+  }, [openNewArticleEditor, state.articlesLoaded]);
+
+  if (!state.articlesLoaded || !state.draft) {
+    return <EmptyState title="正在准备编辑器" description="正在加载文章列表与本地备份，请稍候。" backTo="/articles" />;
+  }
 
   return (
     <ArticleEditorPage
       draft={state.draft}
       isGenerating={state.isGenerating}
       isSaving={state.isLoading}
-      isFormValid={state.isFormValid}
-      onBack={() => navigate("/articles")}
+      isDirty={state.isDraftDirty}
+      isDraftSaveable={state.isDraftSaveable}
+      isPublishReady={state.isPublishReady}
+      onBack={() => {
+        actions.leaveArticleEditor();
+        navigate("/articles");
+      }}
       onTitleChange={actions.handleTitleChange}
       onArticleUpdate={actions.handleArticleUpdate}
       onSave={async () => {
@@ -70,13 +78,18 @@ const ArticleEditRoute = ({ state, actions }: { state: AppState; actions: AppAct
   const navigate = useNavigate();
   const articleId = params.id;
   const article = state.articles.find((item) => item.id === articleId);
+  const openArticleEditor = actions.openArticleEditor;
 
   useEffect(() => {
     if (!article) return;
     if (state.draft?.id !== article.id) {
-      actions.openArticleEditor(article);
+      openArticleEditor(article);
     }
-  }, [actions, article, state.draft?.id]);
+  }, [article, openArticleEditor, state.draft?.id]);
+
+  if (!state.articlesLoaded) {
+    return <EmptyState title="正在加载文章" description="正在读取文章与本地备份，请稍候。" backTo="/articles" />;
+  }
 
   if (!article) {
     return <EmptyState title="文章不存在" description="这篇文章可能已被删除，或者仍在加载中。" backTo="/articles" />;
@@ -99,8 +112,13 @@ const ArticleEditRoute = ({ state, actions }: { state: AppState; actions: AppAct
       draft={currentDraft}
       isGenerating={state.isGenerating}
       isSaving={state.isLoading}
-      isFormValid={state.isFormValid}
-      onBack={() => navigate(`/articles/${article.id}`)}
+      isDirty={state.isDraftDirty}
+      isDraftSaveable={state.isDraftSaveable}
+      isPublishReady={state.isPublishReady}
+      onBack={() => {
+        actions.leaveArticleEditor();
+        navigate(`/articles/${article.id}`);
+      }}
       onTitleChange={actions.handleTitleChange}
       onArticleUpdate={actions.handleArticleUpdate}
       onSave={async () => {
@@ -142,7 +160,7 @@ function App() {
   const navigate = useNavigate();
 
   const openCreateEditorPage = () => {
-    actions.openNewArticleEditor();
+    actions.leaveArticleEditor();
     navigate("/articles/new");
   };
 
@@ -201,7 +219,7 @@ function App() {
         <Route path="/accounts" element={<AccountsView />} />
         <Route path="/website" element={<WebsiteView />} />
         <Route path="/website/:slug/edit" element={<WebsiteEditorView />} />
-        <Route path="/settings" element={<SettingsView providerStatus={state.providerStatus} />} />
+		<Route path="/settings" element={<SettingsView />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 

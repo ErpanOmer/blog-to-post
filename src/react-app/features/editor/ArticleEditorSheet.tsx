@@ -14,7 +14,8 @@ interface ArticleEditorSheetProps {
     draft: Article | null;
     isGenerating: boolean;
     isLoading: boolean;
-    isFormValid: boolean;
+    isDraftSaveable: boolean;
+    isPublishReady: boolean;
     onTitleChange: (title: string) => void;
     onArticleUpdate: (updates: Partial<Article>) => void;
     onSave: () => void;
@@ -28,7 +29,8 @@ export function ArticleEditorSheet({
     draft,
     isGenerating,
     isLoading,
-    isFormValid,
+    isDraftSaveable,
+    isPublishReady,
     onTitleChange,
     onArticleUpdate,
     onSave,
@@ -85,7 +87,7 @@ export function ArticleEditorSheet({
                                 variant="outline"
                                 size="sm"
                                 onClick={onSave}
-                                disabled={!isFormValid || isLoading || isGenerating}
+                                disabled={!isDraftSaveable || isLoading || isGenerating}
                                 type="button"
                                 className="gap-2"
                             >
@@ -97,7 +99,7 @@ export function ArticleEditorSheet({
                                 variant="gradient"
                                 size="sm"
                                 onClick={onQuickPublish}
-                                disabled={!isFormValid || isLoading || isGenerating}
+                                disabled={!isPublishReady || isLoading || isGenerating}
                                 type="button"
                                 className="gap-2"
                             >
@@ -145,7 +147,7 @@ export function ArticleEditorSheet({
                         <div className="flex-1 overflow-hidden p-4">
                             <ArticleEditor
                                 article={draft}
-                                onChange={(article: Article) => onArticleUpdate(article)} // ArticleEditor expects (article) => void, but I can pass full object
+                                onChange={onArticleUpdate}
                                 disabled={isGenerating}
                                 hideAIActions
                             />

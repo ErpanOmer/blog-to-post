@@ -29,7 +29,7 @@ const plugins = [gfm(), breaks(), frontmatter(), gemoji(), highlight(), math(), 
 
 interface ArticleEditorProps {
   article: Article | null;
-  onChange: (draft: Article) => void;
+  onChange: (updates: Pick<Article, "content">) => void;
   disabled?: boolean;
   hideAIActions?: boolean;
 }
@@ -48,7 +48,10 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
 
     try {
       const result = await generateContent(article.title);
-      onChange({ ...article, content: normalizeMarkdownImageSyntax(result.content) });
+      const normalizedContent = normalizeMarkdownImageSyntax(result.content);
+      if (normalizedContent !== content) {
+        onChange({ content: normalizedContent });
+      }
     } catch (error) {
       console.error("生成正文失败", error);
     } finally {
@@ -120,7 +123,9 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
             uploadImages={handleUploadImages}
             onChange={(value) => {
               if (!article) return;
-              onChange({ ...article, content: normalizeMarkdownImageSyntax(value) });
+              const normalizedContent = normalizeMarkdownImageSyntax(value);
+              if (normalizedContent === content) return;
+              onChange({ content: normalizedContent });
             }}
           />
         </div>

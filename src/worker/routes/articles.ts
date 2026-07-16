@@ -22,55 +22,37 @@ import { getPlatformAccount } from "@/worker/db/platform-accounts";
 import type { ArticlePublication } from "@/worker/types/publications";
 import { extractStringArray, safeParseJson } from "@/worker/utils/json-parser";
 import { pickFirstLine } from "@/worker/utils/text";
-import type { ArticleAISettings } from "@/worker/types";
 import { normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
+import { getPromptTemplate } from "@/worker/services/prompts";
 
-import titleSystemPromptRaw from "@/worker/prompts/generate-title-system-prompt.txt?raw";
 import titleUserPromptTplRaw from "@/worker/prompts/generate-title-user-prompt.txt?raw";
-import generateContentSystemPrompt from "@/worker/prompts/generate-content-system-prompt.txt?raw";
-import generateContentUserPrompt from "@/worker/prompts/generate-content-user-prompt.txt?raw";
-import coverPrompt from "@/worker/prompts/cover.prompt.txt?raw";
-import localContent from "@/worker/prompts/conetent.md?raw";
 
 const app = new Hono<{ Bindings: Env }>();
 const fallbackCover = "/vite.svg";
-const defaultArticleAISettings: ArticleAISettings = {
-	model: "kimi-k2.5:cloud",
-	temperature: 0.2,
-	topP: 0.9,
-	maxTokens: 512,
-	requestTimeoutSec: 120,
-	summaryPrompt: "请基于文章内容生成简洁摘要。输出纯文本，不超过80个汉字。",
-	tagsPrompt: "请基于文章内容生成3-8个技术标签。优先技术名词，标签尽量简短。输出JSON：{\"tags\":[\"标签1\",\"标签2\"]}",
-};
 
-function normalizeNumber(value: unknown, fallback: number, min: number, max: number): number {
-	if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
-	if (value < min) return min;
-	if (value > max) return max;
-	return value;
+interface ArticleAILocalOverrides {
+	temperature?: number;
+	topP?: number;
+	summaryPrompt?: string;
+	tagsPrompt?: string;
 }
 
-function normalizeString(value: unknown, fallback: string): string {
-	if (typeof value !== "string") return fallback;
-	const trimmed = value.trim();
-	return trimmed || fallback;
-}
-
-function normalizeArticleAISettings(input?: unknown): ArticleAISettings {
-	if (!input || typeof input !== "object") {
-		return defaultArticleAISettings;
-	}
-	const source = input as Partial<ArticleAISettings>;
-	return {
-		model: normalizeString(source.model, defaultArticleAISettings.model),
-		temperature: normalizeNumber(source.temperature, defaultArticleAISettings.temperature, 0, 2),
-		topP: normalizeNumber(source.topP, defaultArticleAISettings.topP, 0, 1),
-		maxTokens: normalizeNumber(source.maxTokens, defaultArticleAISettings.maxTokens, 64, 32768),
-		requestTimeoutSec: normalizeNumber(source.requestTimeoutSec, defaultArticleAISettings.requestTimeoutSec, 10, 600),
-		summaryPrompt: normalizeString(source.summaryPrompt, defaultArticleAISettings.summaryPrompt),
-		tagsPrompt: normalizeString(source.tagsPrompt, defaultArticleAISettings.tagsPrompt),
-	};
+function normalizeArticleAILocalOverrides(input: unknown): ArticleAILocalOverrides {
+	if (!input || typeof input !== "object") return {};
+	const source = input as Record<string, unknown>;
+	const temperature = typeof source.temperature === "number" && Number.isFinite(source.temperature)
+		? Math.min(2, Math.max(0, source.temperature))
+		: undefined;
+	const topP = typeof source.topP === "number" && Number.isFinite(source.topP)
+		? Math.min(1, Math.max(0, source.topP))
+		: undefined;
+	const summaryPrompt = typeof source.summaryPrompt === "string" && source.summaryPrompt.trim()
+		? source.summaryPrompt.trim()
+		: undefined;
+	const tagsPrompt = typeof source.tagsPrompt === "string" && source.tagsPrompt.trim()
+		? source.tagsPrompt.trim()
+		: undefined;
+	return { temperature, topP, summaryPrompt, tagsPrompt };
 }
 
 function resolvePromptInput(template: string, content: string): {
@@ -157,7 +139,7 @@ app.post("/generate-title", async (c) => {
 	const juejinTitles = titlesData.juejinTitles ?? [];
 	const userPastTitles = titlesData.userTitles ?? [];
 
-	const systemPrompt = titleSystemPromptRaw;
+	const systemPrompt = await getPromptTemplate(c.env, "title");
 	const userPrompt = titleUserPromptTplRaw
 		.replace("{{USER_PAST_TITLES}}", userPastTitles.join("\n") || "no-data")
 		.replace("{{JUEJIN_TOP_20_TITLES}}", juejinTitles.join("\n") || "no-data");
@@ -170,26 +152,15 @@ app.post("/generate-title", async (c) => {
 
 // Generate content
 app.post("/generate-content", async (c) => {
-	if (c.env.ENVIRONMENT === "development") {
-		return c.json({ content: localContent });
-	}
-
 	const { title } = (await c.req.json()) as { title: string };
 	if (!title || !title.trim()) {
 		return c.json({ error: "Title is required" }, 400);
 	}
 
 	const provider = createAIProvider(c.env);
-	const userPrompt = generateContentUserPrompt.replace("{{TITLE}}", title);
-	const systemPrompt = generateContentSystemPrompt.replace("{{TITLE}}", title);
-
-	try {
-		const content = await provider.generateMarkdownContent(systemPrompt, userPrompt);
-		return c.json({ content });
-	} catch (err) {
-		console.error("[generate-content] generation failed:", err);
-		return c.json({ error: String(err) }, 500);
-	}
+	const prompt = (await getPromptTemplate(c.env, "content")).replaceAll("{{TITLE}}", title);
+	const content = await provider.generateMarkdownContent(prompt, `请围绕标题“${title}”生成完整 Markdown 正文。`);
+	return c.json({ content });
 });
 
 // Generate summary
@@ -202,30 +173,16 @@ app.post("/generate-summary", async (c) => {
 	}
 
 	const provider = createAIProvider(c.env);
-
-	try {
-		const settings = normalizeArticleAISettings(payload.settings);
-		const prompt = resolvePromptInput(settings.summaryPrompt, resolvedContent);
-		const summaryRaw = await provider.generateSummary(
-			prompt.systemPrompt,
-			prompt.userPrompt,
-			{
-				model: settings.model,
-				temperature: settings.temperature,
-				topP: settings.topP,
-				maxTokens: settings.maxTokens,
-				requestTimeoutSec: settings.requestTimeoutSec,
-				think: false,
-			},
-		);
-
-		const summary = extractSummaryText(summaryRaw);
-
-		return c.json({ summary });
-	} catch (error) {
-		console.error("generate summary failed:", error);
-		return c.json({ message: "generate summary failed", error: String(error) }, 500);
-	}
+	const settings = normalizeArticleAILocalOverrides(payload.settings);
+	const prompt = resolvePromptInput(
+		settings.summaryPrompt ?? await getPromptTemplate(c.env, "summary"),
+		resolvedContent,
+	);
+	const summaryRaw = await provider.generateSummary(prompt.systemPrompt, prompt.userPrompt, {
+		temperature: settings.temperature,
+		topP: settings.topP,
+	});
+	return c.json({ summary: extractSummaryText(summaryRaw) });
 });
 // Generate tags
 app.post("/generate-tags", async (c) => {
@@ -237,51 +194,37 @@ app.post("/generate-tags", async (c) => {
 	}
 
 	const provider = createAIProvider(c.env);
+	const settings = normalizeArticleAILocalOverrides(payload.settings);
+	const prompt = resolvePromptInput(
+		settings.tagsPrompt ?? await getPromptTemplate(c.env, "tags"),
+		resolvedContent,
+	);
+	const tagsRaw = await provider.generateTags(prompt.systemPrompt, prompt.userPrompt, {
+		temperature: settings.temperature,
+		topP: settings.topP,
+	});
 
-	try {
-		const settings = normalizeArticleAISettings(payload.settings);
-		const prompt = resolvePromptInput(settings.tagsPrompt, resolvedContent);
-		const tagsRaw = await provider.generateTags(
-			prompt.systemPrompt,
-			prompt.userPrompt,
-			{
-				model: settings.model,
-				temperature: settings.temperature,
-				topP: settings.topP,
-				maxTokens: settings.maxTokens,
-				requestTimeoutSec: settings.requestTimeoutSec,
-				format: "json",
-				think: false,
-			},
-		);
+	const parsed = safeParseJson<{ tags?: unknown } | string[] | null>(tagsRaw, null);
 
-		console.log(tagsRaw)
-
-		const parsed = safeParseJson<{ tags?: unknown } | string[] | null>(tagsRaw, null);
-
-		let tags: string[] = [];
-		let explicitEmptyTags = false;
-		if (Array.isArray(parsed)) {
-			tags = parsed.map((item) => String(item).trim()).filter(Boolean);
-			explicitEmptyTags = parsed.length === 0;
-		} else if (parsed && Array.isArray(parsed.tags)) {
-			tags = parsed.tags.map((item) => String(item).trim()).filter(Boolean);
-			explicitEmptyTags = parsed.tags.length === 0;
-		}
-
-		// If the model explicitly returns {"tags":[]}, keep it empty.
-		if (tags.length === 0 && !explicitEmptyTags) {
-			tags = extractStringArray(tagsRaw, 10)
-				.flatMap((item) => item.split(/[\u002c\uFF0C\u3001]/))
-				.map((item) => item.trim())
-				.filter(Boolean);
-		}
-
-		return c.json({ tags: [...new Set(tags)].slice(0, 8) });
-	} catch (error) {
-		console.error("generate tags failed:", error);
-		return c.json({ message: "generate tags failed", error: String(error) }, 500);
+	let tags: string[] = [];
+	let explicitEmptyTags = false;
+	if (Array.isArray(parsed)) {
+		tags = parsed.map((item) => String(item).trim()).filter(Boolean);
+		explicitEmptyTags = parsed.length === 0;
+	} else if (parsed && Array.isArray(parsed.tags)) {
+		tags = parsed.tags.map((item) => String(item).trim()).filter(Boolean);
+		explicitEmptyTags = parsed.tags.length === 0;
 	}
+
+	// If the model explicitly returns {"tags":[]}, keep it empty.
+	if (tags.length === 0 && !explicitEmptyTags) {
+		tags = extractStringArray(tagsRaw, 10)
+			.flatMap((item) => item.split(/[\u002c\uFF0C\u3001]/))
+			.map((item) => item.trim())
+			.filter(Boolean);
+	}
+
+	return c.json({ tags: [...new Set(tags)].slice(0, 8) });
 });
 // Generate cover
 app.post("/generate-cover", async (c) => {
@@ -293,7 +236,7 @@ app.post("/generate-cover", async (c) => {
 	}
 	const provider = createAIProvider(c.env);
 	const userPrompt = `title: ${resolvedTitle}\nsummary:\ncontent:\n${resolvedContent}`;
-	const coverRaw = await provider.generateImage(coverPrompt, userPrompt);
+	const coverRaw = await provider.generateImage(await getPromptTemplate(c.env, "cover"), userPrompt);
 	const coverImage = pickFirstLine(coverRaw) || fallbackCover;
 	return c.json({ coverImage });
 });
@@ -310,23 +253,24 @@ app.get("/:id", async (c) => {
 // Create article
 app.post("/", async (c) => {
 	const payload = (await c.req.json()) as {
-		id?: string;
-		title: string;
-		content: string;
+		title?: string;
+		content?: string;
 		htmlContent?: string;
-		summary: string;
-		tags: string[];
-		coverImage: string;
+		summary?: string | null;
+		tags?: string[] | null;
+		coverImage?: string | null;
 		platform?: PlatformType;
 	};
-	if (!payload.title || !payload.content || !payload.summary || !payload.tags?.length || !payload.coverImage) {
-		return c.json({ message: "missing required fields" }, 400);
+	const title = payload.title ?? "";
+	const content = payload.content ?? "";
+	if (!title.trim() && !content.trim()) {
+		return c.json({ message: "title or content required" }, 400);
 	}
 	const now = Date.now();
-	const normalizedContent = normalizeMarkdownImageSyntax(payload.content);
+	const normalizedContent = normalizeMarkdownImageSyntax(content);
 	const article = await createArticle(c.env.DB, {
-		id: payload.id ?? crypto.randomUUID(),
-		title: payload.title,
+		id: crypto.randomUUID(),
+		title,
 		content: normalizedContent,
 		summary: payload.summary,
 		htmlContent: payload.htmlContent,

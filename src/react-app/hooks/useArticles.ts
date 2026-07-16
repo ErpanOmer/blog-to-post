@@ -11,6 +11,7 @@ import { notify } from "@/react-app/services/notification-service";
 export function useArticles() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchArticles = useCallback(async () => {
@@ -26,6 +27,7 @@ export function useArticles() {
       notify.error("加载文章失败", requestError.message);
     } finally {
       setLoading(false);
+      setHasLoaded(true);
     }
   }, []);
 
@@ -77,6 +79,7 @@ export function useArticles() {
   return {
     articles,
     loading,
+    hasLoaded,
     error,
     refreshArticles,
     createArticle,

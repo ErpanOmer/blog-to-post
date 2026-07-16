@@ -9,7 +9,7 @@ import math from "@bytemd/plugin-math";
 import { useArticles } from "./useArticles";
 import { createEmptyArticle } from "@/react-app/utils/articleDefaults";
 import { notify, requestNotificationPermission } from "@/react-app/services/notification-service";
-import { createPublishTask, getProviderStatus } from "@/react-app/api";
+import { createPublishTask } from "@/react-app/api";
 import type { Article } from "@/react-app/types";
 import type { AccountConfig } from "@/react-app/types/publications";
 import { normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
@@ -27,6 +27,32 @@ function getHtmlContent(markdown: string): string {
   return bytemd.getProcessor({ plugins }).processSync(markdown).toString();
 }
 
+function isDraftSaveable(article: Article | null): boolean {
+	if (!article) return false;
+	return article.title.trim().length > 0 || article.content.trim().length > 0;
+}
+
+function isArticlePublishReady(article: Article | null): boolean {
+  if (!article) return false;
+  return (
+    article.title.trim().length > 0 &&
+    article.content.trim().length > 0 &&
+    (article.summary?.trim().length ?? 0) > 0 &&
+    (article.tags?.length ?? 0) > 0 &&
+    (article.coverImage?.trim().length ?? 0) > 0
+  );
+}
+
+function hasArticleChanges(article: Article, updates: Partial<Article>): boolean {
+  return Object.entries(updates).some(([key, value]) => {
+    const currentValue = article[key as keyof Article];
+    if (Array.isArray(currentValue) && Array.isArray(value)) {
+      return currentValue.length !== value.length || currentValue.some((item, index) => item !== value[index]);
+    }
+    return currentValue !== value;
+  });
+}
+
 type ConfirmState = {
   open: boolean;
   title: string;
@@ -38,18 +64,12 @@ type ConfirmState = {
 };
 
 export function useAppController() {
-  const { articles, updateArticle, createArticle, deleteArticle, refreshArticles } = useArticles();
+  const { articles, hasLoaded: articlesLoaded, updateArticle, createArticle, deleteArticle, refreshArticles } = useArticles();
 
   const [draft, setDraft] = useState<Article | null>(null);
-  const [hasDraftBackupChanges, setHasDraftBackupChanges] = useState(false);
+  const [isDraftDirty, setIsDraftDirty] = useState(false);
   const draftBackupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [providerStatus, setProviderStatus] = useState<{
-    provider: string;
-    ready: boolean;
-    lastCheckedAt: number;
-    message: string;
-    defaultModel?: string;
-  } | null>(null);
+  const persistPromiseRef = useRef<Promise<Article> | null>(null);
   const [distributionDetailTaskId, setDistributionDetailTaskId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -69,16 +89,15 @@ export function useAppController() {
     setConfirmDialog((prev) => ({ ...prev, open: false }));
   }, []);
 
-  const isFormValid = useMemo(() => {
-    if (!draft) return false;
-    return (
-      draft.title.trim().length > 0 &&
-      draft.content.trim().length > 0 &&
-      (draft.summary?.trim().length ?? 0) > 0 &&
-      (draft.tags?.length ?? 0) > 0 &&
-      (draft.coverImage?.trim().length ?? 0) > 0
-    );
-  }, [draft]);
+  const isDraftSaveableState = useMemo(() => isDraftSaveable(draft), [draft]);
+  const isPublishReady = useMemo(() => isArticlePublishReady(draft), [draft]);
+
+  const cancelDraftBackupTimer = useCallback(() => {
+    if (draftBackupTimerRef.current) {
+      clearTimeout(draftBackupTimerRef.current);
+      draftBackupTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     const handleContentGenerating = (event: CustomEvent<{ generating: boolean }>) => {
@@ -92,20 +111,9 @@ export function useAppController() {
   }, []);
 
   useEffect(() => {
-    getProviderStatus()
-      .then(setProviderStatus)
-      .catch((error: Error) => {
-        console.error("加载模型服务状态失败", error);
-      });
-  }, []);
+    cancelDraftBackupTimer();
 
-  useEffect(() => {
-    if (draftBackupTimerRef.current) {
-      clearTimeout(draftBackupTimerRef.current);
-      draftBackupTimerRef.current = null;
-    }
-
-    if (!draft || !hasDraftBackupChanges) return;
+    if (!draft || !isDraftDirty) return;
 
     draftBackupTimerRef.current = setTimeout(() => {
       saveArticleDraftBackup(draft);
@@ -113,92 +121,121 @@ export function useAppController() {
     }, 700);
 
     return () => {
-      if (draftBackupTimerRef.current) {
-        clearTimeout(draftBackupTimerRef.current);
-        draftBackupTimerRef.current = null;
-      }
+      cancelDraftBackupTimer();
     };
-  }, [draft, hasDraftBackupChanges]);
+  }, [cancelDraftBackupTimer, draft, isDraftDirty]);
 
   const openNewArticleEditor = useCallback(() => {
-    const latestBackup = readLatestTempArticleDraftBackup();
+    cancelDraftBackupTimer();
+    const latestBackup = readLatestTempArticleDraftBackup(articles.map((article) => article.id));
     if (latestBackup) {
       setDraft(latestBackup.article);
-      setHasDraftBackupChanges(false);
+      setIsDraftDirty(true);
       notify.info("已恢复上次未保存的新文章", new Date(latestBackup.savedAt).toLocaleString("zh-CN"));
       return;
     }
 
     setDraft(createEmptyArticle());
-    setHasDraftBackupChanges(false);
-  }, []);
+    setIsDraftDirty(false);
+  }, [articles, cancelDraftBackupTimer]);
 
   const openArticleEditor = useCallback((article: Article) => {
     if (article.status !== "draft") {
       notify.error("只有草稿状态的文章才能编辑");
       return false;
     }
+    cancelDraftBackupTimer();
     const backup = readArticleDraftBackup(article.id);
     if (shouldRestoreArticleDraftBackup(article, backup)) {
       setDraft(backup.article);
+      setIsDraftDirty(true);
       notify.info("已恢复本地实时备份", new Date(backup.savedAt).toLocaleString("zh-CN"));
     } else {
       setDraft({ ...article });
+      setIsDraftDirty(false);
     }
-    setHasDraftBackupChanges(false);
     return true;
-  }, []);
+  }, [cancelDraftBackupTimer]);
 
   const clearDraft = useCallback(() => {
+    cancelDraftBackupTimer();
     setDraft(null);
-    setHasDraftBackupChanges(false);
-  }, []);
+    setIsDraftDirty(false);
+  }, [cancelDraftBackupTimer]);
+
+  const leaveArticleEditor = useCallback(() => {
+    cancelDraftBackupTimer();
+    if (draft && isDraftDirty) {
+      saveArticleDraftBackup(draft);
+    }
+    setDraft(null);
+    setIsDraftDirty(false);
+  }, [cancelDraftBackupTimer, draft, isDraftDirty]);
 
   const handleTitleChange = useCallback((title: string) => {
-    setHasDraftBackupChanges(true);
-    setDraft((prev) => (prev ? { ...prev, title } : prev));
-  }, []);
+    if (!draft || draft.title === title) return;
+    setIsDraftDirty(true);
+    setDraft({ ...draft, title });
+  }, [draft]);
 
   const handleArticleUpdate = useCallback((updates: Partial<Article>) => {
-    setHasDraftBackupChanges(true);
-    setDraft((prev) => {
-      if (!prev) return prev;
-      const normalizedUpdates = updates.content !== undefined
-        ? { ...updates, content: normalizeMarkdownImageSyntax(updates.content) }
-        : updates;
-      return { ...prev, ...normalizedUpdates } as Article;
-    });
-  }, []);
+    if (!draft) return;
+    const normalizedUpdates = updates.content !== undefined
+      ? { ...updates, content: normalizeMarkdownImageSyntax(updates.content) }
+      : updates;
+    if (!hasArticleChanges(draft, normalizedUpdates)) return;
+    setIsDraftDirty(true);
+    setDraft({ ...draft, ...normalizedUpdates });
+  }, [draft]);
 
   const persistDraft = useCallback(async (): Promise<Article> => {
-    if (!draft) {
+    if (persistPromiseRef.current) return persistPromiseRef.current;
+
+    const snapshot = draft ? { ...draft, tags: [...(draft.tags ?? [])] } : null;
+    if (!snapshot) {
       throw new Error("当前没有可保存的草稿");
     }
-    if (!isFormValid) {
-      throw new Error("请先补全标题、正文、摘要、标签和封面");
+    if (!isDraftSaveable(snapshot)) {
+      throw new Error("请至少填写标题或正文后再保存草稿");
     }
 
-    const normalizedContent = normalizeMarkdownImageSyntax(draft.content);
-    const payload: Partial<Article> = {
-      title: draft.title,
-      content: normalizedContent,
-      summary: draft.summary,
-      htmlContent: getHtmlContent(normalizedContent),
-      tags: draft.tags,
-      coverImage: draft.coverImage,
-    };
+    cancelDraftBackupTimer();
+    const operation = (async () => {
+      try {
+        const normalizedContent = normalizeMarkdownImageSyntax(snapshot.content);
+        const payload: Partial<Article> = {
+          title: snapshot.title,
+          content: normalizedContent,
+          summary: snapshot.summary,
+          htmlContent: getHtmlContent(normalizedContent),
+          tags: snapshot.tags,
+          coverImage: snapshot.coverImage,
+        };
 
-    const exists = articles.some((item) => item.id === draft.id);
-    const savedArticle = exists
-      ? await updateArticle(draft.id, payload)
-      : await createArticle({ ...draft, ...payload, status: "draft" } as Article);
+        const exists = articles.some((item) => item.id === snapshot.id);
+        const savedArticle = exists
+          ? await updateArticle(snapshot.id, payload)
+          : await createArticle({ ...snapshot, ...payload, status: "draft" } as Article);
 
-    clearArticleDraftBackup(draft.id);
-    clearArticleDraftBackup(savedArticle.id);
-    setHasDraftBackupChanges(false);
-    setDraft(savedArticle);
-    return savedArticle;
-  }, [articles, createArticle, draft, isFormValid, updateArticle]);
+        clearArticleDraftBackup(snapshot.id);
+        clearArticleDraftBackup(savedArticle.id);
+        setIsDraftDirty(false);
+        setDraft(savedArticle);
+        return savedArticle;
+      } catch (error) {
+        saveArticleDraftBackup(snapshot);
+        setIsDraftDirty(true);
+        throw error;
+      }
+    })();
+
+    persistPromiseRef.current = operation;
+    try {
+      return await operation;
+    } finally {
+      persistPromiseRef.current = null;
+    }
+  }, [articles, cancelDraftBackupTimer, createArticle, draft, updateArticle]);
 
   const handleSave = useCallback(async (): Promise<Article | null> => {
     requestNotificationPermission();
@@ -217,12 +254,12 @@ export function useAppController() {
   }, [persistDraft]);
 
   const handleQuickPublish = useCallback(() => {
-    if (!draft || !isFormValid) return;
+    if (!draft || !isPublishReady) return;
     requestNotificationPermission();
     setIsQuickPublishMode(true);
     setArticlesToPublish([draft]);
     setIsPublishDialogOpen(true);
-  }, [draft, isFormValid]);
+  }, [draft, isPublishReady]);
 
   const handleQuickPublishConfirm = useCallback(
     async (accountConfigs: AccountConfig[], scheduleTime: number | null): Promise<string | null> => {
@@ -360,21 +397,24 @@ export function useAppController() {
   return {
     state: {
       articles,
+      articlesLoaded,
       draft,
+      isDraftDirty,
       isLoading,
       isGenerating,
       isPublishDialogOpen,
       isQuickPublishMode,
       articlesToPublish,
       isPublishing,
-      providerStatus,
-      isFormValid,
+      isDraftSaveable: isDraftSaveableState,
+      isPublishReady,
       distributionDetailTaskId,
       confirmDialog,
     },
     actions: {
       setDraft,
       clearDraft,
+      leaveArticleEditor,
       openNewArticleEditor,
       openArticleEditor,
       handleTitleChange,

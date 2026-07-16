@@ -30,7 +30,11 @@ function readIndex(storage: Storage): string[] {
 }
 
 function writeIndex(storage: Storage, ids: string[]) {
-	storage.setItem(ARTICLE_DRAFT_BACKUP_INDEX_KEY, JSON.stringify([...new Set(ids)]));
+	try {
+		storage.setItem(ARTICLE_DRAFT_BACKUP_INDEX_KEY, JSON.stringify([...new Set(ids)]));
+	} catch {
+		// Storage can be unavailable or full. Draft editing must continue regardless.
+	}
 }
 
 function parseBackup(raw: string | null): ArticleDraftBackup | null {
@@ -52,33 +56,59 @@ export function saveArticleDraftBackup(article: Article): ArticleDraftBackup | n
 		article: { ...article, updatedAt: Date.now() },
 		savedAt: Date.now(),
 	};
-	storage.setItem(getArticleDraftBackupKey(article.id), JSON.stringify(backup));
-	writeIndex(storage, [article.id, ...readIndex(storage)]);
-	return backup;
+	try {
+		storage.setItem(getArticleDraftBackupKey(article.id), JSON.stringify(backup));
+		writeIndex(storage, [article.id, ...readIndex(storage)]);
+		return backup;
+	} catch {
+		return null;
+	}
 }
 
 export function readArticleDraftBackup(articleId: string): ArticleDraftBackup | null {
 	const storage = getBackupStorage();
 	if (!storage) return null;
-	return parseBackup(storage.getItem(getArticleDraftBackupKey(articleId)));
+	try {
+		return parseBackup(storage.getItem(getArticleDraftBackupKey(articleId)));
+	} catch {
+		return null;
+	}
 }
 
-export function readLatestTempArticleDraftBackup(): ArticleDraftBackup | null {
+export function readLatestTempArticleDraftBackup(persistedArticleIds: Iterable<string> = []): ArticleDraftBackup | null {
 	const storage = getBackupStorage();
 	if (!storage) return null;
+	const persistedIds = new Set(persistedArticleIds);
+	const indexedIds = readIndex(storage);
+	const validIds: string[] = [];
+	const backups: ArticleDraftBackup[] = [];
 
-	return readIndex(storage)
-		.map((id) => readArticleDraftBackup(id))
-		.filter((backup): backup is ArticleDraftBackup => Boolean(backup?.article.id.startsWith("temp-")))
-		.sort((a, b) => b.savedAt - a.savedAt)[0] ?? null;
+	for (const id of indexedIds) {
+		const backup = readArticleDraftBackup(id);
+		if (!backup) continue;
+		validIds.push(id);
+		if (backup.article.id.startsWith("temp-") && !persistedIds.has(backup.article.id)) {
+			backups.push(backup);
+		}
+	}
+
+	if (validIds.length !== indexedIds.length) {
+		writeIndex(storage, validIds);
+	}
+
+	return backups.sort((a, b) => b.savedAt - a.savedAt)[0] ?? null;
 }
 
 export function clearArticleDraftBackup(articleId: string) {
 	const storage = getBackupStorage();
 	if (!storage) return;
 
-	storage.removeItem(getArticleDraftBackupKey(articleId));
-	writeIndex(storage, readIndex(storage).filter((id) => id !== articleId));
+	try {
+		storage.removeItem(getArticleDraftBackupKey(articleId));
+		writeIndex(storage, readIndex(storage).filter((id) => id !== articleId));
+	} catch {
+		// Best effort cleanup only.
+	}
 }
 
 export function shouldRestoreArticleDraftBackup(article: Article, backup: ArticleDraftBackup | null): backup is ArticleDraftBackup {

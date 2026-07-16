@@ -12,7 +12,9 @@ interface ArticleEditorPageProps {
   draft: Article | null;
   isGenerating: boolean;
   isSaving: boolean;
-  isFormValid: boolean;
+  isDirty: boolean;
+  isDraftSaveable: boolean;
+  isPublishReady: boolean;
   onBack: () => void;
   onTitleChange: (title: string) => void;
   onArticleUpdate: (updates: Partial<Article>) => void;
@@ -24,7 +26,9 @@ export function ArticleEditorPage({
   draft,
   isGenerating,
   isSaving,
-  isFormValid,
+  isDirty,
+  isDraftSaveable,
+  isPublishReady,
   onBack,
   onTitleChange,
   onArticleUpdate,
@@ -32,14 +36,14 @@ export function ArticleEditorPage({
   onQuickPublish,
 }: ArticleEditorPageProps) {
   const hasTitle = Boolean(draft?.title?.trim());
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showAISettings, setShowAISettings] = useState(false);
+  const editorDisabled = isGenerating || isSaving;
 
   // 保护机制：如果用户试图关闭页面或刷新，给出浏览器原生提示
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges) {
+      if (isDirty) {
         e.preventDefault();
         e.returnValue = "";
         return "";
@@ -47,21 +51,10 @@ export function ArticleEditorPage({
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasUnsavedChanges]);
-
-  // 修改状态追踪
-  const handleUpdate = (updates: Partial<Article>) => {
-    setHasUnsavedChanges(true);
-    onArticleUpdate(updates);
-  };
-
-  const handleTitle = (title: string) => {
-    setHasUnsavedChanges(true);
-    onTitleChange(title);
-  };
+  }, [isDirty]);
 
   const handleBackClick = () => {
-    if (hasUnsavedChanges) {
+    if (isDirty) {
       setShowExitConfirm(true);
     } else {
       onBack();
@@ -71,11 +64,6 @@ export function ArticleEditorPage({
   const handleConfirmExit = () => {
     setShowExitConfirm(false);
     onBack();
-  };
-
-  const handleSaveClick = async () => {
-    const result = await onSave();
-    if (result) setHasUnsavedChanges(false);
   };
 
   return (
@@ -99,7 +87,7 @@ export function ArticleEditorPage({
               <h1 className="text-[14px] font-semibold leading-tight text-design-text">文章编辑工作台</h1>
               <p className="text-[12px] text-design-neutral">
                 {hasTitle ? "正在编辑并准备分发" : "请先输入一个好标题"}
-                {hasUnsavedChanges && <span className="ml-2 text-amber-500 font-medium">* 有未保存的更改</span>}
+                {isDirty && <span className="ml-2 text-amber-500 font-medium">* 有未保存的更改</span>}
                 <span className="ml-2 text-emerald-500">实时备份已开启</span>
               </p>
             </div>
@@ -110,7 +98,7 @@ export function ArticleEditorPage({
               variant="outline"
               size="sm"
               onClick={() => setShowAISettings(true)}
-              disabled={isGenerating}
+              disabled={editorDisabled}
               type="button"
               className="gap-1.5"
             >
@@ -121,8 +109,9 @@ export function ArticleEditorPage({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void handleSaveClick()}
-              disabled={!isFormValid || isSaving || isGenerating}
+              onClick={() => void onSave()}
+              disabled={!isDraftSaveable || isSaving || isGenerating}
+              title={!isDraftSaveable ? "请至少填写标题或正文" : "保存当前草稿"}
               type="button"
               className="gap-1.5"
             >
@@ -134,7 +123,8 @@ export function ArticleEditorPage({
               variant="default"
               size="sm"
               onClick={onQuickPublish}
-              disabled={!isFormValid || isSaving || isGenerating}
+              disabled={!isPublishReady || isSaving || isGenerating}
+              title={!isPublishReady ? "快速发布前需要补全标题、正文、摘要、标签和封面" : "快速发布"}
               type="button"
               className="gap-1.5"
             >
@@ -149,13 +139,13 @@ export function ArticleEditorPage({
       <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[clamp(380px,20vw,450px)_minmax(0,1fr)]">
         <aside className="overflow-y-auto border-r border-design-border bg-design-background p-4 custom-scrollbar">
             <div className="space-y-3">
-            <TitleGenerator title={draft?.title ?? ""} onTitleChange={handleTitle} disabled={isGenerating} hideAIActions />
+            <TitleGenerator title={draft?.title ?? ""} onTitleChange={onTitleChange} disabled={editorDisabled} hideAIActions />
             </div>
-            <GenerationPanel article={draft} onArticleUpdate={handleUpdate} disabled={isGenerating} />
+            <GenerationPanel article={draft} onArticleUpdate={onArticleUpdate} disabled={editorDisabled} />
         </aside>
 
         <section className="min-w-0 overflow-y-auto bg-white p-4 lg:p-5 xl:p-6 custom-scrollbar">
-          <ArticleEditor article={draft} onChange={(article) => handleUpdate(article)} disabled={isGenerating} hideAIActions />
+          <ArticleEditor article={draft} onChange={onArticleUpdate} disabled={editorDisabled} hideAIActions />
         </section>
       </div>
 

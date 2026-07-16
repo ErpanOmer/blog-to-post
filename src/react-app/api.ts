@@ -1,6 +1,11 @@
 import type {
 	AIModelCatalog,
 	AIModelSettings,
+	AIModelRouteInput,
+	AIModelRoutingConfig,
+	AIProviderModelsResult,
+	AIProviderProfileSummary,
+	AIProviderTestResult,
 	ArticleAISettings,
 	Article,
 	ArticleStatus,
@@ -8,6 +13,8 @@ import type {
 	PromptKey,
 	PromptTemplate,
 	ProviderStatus,
+	CreateAIProviderProfileInput,
+	UpdateAIProviderProfileInput,
 } from "./types";
 import type {
 	PublishTask,
@@ -38,7 +45,14 @@ export async function searchArticles(query: string): Promise<Article[]> {
 async function parseJson<T>(response: Response): Promise<T> {
 	const text = await response.text();
 	if (!response.ok) {
-		throw new Error(text || `HTTP ${response.status}`);
+		let message = text || `HTTP ${response.status}`;
+		try {
+			const payload = JSON.parse(text) as { message?: string; error?: string };
+			message = payload.message || payload.error || message;
+		} catch {
+			// Keep the raw response text when the server did not return JSON.
+		}
+		throw new Error(message);
 	}
 	try {
 		return JSON.parse(text) as T;
@@ -65,17 +79,11 @@ export async function generateTitle(): Promise<{ titles: string[]; count: number
 }
 
 export async function generateContent(title: string): Promise<{ content: string }> {
-	const response = await fetch("/api/articles/generate-content", {
+	return parseJson<{ content: string }>(await fetch("/api/articles/generate-content", {
 		method: "POST",
-		headers: { "Content-Type": "application/json" },
+		headers: jsonHeaders,
 		body: JSON.stringify({ title }),
-	});
-
-	if (!response.ok) throw new Error("生成正文失败");
-
-	const data = await response.json() as { content: string };
-
-	return data;
+	}));
 }
 
 export interface GeneratedSummary {
@@ -184,6 +192,65 @@ export async function updateAIModelSettings(
 			body: JSON.stringify(payload),
 		}),
 	);
+}
+
+export async function getAIProviderProfiles(): Promise<AIProviderProfileSummary[]> {
+	return parseJson<AIProviderProfileSummary[]>(await fetch("/api/ai/providers"));
+}
+
+export async function createAIProviderProfile(
+	payload: CreateAIProviderProfileInput,
+): Promise<AIProviderProfileSummary> {
+	return parseJson<AIProviderProfileSummary>(await fetch("/api/ai/providers", {
+		method: "POST",
+		headers: jsonHeaders,
+		body: JSON.stringify(payload),
+	}));
+}
+
+export async function updateAIProviderProfile(
+	id: string,
+	payload: UpdateAIProviderProfileInput,
+): Promise<AIProviderProfileSummary> {
+	return parseJson<AIProviderProfileSummary>(await fetch(`/api/ai/providers/${id}`, {
+		method: "PUT",
+		headers: jsonHeaders,
+		body: JSON.stringify(payload),
+	}));
+}
+
+export async function deleteAIProviderProfile(id: string): Promise<void> {
+	await parseJson<{ success: true }>(await fetch(`/api/ai/providers/${id}`, { method: "DELETE" }));
+}
+
+export async function testUnsavedAIProviderProfile(
+	payload: CreateAIProviderProfileInput,
+): Promise<AIProviderTestResult> {
+	return parseJson<AIProviderTestResult>(await fetch("/api/ai/providers/test", {
+		method: "POST",
+		headers: jsonHeaders,
+		body: JSON.stringify(payload),
+	}));
+}
+
+export async function testAIProviderProfile(id: string): Promise<AIProviderTestResult> {
+	return parseJson<AIProviderTestResult>(await fetch(`/api/ai/providers/${id}/test`, { method: "POST" }));
+}
+
+export async function getAIProviderModels(id: string): Promise<AIProviderModelsResult> {
+	return parseJson<AIProviderModelsResult>(await fetch(`/api/ai/providers/${id}/models`));
+}
+
+export async function getAIModelRouting(): Promise<AIModelRoutingConfig> {
+	return parseJson<AIModelRoutingConfig>(await fetch("/api/ai/routing"));
+}
+
+export async function updateAIModelRouting(routes: AIModelRouteInput[]): Promise<AIModelRoutingConfig> {
+	return parseJson<AIModelRoutingConfig>(await fetch("/api/ai/routing", {
+		method: "PUT",
+		headers: jsonHeaders,
+		body: JSON.stringify({ routes }),
+	}));
 }
 
 export async function getPlatformPublishSettings(): Promise<PlatformPublishSettingsMap> {
