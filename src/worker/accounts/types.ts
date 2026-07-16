@@ -1,6 +1,7 @@
 import type { PlatformType } from "@/worker/types";
 import type { Env } from "@/worker/types";
 import type { Article as SharedArticle } from "@/shared/types";
+import type { ImageOperationStats, PublishImageRuntime } from "@/worker/utils/media";
 
 export interface AccountInfo {
     id: string;
@@ -86,6 +87,10 @@ export interface AccountService {
     articleTags(articleId: string): Promise<string[]>;
 
     imageUpload(imageData: string, filename?: string): Promise<ImageUploadResult>;
+
+    setPublishImageRuntime?(runtime?: PublishImageRuntime): void;
+    clearPublishImageRuntime?(): void;
+    getLastImageOperationStats?(): ImageOperationStats;
 
     // Optional publish trace hooks for observability
     setPublishTraceLogger?(logger?: PublishTraceLogger): void;

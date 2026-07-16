@@ -307,39 +307,6 @@ export default class ZhihuAccountService extends AbstractAccountService {
 		return `${baseName}.${ext}`;
 	}
 
-	private async downloadImageFromUrl(imageUrl: string): Promise<{ blob: Blob; filename: string }> {
-		const normalized = this.normalizeImageUrl(imageUrl);
-		if (!normalized || normalized.startsWith("data:")) {
-			throw new Error(`Unsupported image URL: ${imageUrl}`);
-		}
-
-		const response = await fetch(normalized, {
-			method: "GET",
-			headers: {
-				accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-				referer: "https://zhuanlan.zhihu.com/",
-				"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-			},
-		});
-
-		if (!response.ok) {
-			throw new Error(`Image download failed (${response.status}): ${normalized}`);
-		}
-
-		const contentTypeHeader = response.headers.get("content-type")?.split(";")[0]?.trim() ?? "image/jpeg";
-		if (!contentTypeHeader.startsWith("image/") && contentTypeHeader !== "application/octet-stream") {
-			throw new Error(`Resource is not an image: ${normalized} (${contentTypeHeader})`);
-		}
-
-		const arrayBuffer = await response.arrayBuffer();
-		const blob = new Blob([arrayBuffer], {
-			type: contentTypeHeader === "application/octet-stream" ? "image/jpeg" : contentTypeHeader,
-		});
-		const filename = this.guessFileName(normalized, blob.type || contentTypeHeader);
-
-		return { blob, filename };
-	}
-
 	private tryParseJson(rawText: string): unknown | null {
 		if (!rawText) return null;
 		try {
@@ -427,13 +394,13 @@ export default class ZhihuAccountService extends AbstractAccountService {
 
 		const text = await response.text();
 		if (!response.ok) {
-			throw new Error(`Zhihu URL image upload failed (${response.status}): ${text.slice(0, 200)}`);
+			throw new Error(`Zhihu URL image upload failed with HTTP ${response.status}`);
 		}
 
 		const payload = this.tryParseJson(text) as ZhihuUploadedImageByUrlResponse | null;
 		const uploaded = this.normalizeImageUrl(payload?.src ?? "");
 		if (!uploaded) {
-			throw new Error(`Zhihu URL image upload returned unexpected payload: ${text.slice(0, 200)}`);
+			throw new Error("Zhihu URL image upload returned an invalid payload");
 		}
 
 		await this.tracePublish({
@@ -467,7 +434,7 @@ export default class ZhihuAccountService extends AbstractAccountService {
 
 		const text = await response.text();
 		if (!response.ok) {
-			throw new Error(`Zhihu image token request failed (${response.status}): ${text.slice(0, 200)}`);
+			throw new Error(`Zhihu image token request failed with HTTP ${response.status}`);
 		}
 
 		const payload = this.tryParseJson(text) as ZhihuImageTokenResponse | null;
@@ -480,7 +447,7 @@ export default class ZhihuAccountService extends AbstractAccountService {
 			payload?.upload_token?.access_token,
 		);
 		if (!uploadFile || (!hasReusableImage && !hasUploadCredentials)) {
-			throw new Error(`Zhihu image token payload is invalid: ${text.slice(0, 200)}`);
+			throw new Error("Zhihu image token response is incomplete");
 		}
 
 		return payload;
@@ -510,6 +477,8 @@ export default class ZhihuAccountService extends AbstractAccountService {
 		let finalKey = objectKey;
 		if (mimeType === "image/gif" && !/\.gif$/i.test(finalKey)) {
 			finalKey += ".gif";
+		} else if (!/\.(?:jpe?g|png|webp|gif)$/i.test(finalKey) && !/_[a-z]\.jpg$/i.test(finalKey)) {
+			finalKey += "_r.jpg";
 		}
 		return `https://pic4.zhimg.com/${finalKey}`;
 	}
@@ -664,6 +633,46 @@ export default class ZhihuAccountService extends AbstractAccountService {
 		return fallbackUrl;
 	}
 
+	private async uploadImageSourceToZhihu(source: string): Promise<string> {
+		const normalized = this.normalizeImageUrl(source);
+		if (!normalized) throw this.invalidImageSource(source, "Zhihu image upload");
+		if (!normalized.startsWith("data:") && this.isZhihuHostedImage(normalized)) {
+			await this.verifyExistingPlatformImage(normalized, {
+				referer: "https://zhuanlan.zhihu.com/",
+			});
+			return normalized;
+		}
+		const cached = this.imageUrlCache.get(normalized);
+		if (cached) return cached;
+
+		const image = await this.resolveSourceImage(normalized, {
+			referer: "https://zhuanlan.zhihu.com/",
+		});
+		const filename = this.guessFileName(normalized.startsWith("data:") ? "inline-image" : normalized, image.mimeType);
+		const uploadedUrl = await this.withPlatformImageUploadRetry({
+			source: normalized,
+			upload: async (attempt) => {
+				if (!normalized.startsWith("data:") && attempt <= 2) {
+					return await this.uploadImageBySourceUrlToZhihu(image.effectiveUrl);
+				}
+				return await this.uploadImageBlobToZhihu(image.blob, filename);
+			},
+			getUploadedUrl: (url) => url,
+			isExpectedPlatformUrl: (url) => this.isZhihuHostedImage(url),
+			verificationHeaders: {
+				accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+				cookie: this.authToken,
+				referer: "https://zhuanlan.zhihu.com/",
+				"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+				"sec-fetch-dest": "image",
+				"sec-fetch-mode": "no-cors",
+				"sec-fetch-site": "cross-site",
+			},
+		});
+		this.imageUrlCache.set(normalized, uploadedUrl);
+		return uploadedUrl;
+	}
+
 	private async replaceHtmlImageUrls(htmlContent: string): Promise<string> {
 		const imageSources = this.extractImageUrlsFromHtmlContent(htmlContent);
 		if (imageSources.length === 0) {
@@ -678,62 +687,42 @@ export default class ZhihuAccountService extends AbstractAccountService {
 
 		for (const originalSrc of imageSources) {
 			const normalized = this.normalizeImageUrl(originalSrc);
-			if (!normalized) {
-				continue;
-			}
+			if (!normalized) throw this.invalidImageSource(originalSrc, "Zhihu article content");
 			if (!normalized.startsWith("data:") && this.isZhihuHostedImage(normalized)) {
+				await this.verifyExistingPlatformImage(normalized, { referer: "https://zhuanlan.zhihu.com/" });
 				continue;
 			}
 			if (this.imageUrlCache.has(normalized)) {
 				continue;
 			}
 
-			try {
-				let uploadedUrl: string;
-
-				if (normalized.startsWith("data:")) {
-					const blob = this.dataUriToBlob(normalized);
-					const generatedName = this.guessFileName("inline-image", blob.type || "image/jpeg");
-					uploadedUrl = await this.uploadImageBlobToZhihu(blob, generatedName);
-				} else {
-					try {
-						uploadedUrl = await this.uploadImageBySourceUrlToZhihu(normalized);
-					} catch (urlUploadError) {
-						console.warn(`Zhihu URL image upload failed, fallback to binary upload: ${normalized}`, urlUploadError);
-						const { blob, filename } = await this.downloadImageFromUrl(normalized);
-						uploadedUrl = await this.uploadImageBlobToZhihu(blob, filename);
-					}
-				}
-
-				this.imageUrlCache.set(normalized, uploadedUrl);
-				await this.tracePublish({
-					stage: "zhihu_replace_single_image_done",
-					message: "Replace one image URL",
-					metadata: {
-						source: normalized,
-						uploadedUrl,
-					},
-				});
-				await randomDelay(200, 500);
-			} catch (error) {
-				console.warn(`Zhihu image upload failed, keep original image: ${originalSrc}`, error);
-				await this.tracePublish({
-					stage: "zhihu_replace_single_image_failed",
-					level: "warn",
-					message: "Replace one image URL failed, keep original",
-					metadata: {
-						source: originalSrc,
-						error: error instanceof Error ? error.message : "unknown",
-					},
-				});
-			}
+			const uploadedUrl = await this.uploadImageSourceToZhihu(normalized);
+			await this.tracePublish({
+				stage: "zhihu_replace_single_image_done",
+				message: "Replace one image URL",
+				metadata: { source: normalized, uploadedUrl },
+			});
+			await randomDelay(200, 500);
 		}
+		this.assertImageSourcesResolved({
+			sources: imageSources,
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isZhihuHostedImage(source),
+			resolved: this.imageUrlCache,
+			context: "Zhihu article content",
+		});
 
 		const replaced = this.replaceHtmlImageUrlsByMap(
 			htmlContent,
 			(rawUrl) => this.normalizeImageUrl(rawUrl),
 			this.imageUrlCache,
 		);
+		this.assertFinalImageSources({
+			sources: this.extractImageUrlsFromHtmlContent(replaced),
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isZhihuHostedImage(source),
+			context: "Zhihu final HTML",
+		});
 
 		await this.tracePublish({
 			stage: "zhihu_replace_images_done",
@@ -795,18 +784,11 @@ export default class ZhihuAccountService extends AbstractAccountService {
 
 		const normalized = this.normalizeImageUrl(coverImage);
 		if (!normalized) {
-			await this.tracePublish({
-				stage: "zhihu_title_image_invalid",
-				level: "warn",
-				message: "Article cover image URL is invalid, skip titleImage",
-				metadata: {
-					coverImage,
-				},
-			});
-			return undefined;
+			throw this.invalidImageSource(coverImage, "Zhihu title image");
 		}
 
 		if (!normalized.startsWith("data:") && this.isZhihuHostedImage(normalized)) {
+			await this.verifyExistingPlatformImage(normalized, { referer: "https://zhuanlan.zhihu.com/" });
 			await this.tracePublish({
 				stage: "zhihu_title_image_reused",
 				message: "Article cover image is already hosted on Zhihu",
@@ -825,45 +807,13 @@ export default class ZhihuAccountService extends AbstractAccountService {
 			},
 		});
 
-		try {
-			let uploadedUrl: string;
-
-			if (normalized.startsWith("data:")) {
-				const blob = this.dataUriToBlob(normalized);
-				const generatedName = this.guessFileName("article-cover", blob.type || "image/jpeg");
-				uploadedUrl = await this.uploadImageBlobToZhihu(blob, generatedName);
-			} else {
-				try {
-					uploadedUrl = await this.uploadImageBySourceUrlToZhihu(normalized);
-				} catch (urlUploadError) {
-					console.warn(`Zhihu title image URL upload failed, fallback to binary upload: ${normalized}`, urlUploadError);
-					const { blob, filename } = await this.downloadImageFromUrl(normalized);
-					uploadedUrl = await this.uploadImageBlobToZhihu(blob, filename);
-				}
-			}
-
-			this.imageUrlCache.set(normalized, uploadedUrl);
-			await this.tracePublish({
-				stage: "zhihu_title_image_done",
-				message: "Article cover image uploaded for titleImage",
-				metadata: {
-					source: normalized,
-					titleImage: uploadedUrl,
-				},
-			});
-			return uploadedUrl;
-		} catch (error) {
-			await this.tracePublish({
-				stage: "zhihu_title_image_failed",
-				level: "warn",
-				message: "Article cover image upload failed, continue without titleImage",
-				metadata: {
-					source: normalized,
-					error: error instanceof Error ? error.message : "unknown",
-				},
-			});
-			return undefined;
-		}
+		const uploadedUrl = await this.uploadImageSourceToZhihu(normalized);
+		await this.tracePublish({
+			stage: "zhihu_title_image_done",
+			message: "Article cover image uploaded for titleImage",
+			metadata: { source: normalized, titleImage: uploadedUrl },
+		});
+		return uploadedUrl;
 	}
 
 	async articleDraft(article: SharedArticle): Promise<ArticleDraft | null> {
@@ -918,13 +868,12 @@ export default class ZhihuAccountService extends AbstractAccountService {
 			});
 			return draft;
 		} catch (error) {
-			console.error("Zhihu draft creation failed:", error);
 			await this.tracePublish({
 				stage: "zhihu_article_draft_failed",
 				level: "error",
 				message: error instanceof Error ? error.message : "Zhihu draft creation failed",
 			});
-			return null;
+			throw (error instanceof Error ? error : new Error(String(error)));
 		}
 	}
 
@@ -1140,69 +1089,28 @@ export default class ZhihuAccountService extends AbstractAccountService {
 		return [];
 	}
 
-	private dataUriToBlob(dataUri: string): Blob {
-		const match = /^data:([^;]+);base64,(.+)$/i.exec(dataUri);
-		if (!match) {
-			throw new Error("Invalid data URI image payload");
-		}
-
-		const mimeType = match[1] || "image/jpeg";
-		const binary = atob(match[2]);
-		const bytes = new Uint8Array(binary.length);
-		for (let i = 0; i < binary.length; i++) {
-			bytes[i] = binary.charCodeAt(i);
-		}
-
-		return new Blob([bytes], { type: mimeType });
-	}
-
 	async imageUpload(imageData: string, filename = "image.jpg"): Promise<ImageUploadResult> {
 		try {
-			if (!imageData?.trim()) {
-				return { success: false, message: "图片数据为空" };
+			if (!imageData?.trim()) return { success: false, message: "Image data is empty" };
+			const normalized = this.normalizeImageUrl(imageData);
+			if (normalized) {
+				const url = await this.uploadImageSourceToZhihu(normalized);
+				return { success: true, url, message: "Zhihu image uploaded" };
 			}
-
-			const normalizedInput = this.normalizeImageUrl(imageData);
-			if (normalizedInput && !normalizedInput.startsWith("data:")) {
-				if (this.isZhihuHostedImage(normalizedInput)) {
-					return { success: true, url: normalizedInput, message: "上传成功" };
-				}
-				try {
-					const uploadedByUrl = await this.uploadImageBySourceUrlToZhihu(normalizedInput);
-					return { success: true, url: uploadedByUrl, message: "上传成功" };
-				} catch (urlUploadError) {
-					console.warn(`Zhihu URL image upload failed, fallback to binary upload: ${normalizedInput}`, urlUploadError);
-					const downloaded = await this.downloadImageFromUrl(normalizedInput);
-					const uploadedUrl = await this.uploadImageBlobToZhihu(downloaded.blob, downloaded.filename);
-					return { success: true, url: uploadedUrl, message: "上传成功" };
-				}
-			}
-
-			let blob: Blob;
-			let finalFilename = filename;
-
-			if (normalizedInput?.startsWith("data:")) {
-				blob = this.dataUriToBlob(normalizedInput);
-				finalFilename = this.guessFileName(finalFilename, blob.type || "image/jpeg");
-			} else {
-				const binary = atob(imageData);
-				const bytes = new Uint8Array(binary.length);
-				for (let i = 0; i < binary.length; i++) {
-					bytes[i] = binary.charCodeAt(i);
-				}
-				blob = new Blob([bytes], { type: "image/jpeg" });
-				finalFilename = this.guessFileName(finalFilename, "image/jpeg");
-			}
-
-			const uploadedUrl = await this.uploadImageBlobToZhihu(blob, finalFilename);
-			return { success: true, url: uploadedUrl, message: "上传成功" };
+			const bytes = Uint8Array.from(atob(imageData), (character) => character.charCodeAt(0));
+			const blob = new Blob([bytes], { type: "image/jpeg" });
+			const url = await this.withPlatformImageUploadRetry({
+				source: "data:image/jpeg;base64",
+				upload: async () => await this.uploadImageBlobToZhihu(blob, filename),
+				getUploadedUrl: (uploadedUrl) => uploadedUrl,
+				isExpectedPlatformUrl: (uploadedUrl) => this.isZhihuHostedImage(uploadedUrl),
+			});
+			return { success: true, url, message: "Zhihu image uploaded" };
 		} catch (error) {
-			return {
-				success: false,
-				message: error instanceof Error ? error.message : "上传失败",
-			};
+			return { success: false, message: error instanceof Error ? error.message : "Zhihu image upload failed" };
 		}
 	}
+
 }
 
 registerAccountService("zhihu", ZhihuAccountService);

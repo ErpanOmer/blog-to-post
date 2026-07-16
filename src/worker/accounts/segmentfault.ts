@@ -237,23 +237,10 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 	}
 
 	private async downloadImageFromUrl(url: string): Promise<Blob> {
-		const response = await fetch(url, {
-			method: "GET",
-			headers: {
-				accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-				referer: SEGMENTFAULT_REFERER,
-				"user-agent":
-					"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-			},
-		});
-		if (!response.ok) {
-			throw new Error(`Image download failed (${response.status}): ${url}`);
-		}
-		const blob = await response.blob();
-		if (!blob.type.startsWith("image/") && blob.type !== "application/octet-stream") {
-			throw new Error(`Resource is not an image: ${url}`);
-		}
-		return blob;
+		return (await this.resolveSourceImage(url, {
+			referer: SEGMENTFAULT_REFERER,
+			"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+		})).blob;
 	}
 
 	private guessImageSuffix(sourceUrl: string, mimeType: string): string {
@@ -496,7 +483,7 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 		return contentUrl || null;
 	}
 
-	private async uploadImageBySourceUrl(sourceUrl: string): Promise<SegmentFaultUploadedImage> {
+	private async uploadImageOnce(sourceUrl: string): Promise<SegmentFaultUploadedImage> {
 		const normalized = this.normalizeImageUrl(sourceUrl);
 		if (!normalized) {
 			throw new Error(`Invalid image URL: ${sourceUrl}`);
@@ -535,7 +522,7 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 		);
 		const uploadedImage = this.extractUploadedImage(rawPayload);
 		if (!uploadedImage) {
-			throw new Error(`SegmentFault image upload returned invalid payload: ${JSON.stringify(rawPayload)}`);
+			throw new Error("SegmentFault image upload returned an invalid payload");
 		}
 
 		await this.tracePublish({
@@ -551,6 +538,25 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 		return uploadedImage;
 	}
 
+	private async uploadImageBySourceUrl(sourceUrl: string): Promise<SegmentFaultUploadedImage> {
+		const normalized = this.normalizeImageUrl(sourceUrl);
+		if (!normalized) throw this.invalidImageSource(sourceUrl, "SegmentFault image upload");
+		if (!normalized.startsWith("data:") && this.isSegmentFaultHostedImage(normalized)) {
+			await this.verifyExistingPlatformImage(normalized, { referer: SEGMENTFAULT_REFERER });
+			return {
+				contentUrl: normalized,
+				coverUrl: this.resolveCoverUrlValue(null, normalized) ?? normalized,
+			};
+		}
+		return await this.withPlatformImageUploadRetry({
+			source: normalized,
+			upload: async () => await this.uploadImageOnce(normalized),
+			getUploadedUrl: (result) => result.contentUrl,
+			isExpectedPlatformUrl: (url) => this.isSegmentFaultHostedImage(url),
+			verificationHeaders: { referer: SEGMENTFAULT_REFERER },
+		});
+	}
+
 	private getFixedTagIds(): number[] {
 		return SEGMENTFAULT_DEFAULT_TAG_ID;
 	}
@@ -560,26 +566,13 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 		if (!rawCover) return null;
 
 		const normalized = this.normalizeImageUrl(rawCover);
-		if (!normalized) return null;
+		if (!normalized) throw this.invalidImageSource(rawCover, "SegmentFault cover image");
 		if (!normalized.startsWith("data:") && this.isSegmentFaultHostedImage(normalized)) {
 			return this.resolveCoverUrlValue(null, normalized) ?? normalized;
 		}
 
-		try {
-			const uploaded = await this.uploadImageBySourceUrl(normalized);
-			return uploaded.coverUrl;
-		} catch (error) {
-			await this.tracePublish({
-				stage: "segmentfault_cover_upload_failed",
-				level: "warn",
-				message: "SegmentFault cover upload failed, skip cover",
-				metadata: {
-					source: normalized,
-					error: error instanceof Error ? error.message : "unknown",
-				},
-			});
-			return null;
-		}
+		const uploaded = await this.uploadImageBySourceUrl(normalized);
+		return uploaded.coverUrl;
 	}
 
 	private async resolveArticleContent(article: SharedArticle): Promise<SegmentFaultResolvedContent> {
@@ -594,26 +587,24 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 		const imageSources = this.extractImageUrlsFromMarkdownContent(markdown);
 		for (const source of imageSources) {
 			const normalized = this.normalizeImageUrl(source);
-			if (!normalized) continue;
-			if (!normalized.startsWith("data:") && this.isSegmentFaultHostedImage(normalized)) continue;
+			if (!normalized) throw this.invalidImageSource(source, "SegmentFault article content");
+			if (!normalized.startsWith("data:") && this.isSegmentFaultHostedImage(normalized)) {
+				await this.verifyExistingPlatformImage(normalized, { referer: SEGMENTFAULT_REFERER });
+				continue;
+			}
 			if (this.imageUrlCache.has(normalized)) continue;
 
-			try {
-				const uploaded = await this.uploadImageBySourceUrl(normalized);
-				this.imageUrlCache.set(normalized, uploaded.contentUrl);
-				await randomDelay(120, 280);
-			} catch (error) {
-				await this.tracePublish({
-					stage: "segmentfault_resolve_single_image_failed",
-					level: "warn",
-					message: "Image upload failed, keep original source",
-					metadata: {
-						source: normalized,
-						error: error instanceof Error ? error.message : "unknown",
-					},
-				});
-			}
+			const uploaded = await this.uploadImageBySourceUrl(normalized);
+			this.imageUrlCache.set(normalized, uploaded.contentUrl);
+			await randomDelay(120, 280);
 		}
+		this.assertImageSourcesResolved({
+			sources: imageSources,
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isSegmentFaultHostedImage(source),
+			resolved: this.imageUrlCache,
+			context: "SegmentFault article content",
+		});
 
 		const replacedMarkdown = normalizeMarkdownImageSyntax(
 			this.replaceMarkdownImageUrlsByMap(
@@ -623,6 +614,12 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 			),
 			{ normalizeUrl: (rawUrl) => this.normalizeImageUrl(rawUrl) },
 		);
+		this.assertFinalImageSources({
+			sources: this.extractImageUrlsFromMarkdownContent(replacedMarkdown),
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isSegmentFaultHostedImage(source),
+			context: "SegmentFault final markdown",
+		});
 
 		const coverUrl = await this.resolveCoverImage(article);
 

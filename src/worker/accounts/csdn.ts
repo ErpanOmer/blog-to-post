@@ -285,24 +285,10 @@ export default class CSDNAccountService extends AbstractAccountService {
 	}
 
 	private async downloadImageFromUrl(url: string): Promise<Blob> {
-		const response = await fetch(url, {
-			method: "GET",
-			headers: {
-				accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-				referer: CSDN_EDITOR_REFERER,
-				"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-			},
-		});
-
-		if (!response.ok) {
-			throw new Error(`Image download failed (${response.status}): ${url}`);
-		}
-
-		const blob = await response.blob();
-		if (!blob.type.startsWith("image/") && blob.type !== "application/octet-stream") {
-			throw new Error(`Resource is not an image: ${url}`);
-		}
-		return blob;
+		return (await this.resolveSourceImage(url, {
+			referer: CSDN_EDITOR_REFERER,
+			"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+		})).blob;
 	}
 
 	private guessImageSuffix(sourceUrl: string, mimeType: string): string {
@@ -334,7 +320,7 @@ export default class CSDNAccountService extends AbstractAccountService {
 		return "jpg";
 	}
 
-	private async uploadImageBySourceUrl(sourceUrl: string): Promise<string> {
+	private async uploadImageOnce(sourceUrl: string): Promise<string> {
 		const normalized = this.normalizeImageUrl(sourceUrl);
 		if (!normalized) {
 			throw new Error(`Invalid image URL: ${sourceUrl}`);
@@ -415,13 +401,13 @@ export default class CSDNAccountService extends AbstractAccountService {
 		});
 		const obsRaw = await obsResponse.text();
 		if (!obsResponse.ok) {
-			throw new Error(`CSDN image upload failed (${obsResponse.status}): ${obsRaw.slice(0, 220)}`);
+			throw new Error(`CSDN image upload failed with HTTP ${obsResponse.status}`);
 		}
 
 		const obsPayload = this.tryParseJson(obsRaw) as CSDNObsUploadResponse | null;
 		const uploadedUrl = obsPayload?.data?.imageUrl;
 		if (!uploadedUrl) {
-			throw new Error(`CSDN image upload returned invalid payload: ${obsRaw.slice(0, 220)}`);
+			throw new Error("CSDN image upload returned an invalid payload");
 		}
 
 		await this.tracePublish({
@@ -436,39 +422,40 @@ export default class CSDNAccountService extends AbstractAccountService {
 		return uploadedUrl;
 	}
 
+	private async uploadImageBySourceUrl(sourceUrl: string): Promise<string> {
+		const normalized = this.normalizeImageUrl(sourceUrl);
+		if (!normalized) throw this.invalidImageSource(sourceUrl, "CSDN image upload");
+		if (!normalized.startsWith("data:") && this.isCsdnHostedImage(normalized)) {
+			await this.verifyExistingPlatformImage(normalized, { referer: CSDN_EDITOR_REFERER });
+			return normalized;
+		}
+		const cached = this.imageUrlCache.get(normalized);
+		if (cached) return cached;
+		const uploadedUrl = await this.withPlatformImageUploadRetry({
+			source: normalized,
+			upload: async () => await this.uploadImageOnce(normalized),
+			getUploadedUrl: (url) => url,
+			isExpectedPlatformUrl: (url) => this.isCsdnHostedImage(url),
+			verificationHeaders: { referer: CSDN_EDITOR_REFERER },
+		});
+		this.imageUrlCache.set(normalized, uploadedUrl);
+		return uploadedUrl;
+	}
+
 	private async resolveCoverImages(article: SharedArticle): Promise<string[]> {
 		const coverImage = article.coverImage?.trim();
 		if (!coverImage) return [];
 
 		const normalized = this.normalizeImageUrl(coverImage);
 		if (!normalized) {
-			await this.tracePublish({
-				stage: "csdn_cover_invalid",
-				level: "warn",
-				message: "Cover image URL is invalid, skip cover",
-				metadata: { coverImage },
-			});
-			return [];
+			throw this.invalidImageSource(coverImage, "CSDN cover image");
 		}
 
 		if (!normalized.startsWith("data:") && this.isCsdnHostedImage(normalized)) {
 			return [normalized];
 		}
 
-		try {
-			const uploaded = await this.uploadImageBySourceUrl(normalized);
-			return [uploaded];
-		} catch (error) {
-			await this.tracePublish({
-				stage: "csdn_cover_upload_failed",
-				level: "warn",
-				message: error instanceof Error ? error.message : "Cover upload failed",
-				metadata: {
-					source: normalized,
-				},
-			});
-			return [];
-		}
+		return [await this.uploadImageBySourceUrl(normalized)];
 	}
 
 	private resolveMarkdownContent(article: SharedArticle): string {
@@ -520,30 +507,34 @@ export default class CSDNAccountService extends AbstractAccountService {
 
 			for (const source of imageSources) {
 				const normalized = this.normalizeImageUrl(source);
-				if (!normalized) continue;
-				if (!normalized.startsWith("data:") && this.isCsdnHostedImage(normalized)) continue;
+				if (!normalized) throw this.invalidImageSource(source, "CSDN article content");
+				if (!normalized.startsWith("data:") && this.isCsdnHostedImage(normalized)) {
+					await this.verifyExistingPlatformImage(normalized, { referer: CSDN_EDITOR_REFERER });
+					continue;
+				}
 				if (this.imageUrlCache.has(normalized)) continue;
 
-				try {
-					const uploadedUrl = await this.uploadImageBySourceUrl(normalized);
-					this.imageUrlCache.set(normalized, uploadedUrl);
-					await randomDelay(200, 450);
-				} catch (error) {
-					await this.tracePublish({
-						stage: "csdn_resolve_single_image_failed",
-						level: "warn",
-						message: "Image upload failed, keep original source",
-						metadata: {
-							source: normalized,
-							error: error instanceof Error ? error.message : "unknown",
-						},
-					});
-				}
+				const uploadedUrl = await this.uploadImageBySourceUrl(normalized);
+				this.imageUrlCache.set(normalized, uploadedUrl);
+				await randomDelay(200, 450);
 			}
 		}
+		this.assertImageSourcesResolved({
+			sources: [...imageSources],
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isCsdnHostedImage(source),
+			resolved: this.imageUrlCache,
+			context: "CSDN article content",
+		});
 
 		const replacedMarkdown = this.replaceMarkdownImageUrls(markdownContent);
 		const replacedHtml = this.replaceHtmlImageUrls(htmlContent);
+		this.assertFinalImageSources({
+			sources: this.collectImageUrlsFromMarkdownAndHtml(replacedMarkdown, replacedHtml),
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isCsdnHostedImage(source),
+			context: "CSDN final content",
+		});
 		const coverImages = await this.resolveCoverImages(article);
 
 		await this.tracePublish({
@@ -777,7 +768,7 @@ export default class CSDNAccountService extends AbstractAccountService {
 				level: "error",
 				message: error instanceof Error ? error.message : "CSDN draft creation failed",
 			});
-			return null;
+			throw (error instanceof Error ? error : new Error(String(error)));
 		}
 	}
 

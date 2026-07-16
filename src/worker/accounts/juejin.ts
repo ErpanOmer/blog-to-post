@@ -196,23 +196,9 @@ export default class JuejinAccountService extends AbstractAccountService {
 	}
 
 	private async downloadImageFromUrl(imageUrl: string): Promise<Blob> {
-		const response = await fetch(imageUrl, {
-			method: "GET",
-			headers: {
-				accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-				"user-agent": JUEJIN_DEFAULT_USER_AGENT,
-			},
-		});
-
-		if (!response.ok) {
-			throw new Error(`Image download failed (${response.status}): ${imageUrl}`);
-		}
-
-		const blob = await response.blob();
-		const mimeType = await resolveImageMimeTypeFromBlob(blob);
-		if (blob.type === mimeType) return blob;
-
-		return new Blob([await blob.arrayBuffer()], { type: mimeType });
+		return (await this.resolveSourceImage(imageUrl, {
+			"user-agent": JUEJIN_DEFAULT_USER_AGENT,
+		})).blob;
 	}
 
 	private async getImageBlob(source: string): Promise<Blob> {
@@ -375,7 +361,7 @@ export default class JuejinAccountService extends AbstractAccountService {
 		});
 
 		if (!response.ok) {
-			throw new Error(`Juejin TOS image upload failed (${response.status}): ${(await response.text()).slice(0, 300)}`);
+			throw new Error(`Juejin TOS image upload failed with HTTP ${response.status}`);
 		}
 	}
 
@@ -443,6 +429,10 @@ export default class JuejinAccountService extends AbstractAccountService {
 		}
 
 		if (!normalized.startsWith("data:") && this.isJuejinHostedImage(normalized)) {
+			await this.verifyExistingPlatformImage(normalized, {
+				referer: `${JUEJIN_BASE_URL}/`,
+				"user-agent": JUEJIN_DEFAULT_USER_AGENT,
+			});
 			return normalized;
 		}
 
@@ -451,7 +441,27 @@ export default class JuejinAccountService extends AbstractAccountService {
 		}
 
 		const blob = await this.getImageBlob(normalized);
-		const uploadedUrl = await this.uploadImageBlob(blob);
+		const uploadedUrl = await this.withPlatformImageUploadRetry({
+			source: normalized,
+			upload: async (attempt) => {
+				if (attempt > 1) {
+					this.cachedImageXToken = null;
+					this.imageXTokenExpiry = 0;
+				}
+				return await this.uploadImageBlob(blob);
+			},
+			getUploadedUrl: (url) => url,
+			isExpectedPlatformUrl: (url) => this.isJuejinHostedImage(url),
+			verificationHeaders: {
+				accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+				cookie: this.cookieHeader,
+				referer: `${JUEJIN_BASE_URL}/editor/drafts/new?v=2`,
+				"user-agent": JUEJIN_DEFAULT_USER_AGENT,
+				"sec-fetch-dest": "image",
+				"sec-fetch-mode": "no-cors",
+				"sec-fetch-site": "cross-site",
+			},
+		});
 		this.imageUrlCache.set(normalized, uploadedUrl);
 		return uploadedUrl;
 	}
@@ -472,36 +482,26 @@ export default class JuejinAccountService extends AbstractAccountService {
 	}
 
 	private async resolveCoverImage(article: SharedArticle): Promise<string> {
-		const normalized = this.normalizeImageUrl(article.coverImage?.trim() ?? "");
+		const rawCover = article.coverImage?.trim() ?? "";
+		const normalized = this.normalizeImageUrl(rawCover);
+		if (rawCover && !normalized) throw this.invalidImageSource(rawCover, "Juejin cover image");
 		if (!normalized) return "";
 
 		if (!normalized.startsWith("data:") && this.isJuejinHostedImage(normalized)) {
+			await this.verifyExistingPlatformImage(normalized, {
+				referer: `${JUEJIN_BASE_URL}/`,
+				"user-agent": JUEJIN_DEFAULT_USER_AGENT,
+			});
 			return normalized;
 		}
 
-		try {
-			const uploaded = await this.uploadImageBySourceUrl(normalized);
-			await this.tracePublish({
-				stage: "juejin_cover_upload_done",
-				message: "Juejin cover image uploaded",
-				metadata: {
-					source: normalized,
-					uploadedUrl: uploaded,
-				},
-			});
-			return uploaded;
-		} catch (error) {
-			await this.tracePublish({
-				stage: "juejin_cover_upload_failed",
-				level: "warn",
-				message: "Juejin cover image upload failed, continue without cover",
-				metadata: {
-					source: normalized,
-					error: error instanceof Error ? error.message : "unknown",
-				},
-			});
-			return "";
-		}
+		const uploaded = await this.uploadImageBySourceUrl(normalized);
+		await this.tracePublish({
+			stage: "juejin_cover_upload_done",
+			message: "Juejin cover image uploaded",
+			metadata: { source: normalized, uploadedUrl: uploaded },
+		});
+		return uploaded;
 	}
 
 	private async resolveArticleMarkdown(article: SharedArticle): Promise<string> {
@@ -522,28 +522,35 @@ export default class JuejinAccountService extends AbstractAccountService {
 
 		for (const source of imageSources) {
 			const normalized = this.normalizeImageUrl(source);
-			if (!normalized) continue;
-			if (!normalized.startsWith("data:") && this.isJuejinHostedImage(normalized)) continue;
+			if (!normalized) throw this.invalidImageSource(source, "Juejin article content");
+			if (!normalized.startsWith("data:") && this.isJuejinHostedImage(normalized)) {
+				await this.verifyExistingPlatformImage(normalized, {
+					referer: `${JUEJIN_BASE_URL}/`,
+					"user-agent": JUEJIN_DEFAULT_USER_AGENT,
+				});
+				continue;
+			}
 			if (this.imageUrlCache.has(normalized)) continue;
 
-			try {
-				const uploadedUrl = await this.uploadImageBySourceUrl(normalized);
-				this.imageUrlCache.set(normalized, uploadedUrl);
-				await randomDelay(120, 280);
-			} catch (error) {
-				await this.tracePublish({
-					stage: "juejin_resolve_single_image_failed",
-					level: "warn",
-					message: "Image upload failed, keep original source",
-					metadata: {
-						source: normalized,
-						error: error instanceof Error ? error.message : "unknown",
-					},
-				});
-			}
+			const uploadedUrl = await this.uploadImageBySourceUrl(normalized);
+			this.imageUrlCache.set(normalized, uploadedUrl);
+			await randomDelay(120, 280);
 		}
+		this.assertImageSourcesResolved({
+			sources: imageSources,
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isJuejinHostedImage(source),
+			resolved: this.imageUrlCache,
+			context: "Juejin article content",
+		});
 
 		markdown = this.replaceJuejinMarkdownImageUrls(markdown);
+		this.assertFinalImageSources({
+			sources: this.extractImageUrlsFromMarkdownContent(markdown),
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isJuejinHostedImage(source),
+			context: "Juejin final markdown",
+		});
 
 		await this.tracePublish({
 			stage: "juejin_resolve_content_done",
@@ -690,7 +697,7 @@ export default class JuejinAccountService extends AbstractAccountService {
 				level: "error",
 				message: error instanceof Error ? error.message : "Juejin draft creation failed",
 			});
-			return null;
+			throw (error instanceof Error ? error : new Error(String(error)));
 		}
 	}
 
@@ -878,12 +885,21 @@ export default class JuejinAccountService extends AbstractAccountService {
 		void filename;
 		try {
 			const normalized = this.normalizeImageUrl(imageData);
+			if (normalized) {
+				const url = await this.uploadImageBySourceUrl(normalized);
+				return { success: true, url, message: "Juejin image uploaded" };
+			}
 			const blob = normalized
 				? await this.getImageBlob(normalized)
 				: new Blob([Uint8Array.from(atob(imageData), (char) => char.charCodeAt(0))], {
 					type: "application/octet-stream",
 				});
-			const url = await this.uploadImageBlob(blob);
+			const url = await this.withPlatformImageUploadRetry({
+				source: "data:image/unknown;base64",
+				upload: async () => await this.uploadImageBlob(blob),
+				getUploadedUrl: (uploadedUrl) => uploadedUrl,
+				isExpectedPlatformUrl: (uploadedUrl) => this.isJuejinHostedImage(uploadedUrl),
+			});
 			return { success: true, url, message: "掘金图片上传成功" };
 		} catch (error) {
 			return { success: false, message: error instanceof Error ? error.message : "掘金图片上传失败" };

@@ -34,6 +34,7 @@ import {
 	PublishServiceError,
 	toPublishServiceError,
 } from "@/worker/services/publish-errors";
+import { PublishImageRuntime } from "@/worker/utils/media";
 
 interface StepExecutionOutput<T> {
 	value: T;
@@ -64,8 +65,8 @@ interface TaskExecutionOptions {
 	env?: Env;
 }
 
-const ADAPTER_OPERATION_TIMEOUT_MS = 3 * 60 * 1000;
-const PROCESSING_TASK_STALE_TIMEOUT_MS = 10 * 60 * 1000;
+const ADAPTER_OPERATION_TIMEOUT_MS = 12 * 60 * 1000;
+const PROCESSING_TASK_STALE_TIMEOUT_MS = 20 * 60 * 1000;
 
 function errorMessageOf(error: unknown): string {
 	if (error instanceof Error) return error.message;
@@ -631,6 +632,7 @@ export async function executePublishTask(
 	});
 
 	const details: PublicationDetail[] = [];
+	const publishImageRuntime = new PublishImageRuntime();
 
 	try {
 		for (let articleIndex = 0; articleIndex < task.articleIds.length; articleIndex++) {
@@ -844,6 +846,7 @@ export async function executePublishTask(
 							if (service.setPublishTraceLogger) {
 								service.setPublishTraceLogger(pushAdapterTrace);
 							}
+							service.setPublishImageRuntime?.(publishImageRuntime);
 							return {
 								value: service,
 								outputData: {
@@ -999,6 +1002,7 @@ export async function executePublishTask(
 					});
 				} finally {
 					resolvedService?.clearPublishTraceLogger?.();
+					resolvedService?.clearPublishImageRuntime?.();
 					await traceChain;
 				}
 

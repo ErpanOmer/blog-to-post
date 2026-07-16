@@ -13,6 +13,19 @@ import type {
 } from "@/worker/accounts/types";
 import type { Article as SharedArticle } from "@/shared/types";
 import { sleep } from "@/worker/utils/helpers";
+import { randomDelay } from "@/worker/utils/helpers";
+import {
+	IMAGE_MAX_ATTEMPTS,
+	ImagePipelineError,
+	ImagePipelineErrorCodes,
+	PublishImageRuntime,
+	resolveImageMimeTypeFromBlob,
+	sanitizeImageErrorMessage,
+	sanitizeImageUrl,
+	withImageAttemptTimeout,
+	type ImageOperationStats,
+	type ResolvedPublishImage,
+} from "@/worker/utils/media";
 
 const PLATFORM_REQUEST_DELAY_MIN_MS = 3000;
 const PLATFORM_REQUEST_DELAY_MAX_MS = 6500;
@@ -22,6 +35,14 @@ export abstract class AbstractAccountService implements AccountService {
 	protected authToken: string;
 	protected headers: Record<string, string>;
 	protected publishTraceLogger?: PublishTraceLogger;
+	private publishImageRuntime?: PublishImageRuntime;
+	private fallbackImageRuntime?: PublishImageRuntime;
+	private lastImageOperationStats: ImageOperationStats = {
+		downloadAttempts: 0,
+		uploadAttempts: 0,
+		verificationAttempts: 0,
+		cacheHit: false,
+	};
 
 	constructor(platform: PlatformType, authToken: string, protected env?: Env) {
 		this.platform = platform;
@@ -37,12 +58,288 @@ export abstract class AbstractAccountService implements AccountService {
 		this.publishTraceLogger = undefined;
 	}
 
+	setPublishImageRuntime(runtime?: PublishImageRuntime): void {
+		this.publishImageRuntime = runtime;
+	}
+
+	clearPublishImageRuntime(): void {
+		this.publishImageRuntime = undefined;
+	}
+
+	getLastImageOperationStats(): ImageOperationStats {
+		return { ...this.lastImageOperationStats };
+	}
+
+	private sanitizeTraceValue(value: unknown, key = ""): unknown {
+		const normalizedKey = key.toLowerCase();
+		if (
+			/(?:^|[_-])(cookie|authorization|access[_-]?token|secret|signature|sign|policy|auth[_-]?key)(?:$|[_-])/i.test(normalizedKey)
+			|| normalizedKey.includes("authkey")
+		) {
+			return "***";
+		}
+		if (typeof value === "string") return sanitizeImageErrorMessage(value);
+		if (Array.isArray(value)) return value.map((item) => this.sanitizeTraceValue(item));
+		if (value && typeof value === "object") {
+			return Object.fromEntries(
+				Object.entries(value as Record<string, unknown>)
+					.map(([entryKey, entryValue]) => [entryKey, this.sanitizeTraceValue(entryValue, entryKey)]),
+			);
+		}
+		return value;
+	}
+
 	protected async tracePublish(event: PublishTraceEvent): Promise<void> {
 		if (!this.publishTraceLogger) return;
 		try {
-			await this.publishTraceLogger(event);
+			await this.publishTraceLogger({
+				...event,
+				message: sanitizeImageErrorMessage(event.message),
+				metadata: event.metadata
+					? this.sanitizeTraceValue(event.metadata) as Record<string, unknown>
+					: undefined,
+			});
 		} catch {
 			// Never break core publish logic because trace sink failed.
+		}
+	}
+
+	protected imageVerificationHeaders(): HeadersInit {
+		return {
+			accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+		};
+	}
+
+	protected async resolveSourceImage(source: string, headers?: HeadersInit): Promise<ResolvedPublishImage> {
+		const runtime = this.publishImageRuntime ?? (this.fallbackImageRuntime ??= new PublishImageRuntime());
+		const result = await runtime.resolve(source, {
+			platform: this.platform,
+			trace: async (event) => await this.tracePublish(event),
+			headers,
+		});
+		this.lastImageOperationStats = {
+			...this.lastImageOperationStats,
+			source: sanitizeImageUrl(source),
+			downloadAttempts: result.image.downloadAttempts,
+			cacheHit: result.cacheHit,
+		};
+		return result.image;
+	}
+
+	protected invalidImageSource(source: string, context: string): ImagePipelineError {
+		return new ImagePipelineError({
+			code: ImagePipelineErrorCodes.SOURCE_INVALID,
+			stage: "source",
+			message: `${context}: invalid image source ${sanitizeImageUrl(source)}`,
+			source: sanitizeImageUrl(source),
+		});
+	}
+
+	private async verifyUploadedImageUrlOnce(url: string, headers?: HeadersInit): Promise<void> {
+		let parsed: URL;
+		try {
+			parsed = new URL(url);
+		} catch (error) {
+			throw new ImagePipelineError({
+				code: ImagePipelineErrorCodes.PLATFORM_RESULT_INVALID,
+				stage: "verification",
+				message: "Platform image upload returned an invalid URL",
+				source: sanitizeImageUrl(url),
+				cause: error,
+			});
+		}
+		if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+			throw new ImagePipelineError({
+				code: ImagePipelineErrorCodes.PLATFORM_RESULT_INVALID,
+				stage: "verification",
+				message: `Platform image URL uses unsupported protocol ${parsed.protocol}`,
+				source: sanitizeImageUrl(url),
+			});
+		}
+
+		this.lastImageOperationStats.verificationAttempts += 1;
+		const response = await fetch(parsed.toString(), {
+			method: "GET",
+			headers: {
+				...this.imageVerificationHeaders(),
+				...headers,
+			},
+		});
+		if (!response.ok) {
+			throw new ImagePipelineError({
+				code: ImagePipelineErrorCodes.PLATFORM_RESULT_INVALID,
+				stage: "verification",
+				message: `Platform image URL verification failed with HTTP ${response.status}`,
+				source: sanitizeImageUrl(url),
+				httpStatus: response.status,
+			});
+		}
+		const blob = await response.blob();
+		const mimeType = await resolveImageMimeTypeFromBlob(blob);
+		if (blob.size === 0 || !mimeType.startsWith("image/")) {
+			throw new ImagePipelineError({
+				code: ImagePipelineErrorCodes.PLATFORM_RESULT_INVALID,
+				stage: "verification",
+				message: "Platform image URL did not return a valid image",
+				source: sanitizeImageUrl(url),
+			});
+		}
+	}
+
+	protected async verifyExistingPlatformImage(url: string, headers?: HeadersInit): Promise<void> {
+		await this.resolveSourceImage(url, {
+			...this.imageVerificationHeaders(),
+			...headers,
+		});
+	}
+
+	protected async withPlatformImageUploadRetry<T>(params: {
+		source: string;
+		upload: (attempt: number) => Promise<T>;
+		getUploadedUrl?: (result: T) => string | null | undefined;
+		uploadedUrlOptional?: boolean;
+		isExpectedPlatformUrl?: (url: string) => boolean;
+		validateResult?: (result: T) => void | Promise<void>;
+		verificationHeaders?: HeadersInit;
+	}): Promise<T> {
+		let lastError: unknown;
+		this.lastImageOperationStats = {
+			...this.lastImageOperationStats,
+			source: sanitizeImageUrl(params.source),
+			uploadAttempts: 0,
+			verificationAttempts: 0,
+		};
+
+		for (let attempt = 1; attempt <= IMAGE_MAX_ATTEMPTS; attempt++) {
+			this.lastImageOperationStats.uploadAttempts = attempt;
+			await this.tracePublish({
+				stage: "platform_image_upload_attempt",
+				message: "Upload image to platform image host",
+				metadata: {
+					platform: this.platform,
+					source: sanitizeImageUrl(params.source),
+					attempt,
+					maxAttempts: IMAGE_MAX_ATTEMPTS,
+				},
+			});
+
+			try {
+				const result = await withImageAttemptTimeout(async () => {
+					const uploaded = await params.upload(attempt);
+					await params.validateResult?.(uploaded);
+					const uploadedUrl = params.getUploadedUrl?.(uploaded)?.trim();
+					if (params.getUploadedUrl && !uploadedUrl && !params.uploadedUrlOptional) {
+						throw new ImagePipelineError({
+							code: ImagePipelineErrorCodes.PLATFORM_RESULT_INVALID,
+							stage: "verification",
+							message: "Platform image upload did not return an image URL",
+							source: sanitizeImageUrl(params.source),
+						});
+					}
+					if (uploadedUrl) {
+						if (params.isExpectedPlatformUrl && !params.isExpectedPlatformUrl(uploadedUrl)) {
+							throw new ImagePipelineError({
+								code: ImagePipelineErrorCodes.PLATFORM_RESULT_INVALID,
+								stage: "verification",
+								message: "Platform image upload returned a URL outside the expected image host",
+								source: sanitizeImageUrl(uploadedUrl),
+							});
+						}
+						await this.verifyUploadedImageUrlOnce(uploadedUrl, params.verificationHeaders);
+					}
+					return uploaded;
+				});
+
+				await this.tracePublish({
+					stage: "platform_image_upload_verified",
+					message: "Platform image upload and result verification succeeded",
+					metadata: {
+						platform: this.platform,
+						source: sanitizeImageUrl(params.source),
+						attempt,
+						verificationAttempts: this.lastImageOperationStats.verificationAttempts,
+					},
+				});
+				return result;
+			} catch (error) {
+				lastError = error;
+				await this.tracePublish({
+					stage: attempt < IMAGE_MAX_ATTEMPTS ? "platform_image_upload_retry" : "platform_image_upload_failed",
+					level: attempt < IMAGE_MAX_ATTEMPTS ? "warn" : "error",
+					message: sanitizeImageErrorMessage(error),
+					metadata: {
+						platform: this.platform,
+						source: sanitizeImageUrl(params.source),
+						attempt,
+						maxAttempts: IMAGE_MAX_ATTEMPTS,
+					},
+				});
+				if (attempt < IMAGE_MAX_ATTEMPTS) {
+					const baseDelay = 500 * (2 ** (attempt - 1));
+					await randomDelay(baseDelay, Math.min(baseDelay * 2, 8_000));
+				}
+			}
+		}
+
+		const lastErrorCode = typeof lastError === "object" && lastError !== null && "code" in lastError
+			? String((lastError as { code?: unknown }).code)
+			: null;
+		const lastMessage = sanitizeImageErrorMessage(lastError).toLowerCase();
+		const code = lastErrorCode === ImagePipelineErrorCodes.PLATFORM_RESULT_INVALID
+			|| lastMessage.includes("image url verification")
+			|| lastMessage.includes("outside the expected image host")
+			? ImagePipelineErrorCodes.PLATFORM_RESULT_INVALID
+			: ImagePipelineErrorCodes.PLATFORM_UPLOAD_FAILED;
+		throw new ImagePipelineError({
+			code,
+			stage: code === ImagePipelineErrorCodes.PLATFORM_RESULT_INVALID ? "verification" : "upload",
+			message: `Platform image failed after ${IMAGE_MAX_ATTEMPTS} attempts: ${sanitizeImageErrorMessage(lastError)}`,
+			source: sanitizeImageUrl(params.source),
+			attempts: IMAGE_MAX_ATTEMPTS,
+			cause: lastError,
+		});
+	}
+
+	protected assertImageSourcesResolved(params: {
+		sources: string[];
+		normalize: (source: string) => string | null;
+		isPlatformHosted: (source: string) => boolean;
+		resolved: Map<string, string>;
+		context: string;
+	}): void {
+		for (const source of params.sources) {
+			const normalized = params.normalize(source);
+			if (!normalized) throw this.invalidImageSource(source, params.context);
+			if (!normalized.startsWith("data:") && params.isPlatformHosted(normalized)) continue;
+			const replacement = params.resolved.get(normalized);
+			if (!replacement || !params.isPlatformHosted(replacement)) {
+				throw new ImagePipelineError({
+					code: ImagePipelineErrorCodes.REPLACEMENT_INCOMPLETE,
+					stage: "replacement",
+					message: `${params.context}: image replacement is incomplete for ${sanitizeImageUrl(normalized)}`,
+					source: sanitizeImageUrl(normalized),
+				});
+			}
+		}
+	}
+
+	protected assertFinalImageSources(params: {
+		sources: string[];
+		normalize: (source: string) => string | null;
+		isPlatformHosted: (source: string) => boolean;
+		context: string;
+	}): void {
+		for (const source of params.sources) {
+			const normalized = params.normalize(source);
+			if (!normalized) throw this.invalidImageSource(source, params.context);
+			if (normalized.startsWith("data:") || !params.isPlatformHosted(normalized)) {
+				throw new ImagePipelineError({
+					code: ImagePipelineErrorCodes.REPLACEMENT_INCOMPLETE,
+					stage: "replacement",
+					message: `${params.context}: final content still contains an unresolved image`,
+					source: sanitizeImageUrl(normalized),
+				});
+			}
 		}
 	}
 

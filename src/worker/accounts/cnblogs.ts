@@ -203,25 +203,10 @@ export default class CnblogsAccountService extends AbstractAccountService {
 	}
 
 	private async downloadImageFromUrl(url: string): Promise<Blob> {
-		const response = await fetch(url, {
-			method: "GET",
-			headers: {
-				accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-				referer: CNBLOGS_EDITOR_REFERER,
-				"user-agent":
-					"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-			},
-		});
-
-		if (!response.ok) {
-			throw new Error(`Image download failed (${response.status}): ${url}`);
-		}
-
-		const blob = await response.blob();
-		if (!blob.type.startsWith("image/") && blob.type !== "application/octet-stream") {
-			throw new Error(`Resource is not an image: ${url}`);
-		}
-		return blob;
+		return (await this.resolveSourceImage(url, {
+			referer: CNBLOGS_EDITOR_REFERER,
+			"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+		})).blob;
 	}
 
 	private tryParseJson(raw: string): unknown | null {
@@ -365,6 +350,9 @@ export default class CnblogsAccountService extends AbstractAccountService {
 
 	private async resolveFeaturedImageValue(article: SharedArticle): Promise<string | null> {
 		const normalized = this.resolveRawFeaturedImageValue(article);
+		if (article.coverImage?.trim() && !normalized) {
+			throw this.invalidImageSource(article.coverImage, "Cnblogs featured image");
+		}
 		if (!normalized) return null;
 
 		const cached = this.imageUrlCache.get(normalized);
@@ -504,7 +492,7 @@ export default class CnblogsAccountService extends AbstractAccountService {
 		throw (lastError instanceof Error ? lastError : new Error(String(lastError)));
 	}
 
-	private async uploadImageBySourceUrl(
+	private async uploadImageOnce(
 		sourceUrl: string,
 		options: {
 			purpose?: CnblogsImageUploadPurpose;
@@ -575,7 +563,7 @@ export default class CnblogsAccountService extends AbstractAccountService {
 
 			const rawText = await response.text();
 			if (!response.ok) {
-				throw new Error(`Cnblogs image upload failed (${response.status}): ${rawText.slice(0, 220)}`);
+				throw new Error(`Cnblogs image upload failed with HTTP ${response.status}`);
 			}
 
 			return this.toRecord(this.tryParseJson(rawText));
@@ -631,7 +619,7 @@ export default class CnblogsAccountService extends AbstractAccountService {
 
 		const uploadedUrl = uploadedCandidate ? this.normalizeImageUrl(uploadedCandidate) : null;
 		if (!uploadedUrl) {
-			throw new Error(`Cnblogs image upload returned invalid payload: ${JSON.stringify(payload).slice(0, 220)}`);
+			throw new Error("Cnblogs image upload returned an invalid payload");
 		}
 
 		await this.tracePublish({
@@ -649,6 +637,36 @@ export default class CnblogsAccountService extends AbstractAccountService {
 		return uploadedUrl;
 	}
 
+	private async uploadImageBySourceUrl(
+		sourceUrl: string,
+		options: {
+			purpose?: CnblogsImageUploadPurpose;
+			preferConvertedImage?: boolean;
+			allowedSuffixes?: ReadonlySet<string>;
+		} = {},
+	): Promise<string> {
+		const normalized = this.normalizeImageUrl(sourceUrl);
+		if (!normalized) throw this.invalidImageSource(sourceUrl, "Cnblogs image upload");
+		const normalizedSuffix = this.getImageUrlExtension(normalized);
+		const canReuseHosted = !options.preferConvertedImage
+			|| Boolean(normalizedSuffix && options.allowedSuffixes?.has(normalizedSuffix));
+		if (!normalized.startsWith("data:") && this.isCnblogsHostedImage(normalized) && canReuseHosted) {
+			await this.verifyExistingPlatformImage(normalized, { referer: CNBLOGS_EDITOR_REFERER });
+			return normalized;
+		}
+		const cached = this.imageUrlCache.get(normalized);
+		if (cached && !options.preferConvertedImage) return cached;
+		const uploadedUrl = await this.withPlatformImageUploadRetry({
+			source: normalized,
+			upload: async () => await this.uploadImageOnce(normalized, options),
+			getUploadedUrl: (url) => url,
+			isExpectedPlatformUrl: (url) => this.isCnblogsHostedImage(url),
+			verificationHeaders: { referer: CNBLOGS_EDITOR_REFERER },
+		});
+		this.imageUrlCache.set(normalized, uploadedUrl);
+		return uploadedUrl;
+	}
+
 	private async resolveArticleContent(article: SharedArticle): Promise<CnblogsResolvedContent> {
 		const markdown = applyMarkdownContentSlots(article.content?.trim() ?? "", article);
 		if (!markdown) {
@@ -658,32 +676,36 @@ export default class CnblogsAccountService extends AbstractAccountService {
 		const imageSources = this.extractImageUrlsFromMarkdownContent(markdown);
 		for (const source of imageSources) {
 			const normalized = this.normalizeImageUrl(source);
-			if (!normalized) continue;
-			if (!normalized.startsWith("data:") && this.isCnblogsHostedImage(normalized)) continue;
+			if (!normalized) throw this.invalidImageSource(source, "Cnblogs article content");
+			if (!normalized.startsWith("data:") && this.isCnblogsHostedImage(normalized)) {
+				await this.verifyExistingPlatformImage(normalized, { referer: CNBLOGS_EDITOR_REFERER });
+				continue;
+			}
 			if (this.imageUrlCache.has(normalized)) continue;
 
-			try {
-				const uploadedUrl = await this.uploadImageBySourceUrl(normalized);
-				this.imageUrlCache.set(normalized, uploadedUrl);
-				await randomDelay(120, 300);
-			} catch (error) {
-				await this.tracePublish({
-					stage: "cnblogs_resolve_single_image_failed",
-					level: "warn",
-					message: "Image upload failed, keep original source",
-					metadata: {
-						source: normalized,
-						error: error instanceof Error ? error.message : "unknown",
-					},
-				});
-			}
+			const uploadedUrl = await this.uploadImageBySourceUrl(normalized);
+			this.imageUrlCache.set(normalized, uploadedUrl);
+			await randomDelay(120, 300);
 		}
+		this.assertImageSourcesResolved({
+			sources: imageSources,
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isCnblogsHostedImage(source),
+			resolved: this.imageUrlCache,
+			context: "Cnblogs article content",
+		});
 
 		const replacedMarkdown = this.replaceMarkdownImageUrlsByMap(
 			markdown,
 			(rawUrl) => this.normalizeImageUrl(rawUrl),
 			this.imageUrlCache,
 		);
+		this.assertFinalImageSources({
+			sources: this.extractImageUrlsFromMarkdownContent(replacedMarkdown),
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isCnblogsHostedImage(source),
+			context: "Cnblogs final markdown",
+		});
 
 		return {
 			markdownContent: replacedMarkdown,

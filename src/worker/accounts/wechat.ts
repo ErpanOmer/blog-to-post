@@ -567,22 +567,10 @@ export default class WechatAccountService extends AbstractAccountService {
 	}
 
 	private async downloadImageFromUrl(url: string): Promise<Blob> {
-		const response = await fetch(url, {
-			method: "GET",
-			headers: {
-				// Prefer JPEG/PNG for downstream WeChat media endpoints.
-				accept: "image/jpeg,image/png,image/*;q=0.9,*/*;q=0.8",
-				"user-agent": WECHAT_DEFAULT_USER_AGENT,
-			},
-		});
-		if (!response.ok) {
-			throw new Error(`Image download failed (${response.status}): ${url}`);
-		}
-		const blob = await response.blob();
-		if (!blob.type.startsWith("image/") && blob.type !== "application/octet-stream") {
-			throw new Error(`Resource is not an image: ${url}`);
-		}
-		return blob;
+		return (await this.resolveSourceImage(url, {
+			accept: "image/jpeg,image/png,image/*;q=0.9,*/*;q=0.8",
+			"user-agent": WECHAT_DEFAULT_USER_AGENT,
+		})).blob;
 	}
 
 	private isWechatInvalidImageTypeError(error: unknown): boolean {
@@ -639,7 +627,7 @@ export default class WechatAccountService extends AbstractAccountService {
 		return { payload, candidate };
 	}
 
-	private async uploadContentImageBySourceUrl(sourceUrl: string): Promise<string> {
+	private async uploadContentImageOnce(sourceUrl: string): Promise<string> {
 		const normalized = this.normalizeImageUrl(sourceUrl);
 		if (!normalized) {
 			throw new Error(`Invalid image URL: ${sourceUrl}`);
@@ -664,7 +652,7 @@ export default class WechatAccountService extends AbstractAccountService {
 		});
 		const uploadedUrl = this.normalizeImageUrl(this.pickString(uploadPayload, "url") ?? "");
 		if (!uploadedUrl) {
-			throw new Error(`微信公众号正文图片上传失败: ${JSON.stringify(uploadPayload)}`);
+			throw new Error("WeChat content image upload returned an invalid payload");
 		}
 
 		await this.tracePublish({
@@ -682,7 +670,23 @@ export default class WechatAccountService extends AbstractAccountService {
 		return uploadedUrl;
 	}
 
-	private async uploadThumbMediaBySourceUrl(sourceUrl: string): Promise<WechatThumbMedia> {
+	private async uploadContentImageBySourceUrl(sourceUrl: string): Promise<string> {
+		const normalized = this.normalizeImageUrl(sourceUrl);
+		if (!normalized) throw this.invalidImageSource(sourceUrl, "WeChat content image");
+		if (!normalized.startsWith("data:") && this.isWechatHostedImage(normalized)) {
+			await this.verifyExistingPlatformImage(normalized, { "user-agent": WECHAT_DEFAULT_USER_AGENT });
+			return normalized;
+		}
+		return await this.withPlatformImageUploadRetry({
+			source: normalized,
+			upload: async () => await this.uploadContentImageOnce(normalized),
+			getUploadedUrl: (url) => url,
+			isExpectedPlatformUrl: (url) => this.isWechatHostedImage(url),
+			verificationHeaders: { "user-agent": WECHAT_DEFAULT_USER_AGENT },
+		});
+	}
+
+	private async uploadThumbMediaOnce(sourceUrl: string): Promise<WechatThumbMedia> {
 		const normalized = this.normalizeImageUrl(sourceUrl);
 		if (!normalized) {
 			throw new Error(`Invalid cover image URL: ${sourceUrl}`);
@@ -708,7 +712,7 @@ export default class WechatAccountService extends AbstractAccountService {
 
 		const mediaId = this.pickString(uploadPayload, "media_id");
 		if (!mediaId) {
-			throw new Error(`微信公众号封面图上传失败: ${JSON.stringify(uploadPayload)}`);
+			throw new Error("WeChat cover image upload returned no media_id");
 		}
 
 		const uploadedUrl = this.normalizeImageUrl(this.pickString(uploadPayload, "url") ?? "") ?? undefined;
@@ -729,6 +733,22 @@ export default class WechatAccountService extends AbstractAccountService {
 			mediaId,
 			url: uploadedUrl,
 		};
+	}
+
+	private async uploadThumbMediaBySourceUrl(sourceUrl: string): Promise<WechatThumbMedia> {
+		const normalized = this.normalizeImageUrl(sourceUrl);
+		if (!normalized) throw this.invalidImageSource(sourceUrl, "WeChat cover image");
+		return await this.withPlatformImageUploadRetry({
+			source: normalized,
+			upload: async () => await this.uploadThumbMediaOnce(normalized),
+			validateResult: (result) => {
+				if (!result.mediaId) throw new Error("WeChat cover upload returned no media_id");
+			},
+			getUploadedUrl: (result) => result.url,
+			uploadedUrlOptional: true,
+			isExpectedPlatformUrl: (url) => this.isWechatHostedImage(url),
+			verificationHeaders: { "user-agent": WECHAT_DEFAULT_USER_AGENT },
+		});
 	}
 
 	private toPlainTextFromHtml(html: string): string {
@@ -884,72 +904,39 @@ export default class WechatAccountService extends AbstractAccountService {
 		});
 
 		let uploadedCount = 0;
-		const failedImages: Array<{ source: string; error: string }> = [];
 		for (const source of imageSources) {
 			const normalized = this.normalizeImageUrl(source);
-			if (!normalized) continue;
-			if (!normalized.startsWith("data:") && this.isWechatHostedImage(normalized)) continue;
+			if (!normalized) throw this.invalidImageSource(source, "WeChat article content");
+			if (!normalized.startsWith("data:") && this.isWechatHostedImage(normalized)) {
+				await this.verifyExistingPlatformImage(normalized, { "user-agent": WECHAT_DEFAULT_USER_AGENT });
+				continue;
+			}
 			if (this.imageUrlCache.has(normalized)) continue;
 
-			try {
-				const uploadedUrl = await this.withNetworkRetry(
-					"wechat_content_image_upload_retry",
-					async () => await this.uploadContentImageBySourceUrl(normalized),
-					4,
-				);
-				this.imageUrlCache.set(normalized, uploadedUrl);
-				uploadedCount += 1;
-				await randomDelay(120, 320);
-			} catch (error) {
-				failedImages.push({
-					source: normalized,
-					error: error instanceof Error ? error.message : "unknown",
-				});
-			}
+			const uploadedUrl = await this.uploadContentImageBySourceUrl(normalized);
+			this.imageUrlCache.set(normalized, uploadedUrl);
+			uploadedCount += 1;
+			await randomDelay(120, 320);
 		}
-
-		if (failedImages.length > 0) {
-			await this.tracePublish({
-				stage: "wechat_content_images_upload_failed",
-				level: "error",
-				message: "Some WeChat content images failed to upload",
-				metadata: {
-					imageCandidates: imageSources.length,
-					uploadedImages: uploadedCount,
-					failedImages,
-				},
-			});
-			throw new Error(
-				`WeChat content image upload failed for ${failedImages.length}/${imageSources.length} image(s): ${
-					failedImages.map((item) => `${item.source} (${item.error})`).join("; ")
-				}`,
-			);
-		}
+		this.assertImageSourcesResolved({
+			sources: imageSources,
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isWechatHostedImage(source),
+			resolved: this.imageUrlCache,
+			context: "WeChat article content",
+		});
 
 		const replacedHtml = this.replaceHtmlImageUrlsByMap(
 			htmlContent,
 			(rawUrl) => this.normalizeImageUrl(rawUrl),
 			this.imageUrlCache,
 		);
-		const unresolvedImages = this.extractImageUrlsFromHtmlContent(replacedHtml)
-			.map((rawUrl) => this.normalizeImageUrl(rawUrl))
-			.filter((url): url is string => Boolean(url))
-			.filter((url) => !url.startsWith("data:") && !this.isWechatHostedImage(url));
-		if (unresolvedImages.length > 0) {
-			await this.tracePublish({
-				stage: "wechat_content_images_unresolved",
-				level: "error",
-				message: "Final WeChat HTML still contains non-WeChat image URLs",
-				metadata: {
-					imageCandidates: imageSources.length,
-					uploadedImages: uploadedCount,
-					unresolvedImages,
-				},
-			});
-			throw new Error(
-				`WeChat content image replacement incomplete; unresolved image(s): ${unresolvedImages.join("; ")}`,
-			);
-		}
+		this.assertFinalImageSources({
+			sources: this.extractImageUrlsFromHtmlContent(replacedHtml),
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isWechatHostedImage(source),
+			context: "WeChat final HTML",
+		});
 		const finalHtmlImageCount = this.extractImageUrlsFromHtmlContent(replacedHtml).length;
 
 		await this.tracePublish({
@@ -980,7 +967,7 @@ export default class WechatAccountService extends AbstractAccountService {
 		const normalizedCandidates: string[] = [];
 		for (const candidate of candidates) {
 			const normalized = this.normalizeImageUrl(candidate);
-			if (!normalized) continue;
+			if (!normalized) throw this.invalidImageSource(candidate, "WeChat cover candidate");
 			if (normalizedCandidates.includes(normalized)) continue;
 			normalizedCandidates.push(normalized);
 		}
@@ -989,6 +976,7 @@ export default class WechatAccountService extends AbstractAccountService {
 
 	private async resolveThumbMedia(article: SharedArticle, htmlContent: string): Promise<WechatThumbMedia | null> {
 		const candidates = this.collectCoverCandidates(article, htmlContent);
+		const hasExplicitCover = Boolean(article.coverImage?.trim());
 		if (candidates.length === 0) {
 			await this.tracePublish({
 				stage: "wechat_cover_missing",
@@ -998,6 +986,7 @@ export default class WechatAccountService extends AbstractAccountService {
 			return await this.uploadFallbackThumbMedia("No cover candidate found");
 		}
 
+		let lastCandidateError: unknown;
 		for (const candidate of candidates) {
 			const cached = this.thumbMediaCache.get(candidate);
 			if (cached) {
@@ -1009,6 +998,7 @@ export default class WechatAccountService extends AbstractAccountService {
 				this.thumbMediaCache.set(candidate, uploaded);
 				return uploaded;
 			} catch (error) {
+				lastCandidateError = error;
 				await this.tracePublish({
 					stage: "wechat_cover_upload_candidate_failed",
 					level: "warn",
@@ -1018,10 +1008,13 @@ export default class WechatAccountService extends AbstractAccountService {
 						error: error instanceof Error ? error.message : "unknown",
 					},
 				});
+				if (hasExplicitCover) throw error;
 			}
 		}
 
-		return await this.uploadFallbackThumbMedia("All cover candidates failed");
+		throw lastCandidateError instanceof Error
+			? lastCandidateError
+			: new Error("All WeChat cover candidates failed after image upload retries");
 	}
 
 	private async uploadFallbackThumbMedia(reason: string): Promise<WechatThumbMedia> {
@@ -1053,7 +1046,7 @@ export default class WechatAccountService extends AbstractAccountService {
 					error: errorMessage,
 				},
 			});
-			throw new Error(`微信公众号封面图 fallback 上传失败，无法生成 thumb_media_id：${errorMessage}`);
+			throw error;
 		}
 	}
 

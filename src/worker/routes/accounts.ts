@@ -11,6 +11,11 @@ import {
 import { getAccountStatistics, listAccountStatistics } from "@/worker/db/publications";
 import { getPlatformPublishSettings } from "@/worker/services/platform-settings";
 import { isPublishablePlatform } from "@/shared/platform-settings";
+import {
+    AccountImageTestError,
+    testAccountImageUpload,
+} from "@/worker/services/account-image-test";
+import { ImagePipelineError, sanitizeImageErrorMessage } from "@/worker/utils/media";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -227,6 +232,48 @@ app.post("/:id/verify", async (c) => {
     }
     const result = await verifyPlatformAccount(c.env.DB, c.req.param("id"), c.env.ENCRYPTION_KEY);
     return c.json(result);
+});
+
+app.post("/:id/image-test", async (c) => {
+    const payload = (await c.req.json().catch(() => null)) as { sourceUrl?: unknown } | null;
+    if (!payload || typeof payload.sourceUrl !== "string" || !payload.sourceUrl.trim()) {
+        return c.json({
+            success: false,
+            error_code: "IMAGE_SOURCE_INVALID",
+            message: "sourceUrl is required",
+            timestamp: Date.now(),
+        }, 400);
+    }
+
+    try {
+        return c.json(await testAccountImageUpload(c.env, c.req.param("id"), payload.sourceUrl));
+    } catch (error) {
+        if (error instanceof AccountImageTestError) {
+            return c.json({
+                success: false,
+                error_code: error.code,
+                message: error.message,
+                platform: error.platform,
+                timestamp: Date.now(),
+            }, error.status);
+        }
+        if (error instanceof ImagePipelineError) {
+            return c.json({
+                success: false,
+                error_code: error.code,
+                message: error.message,
+                stage: error.stage,
+                attempts: error.attempts,
+                timestamp: Date.now(),
+            }, error.code === "IMAGE_SOURCE_INVALID" ? 400 : 502);
+        }
+        return c.json({
+            success: false,
+            error_code: "IMAGE_PLATFORM_UPLOAD_FAILED",
+            message: sanitizeImageErrorMessage(error),
+            timestamp: Date.now(),
+        }, 502);
+    }
 });
 
 // Delete account

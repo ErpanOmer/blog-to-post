@@ -17,7 +17,6 @@ import {
 	COMMON_IMAGE_MIME_TO_EXTENSION,
 	buildCloudinaryImageFormatRewriteSources,
 	buildPublicImageFormatRewriteSources,
-	resolveImageMimeTypeFromBlob,
 	uploadImageWithCandidates,
 	type ResolvedImageUploadCandidate,
 } from "@/worker/utils/media";
@@ -211,26 +210,10 @@ export default class Cto51AccountService extends AbstractAccountService {
 	}
 
 	private async downloadImageFromUrl(url: string): Promise<Blob> {
-		const response = await fetch(url, {
-			method: "GET",
-			headers: {
-				accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-				referer: CTO51_PUBLISH_URL,
-				"user-agent": CTO51_DEFAULT_USER_AGENT,
-			},
-		});
-
-		if (!response.ok) {
-			throw new Error(`Image download failed (${response.status}): ${url}`);
-		}
-
-		const blob = await response.blob();
-		const mimeType = await resolveImageMimeTypeFromBlob(blob);
-		if (!mimeType.startsWith("image/")) {
-			throw new Error(`Resource is not an image: ${url}`);
-		}
-		if (blob.type === mimeType) return blob;
-		return new Blob([await blob.arrayBuffer()], { type: mimeType });
+		return (await this.resolveSourceImage(url, {
+			referer: CTO51_PUBLISH_URL,
+			"user-agent": CTO51_DEFAULT_USER_AGENT,
+		})).blob;
 	}
 
 	private extractMessage(payload: { msg?: string; message?: string } | null | undefined, fallback: string): string {
@@ -528,9 +511,8 @@ export default class Cto51AccountService extends AbstractAccountService {
 			method: "POST",
 			body: formData,
 		});
-		const rawText = await response.text();
 		if (!response.ok) {
-			throw new Error(`51CTO COS image upload failed (${response.status}): ${rawText.slice(0, 220)}`);
+			throw new Error(`51CTO COS image upload failed with HTTP ${response.status}`);
 		}
 
 		return this.buildUploadedImageUrl(objectKey);
@@ -543,7 +525,7 @@ export default class Cto51AccountService extends AbstractAccountService {
 		];
 	}
 
-	private async uploadImageBySourceUrl(sourceUrl: string): Promise<string> {
+	private async uploadImageOnce(sourceUrl: string): Promise<string> {
 		const normalized = this.normalizeImageUrl(sourceUrl);
 		if (!normalized) {
 			throw new Error(`Invalid image URL: ${sourceUrl}`);
@@ -610,6 +592,32 @@ export default class Cto51AccountService extends AbstractAccountService {
 		return uploadedUrl;
 	}
 
+	private async uploadImageBySourceUrl(sourceUrl: string): Promise<string> {
+		const normalized = this.normalizeImageUrl(sourceUrl);
+		if (!normalized) throw this.invalidImageSource(sourceUrl, "51CTO image upload");
+		if (!normalized.startsWith("data:") && this.isCto51HostedImage(normalized)) {
+			await this.verifyExistingPlatformImage(normalized, {
+				referer: CTO51_PUBLISH_URL,
+				"user-agent": CTO51_DEFAULT_USER_AGENT,
+			});
+			return normalized;
+		}
+		const cached = this.imageUrlCache.get(normalized);
+		if (cached) return cached;
+		const uploadedUrl = await this.withPlatformImageUploadRetry({
+			source: normalized,
+			upload: async () => await this.uploadImageOnce(normalized),
+			getUploadedUrl: (url) => url,
+			isExpectedPlatformUrl: (url) => this.isCto51HostedImage(url),
+			verificationHeaders: {
+				referer: CTO51_PUBLISH_URL,
+				"user-agent": CTO51_DEFAULT_USER_AGENT,
+			},
+		});
+		this.imageUrlCache.set(normalized, uploadedUrl);
+		return uploadedUrl;
+	}
+
 	private resolveTagsValue(article: SharedArticle): string {
 		const rawTags = article.tags as unknown;
 		if (Array.isArray(rawTags)) {
@@ -636,6 +644,7 @@ export default class Cto51AccountService extends AbstractAccountService {
 	private async resolveCoverImageUrl(article: SharedArticle, content: Cto51ResolvedContent): Promise<string> {
 		const rawCover = article.coverImage?.trim();
 		const normalizedCover = rawCover ? this.normalizeImageUrl(rawCover) : null;
+		if (rawCover && !normalizedCover) throw this.invalidImageSource(rawCover, "51CTO cover image");
 		const source = normalizedCover ?? this.firstContentImageUrl(content);
 		if (!source) {
 			throw new Error("51CTO publish requires a cover image. Please set article.coverImage.");
@@ -651,6 +660,10 @@ export default class Cto51AccountService extends AbstractAccountService {
 		});
 
 		if (!source.startsWith("data:") && this.isCto51HostedImage(source)) {
+			await this.verifyExistingPlatformImage(source, {
+				referer: CTO51_PUBLISH_URL,
+				"user-agent": CTO51_DEFAULT_USER_AGENT,
+			});
 			await this.tracePublish({
 				stage: "51cto_cover_resolve_done",
 				message: "51CTO cover image already hosted on 51CTO",
@@ -701,26 +714,27 @@ export default class Cto51AccountService extends AbstractAccountService {
 
 		for (const source of imageSources) {
 			const normalized = this.normalizeImageUrl(source);
-			if (!normalized) continue;
-			if (!normalized.startsWith("data:") && this.isCto51HostedImage(normalized)) continue;
+			if (!normalized) throw this.invalidImageSource(source, "51CTO article content");
+			if (!normalized.startsWith("data:") && this.isCto51HostedImage(normalized)) {
+				await this.verifyExistingPlatformImage(normalized, {
+					referer: CTO51_PUBLISH_URL,
+					"user-agent": CTO51_DEFAULT_USER_AGENT,
+				});
+				continue;
+			}
 			if (this.imageUrlCache.has(normalized)) continue;
 
-			try {
-				const uploadedUrl = await this.uploadImageBySourceUrl(normalized);
-				this.imageUrlCache.set(normalized, uploadedUrl);
-				await randomDelay(120, 280);
-			} catch (error) {
-				await this.tracePublish({
-					stage: "51cto_resolve_single_image_failed",
-					level: "warn",
-					message: "Image upload failed, keep original source",
-					metadata: {
-						source: normalized,
-						error: error instanceof Error ? error.message : "unknown",
-					},
-				});
-			}
+			const uploadedUrl = await this.uploadImageBySourceUrl(normalized);
+			this.imageUrlCache.set(normalized, uploadedUrl);
+			await randomDelay(120, 280);
 		}
+		this.assertImageSourcesResolved({
+			sources: imageSources,
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isCto51HostedImage(source),
+			resolved: this.imageUrlCache,
+			context: "51CTO article content",
+		});
 
 		markdown = this.replaceMarkdownImageUrlsByMap(
 			markdown,
@@ -730,6 +744,12 @@ export default class Cto51AccountService extends AbstractAccountService {
 		markdown = normalizeMarkdownImageSyntax(markdown, {
 			normalizeUrl: (rawUrl) => this.normalizeImageUrl(rawUrl),
 			resolveUrl: (normalizedUrl) => this.imageUrlCache.get(normalizedUrl),
+		});
+		this.assertFinalImageSources({
+			sources: this.extractImageUrlsFromMarkdownContent(markdown),
+			normalize: (source) => this.normalizeImageUrl(source),
+			isPlatformHosted: (source) => this.isCto51HostedImage(source),
+			context: "51CTO final markdown",
 		});
 
 		await this.tracePublish({
