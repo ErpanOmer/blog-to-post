@@ -18,6 +18,7 @@ import {
 	listArticlePublications,
 	updateArticlePublication,
 } from "@/worker/db/publications";
+import { getPlatformAccount } from "@/worker/db/platform-accounts";
 import type { ArticlePublication } from "@/worker/types/publications";
 import { extractStringArray, safeParseJson } from "@/worker/utils/json-parser";
 import { pickFirstLine } from "@/worker/utils/text";
@@ -578,7 +579,7 @@ async function isPublicationUrlStillValid(publication: ArticlePublication): Prom
 	}
 }
 
-function restoreKnownPublishedUrl(publication: ArticlePublication): string | null {
+function restoreKnownPublishedUrlSync(publication: ArticlePublication): string | null {
 	const publishId = publication.publishId?.trim();
 	if (!publishId) return null;
 
@@ -594,9 +595,23 @@ function restoreKnownPublishedUrl(publication: ArticlePublication): string | nul
 	}
 }
 
-function isKnownStablePublishedUrl(publication: ArticlePublication, publishedUrl: string): boolean {
+async function restoreKnownPublishedUrl(env: Env, publication: ArticlePublication): Promise<string | null> {
+	const syncUrl = restoreKnownPublishedUrlSync(publication);
+	if (syncUrl) return syncUrl;
+
+	const publishId = publication.publishId?.trim();
+	if (!publishId || publication.platform !== "cnblogs") return null;
+
+	const account = await getPlatformAccount(env.DB, publication.accountId);
+	const userName = account?.userName?.trim();
+	if (!userName) return null;
+
+	return `https://www.cnblogs.com/${encodeURIComponent(userName)}/articles/${encodeURIComponent(publishId)}`;
+}
+
+async function isKnownStablePublishedUrl(env: Env, publication: ArticlePublication, publishedUrl: string): Promise<boolean> {
 	if (publication.status !== "published") return false;
-	const knownUrl = restoreKnownPublishedUrl(publication);
+	const knownUrl = await restoreKnownPublishedUrl(env, publication);
 	if (!knownUrl) return false;
 	return normalizeComparableUrl(knownUrl) === normalizeComparableUrl(publishedUrl);
 }
@@ -672,7 +687,7 @@ async function validatePublicationLinks(
 
 	for (const publication of publications) {
 		if (!publication.publishedUrl?.trim()) {
-			const restoredUrl = restoreKnownPublishedUrl(publication);
+			const restoredUrl = await restoreKnownPublishedUrl(env, publication);
 			if (!restoredUrl) continue;
 			await updateArticlePublication(env.DB, publication.id, {
 				publishedUrl: restoredUrl,
@@ -734,7 +749,7 @@ async function validatePublicationLinks(
 			continue;
 		}
 
-		if (!options.force && !state && isKnownStablePublishedUrl(publication, publishedUrl)) {
+		if (!options.force && !state && await isKnownStablePublishedUrl(env, publication, publishedUrl)) {
 			await setPublicationLinkCheckState(
 				env,
 				publication,

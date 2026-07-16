@@ -311,7 +311,7 @@ export default class CnblogsAccountService extends AbstractAccountService {
 			return `https://www.cnblogs.com/${userName}/p/${entryName}.html`;
 		}
 		if (userName) {
-			return `https://www.cnblogs.com/${userName}/p/${postId}.html`;
+			return `https://www.cnblogs.com/${userName}/articles/${postId}`;
 		}
 
 		return `https://i.cnblogs.com/articles/edit;postId=${postId}`;
