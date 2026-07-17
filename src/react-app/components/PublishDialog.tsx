@@ -15,6 +15,7 @@ import {
 	Upload,
 	User,
 } from "lucide-react";
+import { useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,6 +38,7 @@ import { PlatformLogo } from "@/react-app/components/PlatformBrand";
 import { getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 import type { Article } from "@/react-app/types";
 import type { AccountConfig, PublishTask, PublishTaskStep } from "@/react-app/types/publications";
+import { notifyArticlePublicationsUpdated } from "@/react-app/services/publication-events";
 import {
 	isPublishablePlatform,
 	normalizePlatformPublishSettings,
@@ -135,6 +137,8 @@ export function PublishDialog({
 	const [taskProgress, setTaskProgress] = useState<PublishTask | null>(null);
 	const [taskSteps, setTaskSteps] = useState<PublishTaskStep[]>([]);
 	const [isPolling, setIsPolling] = useState(false);
+	const notifiedPublicationStepIdsRef = useRef(new Set<string>());
+	const notifiedTerminalTaskIdsRef = useRef(new Set<string>());
 
 	const accountsByPlatform = useMemo(
 		() =>
@@ -184,6 +188,7 @@ export function PublishDialog({
 		setTaskProgress(null);
 		setTaskSteps([]);
 		setIsPolling(false);
+		notifiedPublicationStepIdsRef.current.clear();
 		setPublishMode("immediate");
 		setScheduleDate("");
 		setScheduleClock("");
@@ -211,7 +216,34 @@ export function PublishDialog({
 					setTaskProgress(taskData);
 					setTaskSteps([...stepsData].sort((a, b) => a.stepNumber - b.stepNumber));
 
+					const newlyPersistedArticleIds: string[] = [];
+					for (const step of stepsData) {
+						if (
+							step.stepType !== "persist_publication"
+							|| step.status !== "completed"
+							|| !step.articleId
+							|| notifiedPublicationStepIdsRef.current.has(step.id)
+						) {
+							continue;
+						}
+						notifiedPublicationStepIdsRef.current.add(step.id);
+						newlyPersistedArticleIds.push(step.articleId);
+					}
+					if (newlyPersistedArticleIds.length > 0) {
+						notifyArticlePublicationsUpdated({
+							taskId: taskData.id,
+							articleIds: newlyPersistedArticleIds,
+						});
+					}
+
 					if (["completed", "failed", "cancelled"].includes(taskData.status)) {
+						if (!notifiedTerminalTaskIdsRef.current.has(taskData.id)) {
+							notifiedTerminalTaskIdsRef.current.add(taskData.id);
+							notifyArticlePublicationsUpdated({
+								taskId: taskData.id,
+								articleIds: taskData.articleIds,
+							});
+						}
 						setIsPolling(false);
 						setIsSubmitting(false);
 						setSuccess(taskData.status === "completed" ? "发布任务已完成。" : null);

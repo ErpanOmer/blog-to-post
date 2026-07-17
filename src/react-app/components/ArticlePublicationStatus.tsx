@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ArticlePublication } from "@/react-app/types/publications";
-import { getArticlePublications, getPlatformAccounts, validateArticlePublicationLinks } from "@/react-app/api";
+import { getArticlePublications, getPlatformAccounts } from "@/react-app/api";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Clock, ExternalLink, FileEdit, Loader2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,9 @@ import { PlatformBadge } from "@/react-app/components/PlatformBrand";
 interface ArticlePublicationStatusProps {
 	articleId: string;
 	refreshKey?: number;
+	publicationItems?: ArticlePublication[];
+	publicationAccountNames?: ReadonlyMap<string, string>;
+	publicationDataLoading?: boolean;
 }
 
 const statusConfig = {
@@ -71,42 +74,47 @@ function getPublicationDedupeKey(publication: ArticlePublication): string {
 	}
 }
 
-export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticlePublicationStatusProps) {
-	const [publications, setPublications] = useState<ArticlePublication[]>([]);
-	const [accountNames, setAccountNames] = useState<Map<string, string>>(new Map());
+export function ArticlePublicationStatus({
+	articleId,
+	refreshKey = 0,
+	publicationItems,
+	publicationAccountNames,
+	publicationDataLoading,
+}: ArticlePublicationStatusProps) {
+	const [loadedPublications, setLoadedPublications] = useState<ArticlePublication[]>([]);
+	const [loadedAccountNames, setLoadedAccountNames] = useState<Map<string, string>>(new Map());
 	const [activePlatform, setActivePlatform] = useState<string | null>(null);
-	const [isLoading, setIsLoading] = useState(true);
-	const [isCheckingLinks, setIsCheckingLinks] = useState(false);
+	const [isLoadingStandalone, setIsLoadingStandalone] = useState(true);
+	const usesSharedData = publicationItems !== undefined;
+	const publications = publicationItems ?? loadedPublications;
+	const accountNames = publicationAccountNames ?? loadedAccountNames;
+	const isLoading = publicationDataLoading ?? isLoadingStandalone;
 
 	const loadData = useCallback(async () => {
-		setIsLoading(true);
+		setIsLoadingStandalone(true);
 		try {
-			setIsCheckingLinks(true);
 			const [pubs, accounts] = await Promise.all([
-				validateArticlePublicationLinks(articleId).catch(async (error) => {
-					console.warn("Validate publication links failed, fallback to cached publications", error);
-					return getArticlePublications(articleId);
-				}),
+				getArticlePublications(articleId),
 				getPlatformAccounts(),
 			]);
-			setPublications([...pubs].sort((a, b) => b.updatedAt - a.updatedAt));
+			setLoadedPublications([...pubs].sort((a, b) => b.updatedAt - a.updatedAt));
 
 			const nameMap = new Map<string, string>();
 			accounts.forEach((account) => {
 				nameMap.set(account.id, account.userName || "未命名账号");
 			});
-			setAccountNames(nameMap);
+			setLoadedAccountNames(nameMap);
 		} catch (error) {
 			console.error("Load publication status failed", error);
 		} finally {
-			setIsCheckingLinks(false);
-			setIsLoading(false);
+			setIsLoadingStandalone(false);
 		}
 	}, [articleId]);
 
 	useEffect(() => {
+		if (usesSharedData) return;
 		void loadData();
-	}, [loadData, refreshKey]);
+	}, [loadData, refreshKey, usesSharedData]);
 
 	useEffect(() => {
 		setActivePlatform(null);
@@ -203,7 +211,6 @@ export function ArticlePublicationStatus({ articleId, refreshKey = 0 }: ArticleP
 		<div className="flex flex-wrap items-center gap-1.5">
 			<span className="text-[12px] font-medium text-design-textSecondary">分发链接</span>
 			<span className="mr-1 text-[12px] text-design-neutral">{linkPublications.length} 条</span>
-			{isCheckingLinks ? <Loader2 className="h-3 w-3 animate-spin text-design-neutral" /> : null}
 			{platformGroups.map(({ platform, entries }) => {
 				const isActive = activePlatform === platform;
 				const singlePublication = entries.length === 1 ? entries[0].publication : null;

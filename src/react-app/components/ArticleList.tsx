@@ -33,8 +33,9 @@ interface ArticleListProps {
   onDelete?: (article: Article) => void;
   onDeleteMany?: (articles: Article[]) => void;
   onPublish?: (articles: Article[]) => void;
-  publicationRefreshKey?: number;
   publicationHistory?: ArticlePublication[];
+  publicationAccountNames?: ReadonlyMap<string, string>;
+  publicationDataLoading?: boolean;
 }
 
 type SortValue = "createdAt:desc" | "createdAt:asc" | "updatedAt:desc" | "updatedAt:asc" | "title:asc";
@@ -92,8 +93,9 @@ export function ArticleList({
   onDelete,
   onDeleteMany,
   onPublish,
-  publicationRefreshKey = 0,
   publicationHistory = [],
+  publicationAccountNames,
+  publicationDataLoading = false,
 }: ArticleListProps) {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -466,7 +468,12 @@ export function ArticleList({
 
                     <div className="mt-3 border-t border-design-border pt-3">
                       <div className="min-w-0">
-                        <ArticlePublicationStatus articleId={article.id} refreshKey={publicationRefreshKey} />
+                        <ArticlePublicationStatus
+                          articleId={article.id}
+                          publicationItems={publicationsByArticleId.get(article.id) ?? []}
+                          publicationAccountNames={publicationAccountNames}
+                          publicationDataLoading={publicationDataLoading}
+                        />
                       </div>
 
                       {!isBatchMode && (

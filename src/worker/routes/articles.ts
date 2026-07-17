@@ -544,11 +544,15 @@ async function restoreKnownPublishedUrl(env: Env, publication: ArticlePublicatio
 	if (syncUrl) return syncUrl;
 
 	const publishId = publication.publishId?.trim();
-	if (!publishId || publication.platform !== "cnblogs") return null;
+	if (!publishId || !["cnblogs", "csdn"].includes(publication.platform)) return null;
 
 	const account = await getPlatformAccount(env.DB, publication.accountId);
 	const userName = account?.userName?.trim();
 	if (!userName) return null;
+
+	if (publication.platform === "csdn") {
+		return `https://blog.csdn.net/${encodeURIComponent(userName)}/article/details/${encodeURIComponent(publishId)}`;
+	}
 
 	return `https://www.cnblogs.com/${encodeURIComponent(userName)}/articles/${encodeURIComponent(publishId)}`;
 }
@@ -566,6 +570,7 @@ function isPublicationLinkCheckFresh(
 	now: number,
 ): boolean {
 	if (!state) return false;
+	if (state.status === "invalid") return false;
 	if (normalizeComparableUrl(state.publishedUrl) !== normalizeComparableUrl(publishedUrl)) return false;
 	return now - state.checkedAt < publicationLinkCheckIntervalMs;
 }

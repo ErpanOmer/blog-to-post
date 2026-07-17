@@ -196,8 +196,6 @@ export default class ZhihuAccountService extends AbstractAccountService {
 			formdata.append("content_token", "undefined");
 			formdata.append("scene", "article");
 
-			console.log("Sending content to Zhihu convert API, content length:", content);
-
 			const response = await this.fetchPlatform("https://www.zhihu.com/api/v4/document/convert", {
 				method: "POST",
 				body: formdata,
@@ -222,8 +220,6 @@ export default class ZhihuAccountService extends AbstractAccountService {
 			if (!result.data?.html_content) {
 				throw new Error("Zhihu convert API did not return html_content");
 			}
-
-			console.log("Zhihu convert API succeeded, html content length:", result);
 
 			return result.data.html_content;
 		} catch (error) {
@@ -849,8 +845,6 @@ export default class ZhihuAccountService extends AbstractAccountService {
 					}),
 				},
 			);
-
-			console.log("Zhihu draft creation response:", data);
 
 			const draft = {
 				id: data.id,

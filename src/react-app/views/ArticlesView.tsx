@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { FileText, Loader2, RefreshCw } from "lucide-react";
+import { useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SectionCard } from "@/react-app/components/SectionCard";
 import { ArticleList } from "@/react-app/components/ArticleList";
-import { getPublications, validateAllArticlePublicationLinks } from "@/react-app/api";
+import { getPlatformAccounts, getPublications, validateAllArticlePublicationLinks } from "@/react-app/api";
 import type { Article } from "@/react-app/types";
 import type { ArticlePublication } from "@/react-app/types/publications";
+import { subscribeToArticlePublicationUpdates } from "@/react-app/services/publication-events";
 
 interface ArticlesViewProps {
   articles: Article[];
@@ -19,31 +21,78 @@ interface ArticlesViewProps {
 
 export function ArticlesView({ articles, onViewDetail, onEdit, onDelete, onDeleteMany, onPublish }: ArticlesViewProps) {
   const [isCleaningLinks, setIsCleaningLinks] = useState(false);
-  const [publicationRefreshKey, setPublicationRefreshKey] = useState(0);
   const [publications, setPublications] = useState<ArticlePublication[]>([]);
+  const [publicationAccountNames, setPublicationAccountNames] = useState<Map<string, string>>(new Map());
+  const [isPublicationDataLoading, setIsPublicationDataLoading] = useState(true);
+  const publicationHistorySignatureRef = useRef<string | null>(null);
+  const publicationHistoryLoadingRef = useRef(false);
+
+  const loadPublicationHistory = useCallback(async () => {
+    if (publicationHistoryLoadingRef.current) return;
+    publicationHistoryLoadingRef.current = true;
+    try {
+      const history = await getPublications();
+      const nextSignature = history
+        .map((publication) => [
+          publication.id,
+          publication.status,
+          publication.publishedUrl ?? "",
+          publication.updatedAt,
+        ].join(":"))
+        .sort()
+        .join("|");
+      const historyChanged = publicationHistorySignatureRef.current !== nextSignature;
+
+      if (historyChanged) {
+        publicationHistorySignatureRef.current = nextSignature;
+        setPublications(history);
+      }
+    } catch (error) {
+      console.error("Load article publication history failed", error);
+    } finally {
+      publicationHistoryLoadingRef.current = false;
+      setIsPublicationDataLoading(false);
+    }
+  }, []);
+
+  useEffect(() => subscribeToArticlePublicationUpdates(() => {
+    void loadPublicationHistory();
+  }), [loadPublicationHistory]);
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      try {
-        const history = await getPublications();
-        if (!cancelled) {
-          setPublications(history);
-        }
-      } catch (error) {
-        console.error("加载文章分发筛选数据失败", error);
-      }
-    })();
+    void getPlatformAccounts()
+      .then((accounts) => {
+        if (cancelled) return;
+        setPublicationAccountNames(new Map(
+          accounts.map((account) => [account.id, account.userName || "未命名账号"]),
+        ));
+      })
+      .catch((error) => console.error("Load publication account names failed", error));
+
     return () => {
       cancelled = true;
     };
-  }, [publicationRefreshKey]);
+  }, []);
+
+  useEffect(() => {
+    void loadPublicationHistory();
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadPublicationHistory();
+      }
+    }, 10000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [loadPublicationHistory]);
 
   const handleCleanPublicationLinks = async () => {
     setIsCleaningLinks(true);
     try {
       const result = await validateAllArticlePublicationLinks();
-      setPublicationRefreshKey((value) => value + 1);
+      publicationHistorySignatureRef.current = null;
       setPublications(result.publications);
       toast.success(
         `链接清理完成：去重 ${result.deduplicated.length} 条，移除失效 ${result.removed.length} 条，恢复 ${result.restored.length} 条`,
@@ -81,8 +130,9 @@ export function ArticlesView({ articles, onViewDetail, onEdit, onDelete, onDelet
         onDelete={onDelete}
         onDeleteMany={onDeleteMany}
         onPublish={onPublish}
-        publicationRefreshKey={publicationRefreshKey}
         publicationHistory={publications}
+        publicationAccountNames={publicationAccountNames}
+        publicationDataLoading={isPublicationDataLoading}
       />
     </SectionCard>
   );
