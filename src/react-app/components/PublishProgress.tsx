@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { CheckCircle2, Circle, ClipboardList, FileText, Loader2, Rocket, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, Circle, ClipboardList, FileText, Loader2, Rocket, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -13,6 +13,7 @@ interface PublishProgressProps {
   task: PublishTask;
   steps: PublishTaskStep[];
   article: Article;
+  pollingWarning?: string | null;
   onClose: () => void;
   onViewDetails: () => void;
 }
@@ -38,7 +39,7 @@ function getStepDescription(step: PublishTaskStep): string {
   return "等待执行";
 }
 
-export function PublishProgress({ task, steps, article, onClose, onViewDetails }: PublishProgressProps) {
+export function PublishProgress({ task, steps, article, pollingWarning, onClose, onViewDetails }: PublishProgressProps) {
   const workflowSteps = useMemo(
     () => steps.filter((step) => step.stepType !== "adapter_trace").sort((a, b) => a.stepNumber - b.stepNumber),
     [steps],
@@ -109,6 +110,13 @@ export function PublishProgress({ task, steps, article, onClose, onViewDetails }
             </div>
           </div>
         </div>
+
+        {pollingWarning && (
+          <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-700">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span>{pollingWarning}</span>
+          </div>
+        )}
 
         <div className="mt-5">
           <div className="mb-2 flex items-center justify-between text-[12px] font-medium text-design-textSecondary">

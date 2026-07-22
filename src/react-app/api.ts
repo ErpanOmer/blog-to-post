@@ -50,7 +50,21 @@ async function parseJson<T>(response: Response): Promise<T> {
 			const payload = JSON.parse(text) as { message?: string; error?: string };
 			message = payload.message || payload.error || message;
 		} catch {
-			// Keep the raw response text when the server did not return JSON.
+			const isHtml = response.headers.get("content-type")?.includes("text/html")
+				|| /^\s*<!doctype html/i.test(text);
+			if (isHtml) {
+				const embeddedError = text.match(/const error = (\{[^\r\n]+\})/);
+				if (embeddedError) {
+					try {
+						const payload = JSON.parse(embeddedError[1]) as { message?: string };
+						message = payload.message || `HTTP ${response.status}`;
+					} catch {
+						message = `HTTP ${response.status}`;
+					}
+				} else {
+					message = `HTTP ${response.status}`;
+				}
+			}
 		}
 		throw new Error(message);
 	}
@@ -418,8 +432,8 @@ export async function getPublishTasks(
 }
 
 // 获取单个发布任务详情
-export async function getPublishTask(taskId: string): Promise<PublishTaskStatusResponse> {
-	return parseJson<PublishTaskStatusResponse>(await fetch(`/api/publish/tasks/${taskId}`));
+export async function getPublishTask(taskId: string, signal?: AbortSignal): Promise<PublishTaskStatusResponse> {
+	return parseJson<PublishTaskStatusResponse>(await fetch(`/api/publish/tasks/${taskId}`, { signal }));
 }
 
 // 获取发布任务步骤列表

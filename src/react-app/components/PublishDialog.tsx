@@ -29,7 +29,6 @@ import {
 	getPlatformAccounts,
 	getPlatformPublishSettings,
 	getPublishTask,
-	getPublishTaskSteps,
 	type PlatformAccount,
 } from "@/react-app/api";
 import { PublishProgress } from "./PublishProgress";
@@ -44,6 +43,10 @@ import {
 	normalizePlatformPublishSettings,
 } from "@/shared/platform-settings";
 import type { PlatformPublishSetting, PlatformPublishSettingsMap, PublishablePlatformType } from "@/shared/types";
+
+const POLL_INTERVAL_MS = 3000;
+const MAX_POLL_RETRY_DELAY_MS = 15000;
+const POLL_WARNING_THRESHOLD = 2;
 
 interface PublishDialogProps {
 	articles: Article[];
@@ -137,6 +140,7 @@ export function PublishDialog({
 	const [taskProgress, setTaskProgress] = useState<PublishTask | null>(null);
 	const [taskSteps, setTaskSteps] = useState<PublishTaskStep[]>([]);
 	const [isPolling, setIsPolling] = useState(false);
+	const [pollingWarning, setPollingWarning] = useState<string | null>(null);
 	const notifiedPublicationStepIdsRef = useRef(new Set<string>());
 	const notifiedTerminalTaskIdsRef = useRef(new Set<string>());
 
@@ -188,6 +192,7 @@ export function PublishDialog({
 		setTaskProgress(null);
 		setTaskSteps([]);
 		setIsPolling(false);
+		setPollingWarning(null);
 		notifiedPublicationStepIdsRef.current.clear();
 		setPublishMode("immediate");
 		setScheduleDate("");
@@ -203,15 +208,24 @@ export function PublishDialog({
 	}, [loadAccounts, open]);
 
 	useEffect(() => {
-		let intervalId: ReturnType<typeof setInterval> | undefined;
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		let activeController: AbortController | undefined;
+		let cancelled = false;
+		let shouldContinue = true;
+		let consecutiveFailures = 0;
 
 		if (isPolling && currentTaskId) {
 			const fetchProgress = async () => {
+				activeController = new AbortController();
 				try {
-					const [taskData, stepsData] = await Promise.all([
-						getPublishTask(currentTaskId).then((res) => res.task),
-						getPublishTaskSteps(currentTaskId),
-					]);
+					const { task: taskData, steps: stepsData } = await getPublishTask(
+						currentTaskId,
+						activeController.signal,
+					);
+					if (cancelled) return;
+
+					consecutiveFailures = 0;
+					setPollingWarning(null);
 
 					setTaskProgress(taskData);
 					setTaskSteps([...stepsData].sort((a, b) => a.stepNumber - b.stepNumber));
@@ -237,6 +251,7 @@ export function PublishDialog({
 					}
 
 					if (["completed", "failed", "cancelled"].includes(taskData.status)) {
+						shouldContinue = false;
 						if (!notifiedTerminalTaskIdsRef.current.has(taskData.id)) {
 							notifiedTerminalTaskIdsRef.current.add(taskData.id);
 							notifyArticlePublicationsUpdated({
@@ -253,16 +268,31 @@ export function PublishDialog({
 						}
 					}
 				} catch (pollError) {
-					console.error("轮询任务状态失败", pollError);
+					if (cancelled || (pollError instanceof DOMException && pollError.name === "AbortError")) return;
+
+					consecutiveFailures += 1;
+					console.warn("轮询任务状态暂时失败，将自动重试", pollError);
+					if (consecutiveFailures >= POLL_WARNING_THRESHOLD) {
+						setPollingWarning("暂时无法获取最新发布进度，正在自动重试。");
+					}
+				} finally {
+					activeController = undefined;
+					if (!cancelled && shouldContinue) {
+						const retryDelay = consecutiveFailures > 0
+							? Math.min(POLL_INTERVAL_MS * (2 ** consecutiveFailures), MAX_POLL_RETRY_DELAY_MS)
+							: POLL_INTERVAL_MS;
+						timeoutId = setTimeout(() => void fetchProgress(), retryDelay);
+					}
 				}
 			};
 
 			void fetchProgress();
-			intervalId = setInterval(() => void fetchProgress(), 3000);
 		}
 
 		return () => {
-			if (intervalId) clearInterval(intervalId);
+			cancelled = true;
+			if (timeoutId) clearTimeout(timeoutId);
+			activeController?.abort();
 		};
 	}, [currentTaskId, isPolling]);
 
@@ -331,6 +361,7 @@ export function PublishDialog({
 		setIsSubmitting(true);
 		setError(null);
 		setSuccess(null);
+		setPollingWarning(null);
 
 		try {
 			const configs: AccountConfig[] = [];
@@ -659,7 +690,14 @@ export function PublishDialog({
 
 				{currentTaskId && taskProgress && (
 					<div className="absolute inset-0 z-50 bg-white">
-						<PublishProgress task={taskProgress} steps={taskSteps} article={articles[0]} onClose={() => onOpenChange(false)} onViewDetails={handleViewDetails} />
+						<PublishProgress
+							task={taskProgress}
+							steps={taskSteps}
+							article={articles[0]}
+							pollingWarning={pollingWarning}
+							onClose={() => onOpenChange(false)}
+							onViewDetails={handleViewDetails}
+						/>
 					</div>
 				)}
 
