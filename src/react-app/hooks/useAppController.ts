@@ -180,12 +180,9 @@ export function useAppController() {
 
   const handleArticleUpdate = useCallback((updates: Partial<Article>) => {
     if (!draft) return;
-    const normalizedUpdates = updates.content !== undefined
-      ? { ...updates, content: normalizeMarkdownImageSyntax(updates.content) }
-      : updates;
-    if (!hasArticleChanges(draft, normalizedUpdates)) return;
+    if (!hasArticleChanges(draft, updates)) return;
     setIsDraftDirty(true);
-    setDraft({ ...draft, ...normalizedUpdates });
+    setDraft({ ...draft, ...updates });
   }, [draft]);
 
   const persistDraft = useCallback(async (): Promise<Article> => {

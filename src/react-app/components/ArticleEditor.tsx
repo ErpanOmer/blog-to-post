@@ -122,10 +122,8 @@ export function ArticleEditor({ article, onChange, disabled, hideAIActions = fal
             plugins={plugins}
             uploadImages={handleUploadImages}
             onChange={(value) => {
-              if (!article) return;
-              const normalizedContent = normalizeMarkdownImageSyntax(value);
-              if (normalizedContent === content) return;
-              onChange({ content: normalizedContent });
+              if (!article || value === content) return;
+              onChange({ content: value });
             }}
           />
         </div>

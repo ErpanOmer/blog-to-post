@@ -49,11 +49,26 @@ function unwrapMarkdownDestination(destination: string): string {
 }
 
 function escapeMarkdownImageAlt(value: string): string {
-	return value
-		.replace(/\r?\n/g, " ")
-		.replace(/\\/g, "\\\\")
-		.replace(/\[/g, "\\[")
-		.replace(/\]/g, "\\]");
+	const normalized = value.replace(/\r?\n/g, " ");
+	let output = "";
+	let precedingBackslashCount = 0;
+
+	for (const char of normalized) {
+		if (char === "\\") {
+			output += char;
+			precedingBackslashCount += 1;
+			continue;
+		}
+
+		if ((char === "[" || char === "]") && precedingBackslashCount % 2 === 0) {
+			output += "\\";
+		}
+
+		output += char;
+		precedingBackslashCount = 0;
+	}
+
+	return output;
 }
 
 function sanitizeMarkdownImageUrl(value: string): string {
