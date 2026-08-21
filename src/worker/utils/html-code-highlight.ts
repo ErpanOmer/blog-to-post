@@ -257,6 +257,13 @@ export interface HtmlCodeHighlightOptions {
 	languageAliasMap?: Record<string, string>;
 	languageDisplayMap?: Record<string, string>;
 	autoDetectLanguages?: string[];
+	/**
+	 * 将代码内容中的换行编码为 <br>、空格编码为 &nbsp;。
+	 * 面向微信公众号这类会把内容导入富文本编辑器模型的平台：
+	 * 编辑器重序列化时会丢弃 span 之间仅含空白的文本节点（导致代码粘连），
+	 * 而 <br> 与 &nbsp; 会被原样保留。在 white-space:pre 下渲染效果与原始编码一致。
+	 */
+	hardenWhitespace?: boolean;
 }
 
 export interface HtmlPreCodeHighlightOptions {
@@ -497,6 +504,18 @@ const inlineHighlightTokenStyles = (
 
 		return `<span${nextAttrs}>`;
 	});
+};
+
+const hardenCodeWhitespaceForRichText = (highlightedHtml: string): string => {
+	return highlightedHtml
+		.split(/(<[^>]+>)/)
+		.map((part) => {
+			if (part.startsWith("<")) return part;
+			return part
+				.replace(/ /g, "&nbsp;")
+				.replace(/\r?\n/g, "<br>");
+		})
+		.join("");
 };
 
 const highlightCodeToGithubHtml = (
@@ -899,15 +918,18 @@ export const highlightHtmlCodeBlocks = (
 				languageAliasMap,
 			);
 			const plainCode = decodeHtmlEntities(stripHtmlTags(resolvedCodeHtml));
-			const highlighted = highlightCodeToGithubHtml(plainCode, explicitLanguage, autoDetectLanguages);
-			const highlightedWithTokenStyle = inlineHighlightTokenStyles(highlighted.html, tokenStyleMap);
-			const normalizedLanguage = normalizeCodeLanguage(
-				explicitLanguage ?? highlighted.language,
-				languageAliasMap,
-			) ?? "plaintext";
-			const languageLabel = resolveCodeLanguageLabel(normalizedLanguage, languageDisplayMap);
+		const highlighted = highlightCodeToGithubHtml(plainCode, explicitLanguage, autoDetectLanguages);
+		const highlightedWithTokenStyle = inlineHighlightTokenStyles(highlighted.html, tokenStyleMap);
+		const finalCodeHtml = options.hardenWhitespace
+			? hardenCodeWhitespaceForRichText(highlightedWithTokenStyle)
+			: highlightedWithTokenStyle;
+		const normalizedLanguage = normalizeCodeLanguage(
+			explicitLanguage ?? highlighted.language,
+			languageAliasMap,
+		) ?? "plaintext";
+		const languageLabel = resolveCodeLanguageLabel(normalizedLanguage, languageDisplayMap);
 
-			return `<div style="${options.wrapperStyle}"><div style="${options.headerStyle}"><span style="${options.languageLabelStyle}">${escapeHtml(languageLabel)}</span></div><pre style="${options.preStyle}"><code style="${options.codeStyle}">${highlightedWithTokenStyle}</code></pre></div>`;
+		return `<div style="${options.wrapperStyle}"><div style="${options.headerStyle}"><span style="${options.languageLabelStyle}">${escapeHtml(languageLabel)}</span></div><pre style="${options.preStyle}"><code style="${options.codeStyle}">${finalCodeHtml}</code></pre></div>`;
 		},
 	);
 };

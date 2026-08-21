@@ -176,10 +176,13 @@ const WECHAT_CODE_WRAPPER_STYLE =
 	"margin:16px 0;border:1px solid #30363d;border-radius:10px;background:#0d1117;overflow:hidden;";
 const WECHAT_CODE_HEADER_STYLE =
 	"display:flex;align-items:center;justify-content:space-between;padding:7px 12px;background:#161b22 !important;border-bottom:1px solid #30363d;";
+// NOTE: font-family 值必须使用不带引号的多词字体名（CSS 合法）。
+// 一旦在双引号包裹的 style 属性里再嵌套双引号，微信端解析 HTML 时会把 style 截断，
+// 并把 "Liberation Mono"、"Courier New" 拆成 liberation/mono/new 等垃圾属性。
 const WECHAT_CODE_LANGUAGE_LABEL_STYLE =
-	"font-size:12px;line-height:1;color:#8b949e;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,\"Liberation Mono\",\"Courier New\",monospace;";
+	"font-size:12px;line-height:1;color:#8b949e;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;";
 const WECHAT_CODE_PRE_STYLE =
-	"margin:0;padding:14px 16px;background:#0d1117 !important;color:#c9d1d9;overflow-x:auto;white-space:pre;word-break:normal;line-height:1.6;font-size:13px;border-radius:5px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,\"Liberation Mono\",\"Courier New\",monospace;";
+	"margin:0;padding:14px 16px;background:#0d1117 !important;color:#c9d1d9;overflow-x:auto;white-space:pre;word-break:normal;line-height:1.6;font-size:13px;border-radius:5px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;";
 const WECHAT_CODE_TAG_STYLE =
 	"display:block;margin:0;padding:0;background:transparent;color:inherit;white-space:inherit;word-break:normal;line-height:inherit;font-size:inherit;font-family:inherit;";
 
@@ -855,6 +858,7 @@ export default class WechatAccountService extends AbstractAccountService {
 			languageLabelStyle: WECHAT_CODE_LANGUAGE_LABEL_STYLE,
 			preStyle: WECHAT_CODE_PRE_STYLE,
 			codeStyle: WECHAT_CODE_TAG_STYLE,
+			hardenWhitespace: true,
 		});
 	}
 
