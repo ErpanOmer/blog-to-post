@@ -11,7 +11,12 @@ import type {
 } from "@/worker/accounts/index";
 import type { Article as SharedArticle } from "@/shared/types";
 import { randomDelay } from "@/worker/utils/helpers";
-import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
+import {
+	applyMarkdownContentSlots,
+	createFooterImageScanPlaceholder,
+	FOOTER_SLOT_PLACEHOLDER,
+	normalizePublishContentSlots,
+} from "@/worker/utils/content-slots";
 import {
 	COMMON_IMAGE_MIME_TO_EXTENSION,
 	buildCloudinaryImageFormatRewriteSources,
@@ -668,12 +673,43 @@ export default class CnblogsAccountService extends AbstractAccountService {
 	}
 
 	private async resolveArticleContent(article: SharedArticle): Promise<CnblogsResolvedContent> {
-		const markdown = applyMarkdownContentSlots(article.content?.trim() ?? "", article);
+		const sourceMarkdown = article.content?.trim() ?? "";
+		const contentSlots = normalizePublishContentSlots(article.contentSlots);
+		const hasFooterSlot = Boolean(contentSlots.footerMarkdown);
+		const footerInsertion = !hasFooterSlot
+			? "not_configured"
+			: sourceMarkdown.includes(FOOTER_SLOT_PLACEHOLDER)
+				? "replaced_placeholder"
+				: "appended_at_end";
+		const footerImageScanPlaceholder = hasFooterSlot
+			? createFooterImageScanPlaceholder(sourceMarkdown, contentSlots.footerMarkdown, "cnblogs")
+			: "";
+		const articleForContentImageResolution = footerImageScanPlaceholder
+			? {
+				...article,
+				contentSlots: {
+					...(article.contentSlots ?? {}),
+					footerMarkdown: footerImageScanPlaceholder,
+				},
+			}
+			: article;
+		let markdown = applyMarkdownContentSlots(sourceMarkdown, articleForContentImageResolution);
 		if (!markdown) {
 			throw new Error("Article markdown content is empty, cannot publish to cnblogs");
 		}
 
 		const imageSources = this.extractImageUrlsFromMarkdownContent(markdown);
+		await this.tracePublish({
+			stage: "cnblogs_content_images_scan",
+			message: "Scan cnblogs content images",
+			metadata: {
+				totalImages: imageSources.length,
+				hasCoverImage: Boolean(article.coverImage?.trim()),
+				hasFooterSlot,
+				footerLength: contentSlots.footerMarkdown.length,
+				footerInsertion,
+			},
+		});
 		for (const source of imageSources) {
 			const normalized = this.normalizeImageUrl(source);
 			if (!normalized) throw this.invalidImageSource(source, "Cnblogs article content");
@@ -695,20 +731,48 @@ export default class CnblogsAccountService extends AbstractAccountService {
 			context: "Cnblogs article content",
 		});
 
-		const replacedMarkdown = this.replaceMarkdownImageUrlsByMap(
+		markdown = this.replaceMarkdownImageUrlsByMap(
 			markdown,
 			(rawUrl) => this.normalizeImageUrl(rawUrl),
 			this.imageUrlCache,
 		);
+		const finalImageSources = this.extractImageUrlsFromMarkdownContent(markdown);
+		const replacedContentImages = imageSources.filter((source) => {
+			const normalized = this.normalizeImageUrl(source);
+			return Boolean(
+				normalized
+				&& !this.isCnblogsHostedImage(normalized)
+				&& this.imageUrlCache.has(normalized),
+			);
+		}).length;
 		this.assertFinalImageSources({
-			sources: this.extractImageUrlsFromMarkdownContent(replacedMarkdown),
+			sources: finalImageSources,
 			normalize: (source) => this.normalizeImageUrl(source),
 			isPlatformHosted: (source) => this.isCnblogsHostedImage(source),
 			context: "Cnblogs final markdown",
 		});
+		if (footerImageScanPlaceholder) {
+			markdown = markdown.split(footerImageScanPlaceholder).join(contentSlots.footerMarkdown);
+		}
+
+		await this.tracePublish({
+			stage: "cnblogs_resolve_content_done",
+			message: "Cnblogs markdown content resolved",
+			metadata: {
+				markdownLength: markdown.length,
+				contentImagesScanned: imageSources.length,
+				contentImagesReplaced: replacedContentImages,
+				finalContentImages: finalImageSources.length,
+				replacedImages: replacedContentImages,
+				hasFooterSlot,
+				footerLength: contentSlots.footerMarkdown.length,
+				footerInsertion,
+				footerExcludedFromContentImageScan: hasFooterSlot,
+			},
+		});
 
 		return {
-			markdownContent: replacedMarkdown,
+			markdownContent: markdown,
 		};
 	}
 

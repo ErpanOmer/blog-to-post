@@ -62,6 +62,54 @@ function replacePlaceholders(content: string, placeholders: string[], value: str
 	return output;
 }
 
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Builds an otherwise inert marker so a fixed footer can be restored after a
+ * platform has finished scanning and rewriting only article-owned images.
+ */
+export function createFooterImageScanPlaceholder(
+	sourceContent: string,
+	footerContent: string,
+	platform: string,
+): string {
+	const normalizedPlatform = platform
+		.trim()
+		.toUpperCase()
+		.replace(/[^A-Z0-9]+/g, "_")
+		.replace(/^_+|_+$/g, "") || "CONTENT";
+	const prefix = `{{${normalizedPlatform}_FOOTER_SLOT_IMAGE_SCAN_EXCLUDED`;
+	let suffix = 0;
+	let placeholder = `${prefix}}}`;
+	while (sourceContent.includes(placeholder) || footerContent.includes(placeholder)) {
+		suffix += 1;
+		placeholder = `${prefix}_${suffix}}}`;
+	}
+	return placeholder;
+}
+
+/**
+ * Restore a deferred footer in HTML without nesting its block markup inside a
+ * paragraph emitted by a Markdown-to-HTML converter.
+ */
+export function restoreFooterImageScanPlaceholderInHtml(
+	htmlContent: string,
+	placeholder: string,
+	footerHtml: string,
+): string {
+	if (!placeholder) return htmlContent;
+	const standaloneParagraph = new RegExp(
+		`<p\\b[^>]*>\\s*${escapeRegExp(placeholder)}\\s*<\\/p>`,
+		"gi",
+	);
+	return htmlContent
+		.replace(standaloneParagraph, footerHtml)
+		.split(placeholder)
+		.join(footerHtml);
+}
+
 export function buildDefaultHeaderSlotMarkdown(article: Article): string {
 	const coverImage = article.coverImage?.trim();
 	if (!coverImage) return "";

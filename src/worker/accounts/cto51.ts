@@ -11,7 +11,12 @@ import type {
 } from "@/worker/accounts/index";
 import type { Article as SharedArticle } from "@/shared/types";
 import { convertHtmlTagsToMarkdown, normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
-import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
+import {
+	applyMarkdownContentSlots,
+	createFooterImageScanPlaceholder,
+	FOOTER_SLOT_PLACEHOLDER,
+	normalizePublishContentSlots,
+} from "@/worker/utils/content-slots";
 import { randomDelay } from "@/worker/utils/helpers";
 import {
 	COMMON_IMAGE_MIME_TO_EXTENSION,
@@ -686,8 +691,28 @@ export default class Cto51AccountService extends AbstractAccountService {
 	}
 
 	private async resolveArticleContent(article: SharedArticle): Promise<Cto51ResolvedContent> {
+		const sourceMarkdown = article.content?.trim() ?? "";
+		const contentSlots = normalizePublishContentSlots(article.contentSlots);
+		const hasFooterSlot = Boolean(contentSlots.footerMarkdown);
+		const footerInsertion = !hasFooterSlot
+			? "not_configured"
+			: sourceMarkdown.includes(FOOTER_SLOT_PLACEHOLDER)
+				? "replaced_placeholder"
+				: "appended_at_end";
+		const footerImageScanPlaceholder = hasFooterSlot
+			? createFooterImageScanPlaceholder(sourceMarkdown, contentSlots.footerMarkdown, "51cto")
+			: "";
+		const articleForContentImageResolution = footerImageScanPlaceholder
+			? {
+				...article,
+				contentSlots: {
+					...(article.contentSlots ?? {}),
+					footerMarkdown: footerImageScanPlaceholder,
+				},
+			}
+			: article;
 		let markdown = convertHtmlTagsToMarkdown(
-			applyMarkdownContentSlots(article.content?.trim() ?? "", article),
+			applyMarkdownContentSlots(sourceMarkdown, articleForContentImageResolution),
 			{ normalizeUrl: (rawUrl) => this.normalizeImageUrl(rawUrl) },
 		);
 		if (!markdown) {
@@ -700,6 +725,9 @@ export default class Cto51AccountService extends AbstractAccountService {
 			metadata: {
 				contentLength: markdown.length,
 				hasCoverImage: Boolean(article.coverImage?.trim()),
+				hasFooterSlot,
+				footerLength: contentSlots.footerMarkdown.length,
+				footerInsertion,
 			},
 		});
 
@@ -745,19 +773,38 @@ export default class Cto51AccountService extends AbstractAccountService {
 			normalizeUrl: (rawUrl) => this.normalizeImageUrl(rawUrl),
 			resolveUrl: (normalizedUrl) => this.imageUrlCache.get(normalizedUrl),
 		});
+		const finalImageSources = this.extractImageUrlsFromMarkdownContent(markdown);
+		const replacedContentImages = imageSources.filter((source) => {
+			const normalized = this.normalizeImageUrl(source);
+			return Boolean(
+				normalized
+				&& !this.isCto51HostedImage(normalized)
+				&& this.imageUrlCache.has(normalized),
+			);
+		}).length;
 		this.assertFinalImageSources({
-			sources: this.extractImageUrlsFromMarkdownContent(markdown),
+			sources: finalImageSources,
 			normalize: (source) => this.normalizeImageUrl(source),
 			isPlatformHosted: (source) => this.isCto51HostedImage(source),
 			context: "51CTO final markdown",
 		});
+		if (footerImageScanPlaceholder) {
+			markdown = markdown.split(footerImageScanPlaceholder).join(contentSlots.footerMarkdown);
+		}
 
 		await this.tracePublish({
 			stage: "51cto_resolve_content_done",
 			message: "51CTO markdown content resolved",
 			metadata: {
 				markdownLength: markdown.length,
-				replacedImages: this.imageUrlCache.size,
+				contentImagesScanned: imageSources.length,
+				contentImagesReplaced: replacedContentImages,
+				finalContentImages: finalImageSources.length,
+				replacedImages: replacedContentImages,
+				hasFooterSlot,
+				footerLength: contentSlots.footerMarkdown.length,
+				footerInsertion,
+				footerExcludedFromContentImageScan: hasFooterSlot,
 			},
 		});
 

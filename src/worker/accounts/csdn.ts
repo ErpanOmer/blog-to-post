@@ -13,7 +13,14 @@ import type {
 import { marked } from "marked";
 import { randomDelay } from "@/worker/utils/helpers";
 import { highlightHtmlPreCodeBlocksWithPrism } from "@/worker/utils/html-code-highlight";
-import { applyHtmlContentSlots, applyMarkdownContentSlots } from "@/worker/utils/content-slots";
+import {
+	applyHtmlContentSlots,
+	applyMarkdownContentSlots,
+	createFooterImageScanPlaceholder,
+	FOOTER_SLOT_PLACEHOLDER,
+	normalizePublishContentSlots,
+	restoreFooterImageScanPlaceholderInHtml,
+} from "@/worker/utils/content-slots";
 
 interface CSDNBaseInfoResponse {
 	code: number;
@@ -479,6 +486,44 @@ export default class CSDNAccountService extends AbstractAccountService {
 	}
 
 	private async resolveArticleContent(article: SharedArticle): Promise<CSDNResolvedContent> {
+		const sourceMarkdown = article.content?.trim() ?? "";
+		const existingHtml = article.htmlContent?.trim() ?? "";
+		const contentSlots = normalizePublishContentSlots(article.contentSlots);
+		const hasMarkdownFooter = Boolean(contentSlots.footerMarkdown);
+		const hasHtmlFooter = Boolean(existingHtml ? contentSlots.footerHtml : contentSlots.footerMarkdown);
+		const hasFooterSlot = hasMarkdownFooter || hasHtmlFooter;
+		const footerInsertion = !hasFooterSlot
+			? "not_configured"
+			: sourceMarkdown.includes(FOOTER_SLOT_PLACEHOLDER)
+				? "replaced_placeholder"
+				: "appended_at_end";
+		const markdownFooterPlaceholder = hasMarkdownFooter
+			? createFooterImageScanPlaceholder(sourceMarkdown, contentSlots.footerMarkdown, "csdn_markdown")
+			: "";
+		const htmlFooterPlaceholder = hasHtmlFooter
+			? existingHtml
+				? createFooterImageScanPlaceholder(existingHtml, contentSlots.footerHtml, "csdn_html")
+				: markdownFooterPlaceholder
+			: "";
+		const articleForMarkdownContentResolution = markdownFooterPlaceholder
+			? {
+				...article,
+				contentSlots: {
+					...(article.contentSlots ?? {}),
+					footerMarkdown: markdownFooterPlaceholder,
+				},
+			}
+			: article;
+		const articleForHtmlContentResolution = existingHtml && htmlFooterPlaceholder
+			? {
+				...article,
+				contentSlots: {
+					...(article.contentSlots ?? {}),
+					footerHtml: htmlFooterPlaceholder,
+				},
+			}
+			: articleForMarkdownContentResolution;
+		const footerLength = (existingHtml ? contentSlots.footerHtml : contentSlots.footerMarkdown).length;
 		await this.tracePublish({
 			stage: "csdn_resolve_content_start",
 			message: "Start resolving CSDN article content",
@@ -486,11 +531,14 @@ export default class CSDNAccountService extends AbstractAccountService {
 				contentLength: article.content?.length ?? 0,
 				hasExistingHtml: Boolean(article.htmlContent?.trim()),
 				hasCoverImage: Boolean(article.coverImage?.trim()),
+				hasFooterSlot,
+				footerLength,
+				footerInsertion,
 			},
 		});
 
-		const markdownContent = this.resolveMarkdownContent(article);
-		const htmlContent = this.resolveHtmlContent(article, markdownContent);
+		const markdownContent = this.resolveMarkdownContent(articleForMarkdownContentResolution);
+		const htmlContent = this.resolveHtmlContent(articleForHtmlContentResolution, markdownContent);
 
 		const imageSources = new Set<string>(
 			this.collectImageUrlsFromMarkdownAndHtml(markdownContent, htmlContent),
@@ -502,6 +550,8 @@ export default class CSDNAccountService extends AbstractAccountService {
 				message: "Start replacing CSDN article images",
 				metadata: {
 					imageCount: imageSources.size,
+					hasFooterSlot,
+					footerExcludedFromContentImageScan: hasFooterSlot,
 				},
 			});
 
@@ -527,14 +577,42 @@ export default class CSDNAccountService extends AbstractAccountService {
 			context: "CSDN article content",
 		});
 
-		const replacedMarkdown = this.replaceMarkdownImageUrls(markdownContent);
-		const replacedHtml = this.replaceHtmlImageUrls(htmlContent);
+		let replacedMarkdown = this.replaceMarkdownImageUrls(markdownContent);
+		let replacedHtml = this.replaceHtmlImageUrls(htmlContent);
+		const finalImageSources = this.collectImageUrlsFromMarkdownAndHtml(replacedMarkdown, replacedHtml);
+		const replacedContentImages = [...imageSources].filter((source) => {
+			const normalized = this.normalizeImageUrl(source);
+			return Boolean(
+				normalized
+				&& !this.isCsdnHostedImage(normalized)
+				&& this.imageUrlCache.has(normalized),
+			);
+		}).length;
 		this.assertFinalImageSources({
-			sources: this.collectImageUrlsFromMarkdownAndHtml(replacedMarkdown, replacedHtml),
+			sources: finalImageSources,
 			normalize: (source) => this.normalizeImageUrl(source),
 			isPlatformHosted: (source) => this.isCsdnHostedImage(source),
 			context: "CSDN final content",
 		});
+		if (markdownFooterPlaceholder) {
+			replacedMarkdown = replacedMarkdown
+				.split(markdownFooterPlaceholder)
+				.join(contentSlots.footerMarkdown);
+		}
+		if (htmlFooterPlaceholder) {
+			const footerHtml = existingHtml
+				? contentSlots.footerHtml
+				: (marked.parse(contentSlots.footerMarkdown, {
+					async: false,
+					gfm: true,
+					breaks: false,
+				}) as string);
+			replacedHtml = restoreFooterImageScanPlaceholderInHtml(
+				replacedHtml,
+				htmlFooterPlaceholder,
+				footerHtml,
+			);
+		}
 		const coverImages = await this.resolveCoverImages(article);
 
 		await this.tracePublish({
@@ -543,7 +621,14 @@ export default class CSDNAccountService extends AbstractAccountService {
 			metadata: {
 				markdownLength: replacedMarkdown.length,
 				htmlLength: replacedHtml.length,
-				replacedImages: this.imageUrlCache.size,
+				contentImagesScanned: imageSources.size,
+				contentImagesReplaced: replacedContentImages,
+				finalContentImages: finalImageSources.length,
+				replacedImages: replacedContentImages,
+				hasFooterSlot,
+				footerLength,
+				footerInsertion,
+				footerExcludedFromContentImageScan: hasFooterSlot,
 				coverCount: coverImages.length,
 			},
 		});

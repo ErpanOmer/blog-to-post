@@ -11,7 +11,12 @@ import type {
 } from "@/worker/accounts/index";
 import type { Article as SharedArticle } from "@/shared/types";
 import { randomDelay } from "@/worker/utils/helpers";
-import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
+import {
+	applyMarkdownContentSlots,
+	createFooterImageScanPlaceholder,
+	FOOTER_SLOT_PLACEHOLDER,
+	normalizePublishContentSlots,
+} from "@/worker/utils/content-slots";
 import { convertHtmlTagsToMarkdown, normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
 
 interface SegmentFaultResolvedContent {
@@ -576,8 +581,28 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 	}
 
 	private async resolveArticleContent(article: SharedArticle): Promise<SegmentFaultResolvedContent> {
+		const sourceMarkdown = article.content?.trim() ?? "";
+		const contentSlots = normalizePublishContentSlots(article.contentSlots);
+		const hasFooterSlot = Boolean(contentSlots.footerMarkdown);
+		const footerInsertion = !hasFooterSlot
+			? "not_configured"
+			: sourceMarkdown.includes(FOOTER_SLOT_PLACEHOLDER)
+				? "replaced_placeholder"
+				: "appended_at_end";
+		const footerImageScanPlaceholder = hasFooterSlot
+			? createFooterImageScanPlaceholder(sourceMarkdown, contentSlots.footerMarkdown, "segmentfault")
+			: "";
+		const articleForContentImageResolution = footerImageScanPlaceholder
+			? {
+				...article,
+				contentSlots: {
+					...(article.contentSlots ?? {}),
+					footerMarkdown: footerImageScanPlaceholder,
+				},
+			}
+			: article;
 		const markdown = convertHtmlTagsToMarkdown(
-			applyMarkdownContentSlots(article.content?.trim() ?? "", article),
+			applyMarkdownContentSlots(sourceMarkdown, articleForContentImageResolution),
 			{ normalizeUrl: (rawUrl) => this.normalizeImageUrl(rawUrl) },
 		);
 		if (!markdown) {
@@ -585,6 +610,17 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 		}
 
 		const imageSources = this.extractImageUrlsFromMarkdownContent(markdown);
+		await this.tracePublish({
+			stage: "segmentfault_content_images_scan",
+			message: "Scan content images for SegmentFault",
+			metadata: {
+				totalImages: imageSources.length,
+				hasCoverImage: Boolean(article.coverImage?.trim()),
+				hasFooterSlot,
+				footerLength: contentSlots.footerMarkdown.length,
+				footerInsertion,
+			},
+		});
 		for (const source of imageSources) {
 			const normalized = this.normalizeImageUrl(source);
 			if (!normalized) throw this.invalidImageSource(source, "SegmentFault article content");
@@ -606,7 +642,7 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 			context: "SegmentFault article content",
 		});
 
-		const replacedMarkdown = normalizeMarkdownImageSyntax(
+		let replacedMarkdown = normalizeMarkdownImageSyntax(
 			this.replaceMarkdownImageUrlsByMap(
 				markdown,
 				(rawUrl) => this.normalizeImageUrl(rawUrl),
@@ -614,11 +650,41 @@ export default class SegmentFaultAccountService extends AbstractAccountService {
 			),
 			{ normalizeUrl: (rawUrl) => this.normalizeImageUrl(rawUrl) },
 		);
+		const finalImageSources = this.extractImageUrlsFromMarkdownContent(replacedMarkdown);
+		const replacedContentImages = imageSources.filter((source) => {
+			const normalized = this.normalizeImageUrl(source);
+			return Boolean(
+				normalized
+				&& !this.isSegmentFaultHostedImage(normalized)
+				&& this.imageUrlCache.has(normalized),
+			);
+		}).length;
 		this.assertFinalImageSources({
-			sources: this.extractImageUrlsFromMarkdownContent(replacedMarkdown),
+			sources: finalImageSources,
 			normalize: (source) => this.normalizeImageUrl(source),
 			isPlatformHosted: (source) => this.isSegmentFaultHostedImage(source),
 			context: "SegmentFault final markdown",
+		});
+		if (footerImageScanPlaceholder) {
+			replacedMarkdown = replacedMarkdown
+				.split(footerImageScanPlaceholder)
+				.join(contentSlots.footerMarkdown);
+		}
+
+		await this.tracePublish({
+			stage: "segmentfault_resolve_content_done",
+			message: "SegmentFault article markdown resolved",
+			metadata: {
+				markdownLength: replacedMarkdown.length,
+				contentImagesScanned: imageSources.length,
+				contentImagesReplaced: replacedContentImages,
+				finalContentImages: finalImageSources.length,
+				replacedImages: replacedContentImages,
+				hasFooterSlot,
+				footerLength: contentSlots.footerMarkdown.length,
+				footerInsertion,
+				footerExcludedFromContentImageScan: hasFooterSlot,
+			},
 		});
 
 		const coverUrl = await this.resolveCoverImage(article);

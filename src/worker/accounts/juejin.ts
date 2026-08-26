@@ -11,7 +11,12 @@ import type {
 	ImageUploadResult,
 } from "@/worker/accounts/index";
 import { randomDelay } from "@/worker/utils/helpers";
-import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
+import {
+	applyMarkdownContentSlots,
+	createFooterImageScanPlaceholder,
+	FOOTER_SLOT_PLACEHOLDER,
+	normalizePublishContentSlots,
+} from "@/worker/utils/content-slots";
 import { crc32, signAWS4 } from "@/worker/utils/aws4";
 import { resolveImageMimeTypeFromBlob } from "@/worker/utils/media";
 import { normalizeMarkdownImageSyntax } from "@/shared/markdown-normalize";
@@ -505,7 +510,27 @@ export default class JuejinAccountService extends AbstractAccountService {
 	}
 
 	private async resolveArticleMarkdown(article: SharedArticle): Promise<string> {
-		let markdown = applyMarkdownContentSlots(article.content?.trim() ?? "", article);
+		const sourceMarkdown = article.content?.trim() ?? "";
+		const contentSlots = normalizePublishContentSlots(article.contentSlots);
+		const hasFooterSlot = Boolean(contentSlots.footerMarkdown);
+		const footerInsertion = !hasFooterSlot
+			? "not_configured"
+			: sourceMarkdown.includes(FOOTER_SLOT_PLACEHOLDER)
+				? "replaced_placeholder"
+				: "appended_at_end";
+		const footerImageScanPlaceholder = hasFooterSlot
+			? createFooterImageScanPlaceholder(sourceMarkdown, contentSlots.footerMarkdown, "juejin")
+			: "";
+		const articleForContentImageResolution = footerImageScanPlaceholder
+			? {
+				...article,
+				contentSlots: {
+					...(article.contentSlots ?? {}),
+					footerMarkdown: footerImageScanPlaceholder,
+				},
+			}
+			: article;
+		let markdown = applyMarkdownContentSlots(sourceMarkdown, articleForContentImageResolution);
 		if (!markdown) {
 			throw new Error("Article markdown content is empty, cannot publish to Juejin");
 		}
@@ -517,6 +542,9 @@ export default class JuejinAccountService extends AbstractAccountService {
 			metadata: {
 				totalImages: imageSources.length,
 				hasCoverImage: Boolean(article.coverImage?.trim()),
+				hasFooterSlot,
+				footerLength: contentSlots.footerMarkdown.length,
+				footerInsertion,
 			},
 		});
 
@@ -545,19 +573,38 @@ export default class JuejinAccountService extends AbstractAccountService {
 		});
 
 		markdown = this.replaceJuejinMarkdownImageUrls(markdown);
+		const finalImageSources = this.extractImageUrlsFromMarkdownContent(markdown);
+		const replacedContentImages = imageSources.filter((source) => {
+			const normalized = this.normalizeImageUrl(source);
+			return Boolean(
+				normalized
+				&& !this.isJuejinHostedImage(normalized)
+				&& this.imageUrlCache.has(normalized),
+			);
+		}).length;
 		this.assertFinalImageSources({
-			sources: this.extractImageUrlsFromMarkdownContent(markdown),
+			sources: finalImageSources,
 			normalize: (source) => this.normalizeImageUrl(source),
 			isPlatformHosted: (source) => this.isJuejinHostedImage(source),
 			context: "Juejin final markdown",
 		});
+		if (footerImageScanPlaceholder) {
+			markdown = markdown.split(footerImageScanPlaceholder).join(contentSlots.footerMarkdown);
+		}
 
 		await this.tracePublish({
 			stage: "juejin_resolve_content_done",
 			message: "Juejin article markdown resolved",
 			metadata: {
 				markdownLength: markdown.length,
-				replacedImages: this.imageUrlCache.size,
+				contentImagesScanned: imageSources.length,
+				contentImagesReplaced: replacedContentImages,
+				finalContentImages: finalImageSources.length,
+				replacedImages: replacedContentImages,
+				hasFooterSlot,
+				footerLength: contentSlots.footerMarkdown.length,
+				footerInsertion,
+				footerExcludedFromContentImageScan: hasFooterSlot,
 				imageDestinationSyntax: "plain-no-title",
 			},
 		});

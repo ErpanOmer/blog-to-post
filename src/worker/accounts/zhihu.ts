@@ -13,7 +13,13 @@ import type { Article as SharedArticle } from "@/shared/types";
 import type { ZhihuUserInfo } from "@/worker/accounts/abstract";
 import { marked } from "marked";
 import { randomDelay } from "@/worker/utils/helpers";
-import { applyMarkdownContentSlots } from "@/worker/utils/content-slots";
+import {
+	applyMarkdownContentSlots,
+	createFooterImageScanPlaceholder,
+	FOOTER_SLOT_PLACEHOLDER,
+	normalizePublishContentSlots,
+	restoreFooterImageScanPlaceholderInHtml,
+} from "@/worker/utils/content-slots";
 import {
 	FRONTEND_AUTO_DETECT_LANGUAGES,
 	highlightHtmlPreCodeBlocksWithHighlightJs,
@@ -742,6 +748,26 @@ export default class ZhihuAccountService extends AbstractAccountService {
 	}
 
 	private async resolveArticleHtml(article: SharedArticle): Promise<string> {
+		const sourceMarkdown = article.content ?? "";
+		const contentSlots = normalizePublishContentSlots(article.contentSlots);
+		const hasFooterSlot = Boolean(contentSlots.footerMarkdown);
+		const footerInsertion = !hasFooterSlot
+			? "not_configured"
+			: sourceMarkdown.includes(FOOTER_SLOT_PLACEHOLDER)
+				? "replaced_placeholder"
+				: "appended_at_end";
+		const footerImageScanPlaceholder = hasFooterSlot
+			? createFooterImageScanPlaceholder(sourceMarkdown, contentSlots.footerMarkdown, "zhihu")
+			: "";
+		const articleForContentImageResolution = footerImageScanPlaceholder
+			? {
+				...article,
+				contentSlots: {
+					...(article.contentSlots ?? {}),
+					footerMarkdown: footerImageScanPlaceholder,
+				},
+			}
+			: article;
 		await this.tracePublish({
 			stage: "zhihu_resolve_html_start",
 			message: "Start resolving article HTML",
@@ -749,10 +775,13 @@ export default class ZhihuAccountService extends AbstractAccountService {
 				hasExistingHtml: Boolean(article.htmlContent?.trim()),
 				contentLength: article.content?.length ?? 0,
 				mode: "zhihu_document_convert_forced",
+				hasFooterSlot,
+				footerLength: contentSlots.footerMarkdown.length,
+				footerInsertion,
 			},
 		});
 
-		const markdownContent = applyMarkdownContentSlots(article.content ?? "", article);
+		const markdownContent = applyMarkdownContentSlots(sourceMarkdown, articleForContentImageResolution);
 		const htmlContent = await this.convertMarkdownToHtmlViaAPI(markdownContent);
 
 		if (!htmlContent) {
@@ -760,13 +789,25 @@ export default class ZhihuAccountService extends AbstractAccountService {
 		}
 
 		const highlightedHtml = this.highlightHtmlCodeBlocks(htmlContent);
-		const finalHtml = await this.replaceHtmlImageUrls(highlightedHtml);
+		let finalHtml = await this.replaceHtmlImageUrls(highlightedHtml);
+		if (footerImageScanPlaceholder) {
+			const footerHtml = await this.convertMarkdownToHtmlViaAPI(contentSlots.footerMarkdown);
+			finalHtml = restoreFooterImageScanPlaceholderInHtml(
+				finalHtml,
+				footerImageScanPlaceholder,
+				footerHtml,
+			);
+		}
 		await this.tracePublish({
 			stage: "zhihu_resolve_html_done",
 			message: "Article HTML resolved",
 			metadata: {
 				htmlLength: finalHtml.length,
 				cachedImageCount: this.imageUrlCache.size,
+				hasFooterSlot,
+				footerLength: contentSlots.footerMarkdown.length,
+				footerInsertion,
+				footerExcludedFromContentImageScan: hasFooterSlot,
 			},
 		});
 		return finalHtml;
@@ -1108,4 +1149,3 @@ export default class ZhihuAccountService extends AbstractAccountService {
 }
 
 registerAccountService("zhihu", ZhihuAccountService);
-
