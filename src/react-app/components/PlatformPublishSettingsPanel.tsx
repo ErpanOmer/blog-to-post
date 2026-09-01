@@ -35,6 +35,7 @@ const platformDescriptions: Record<PublishablePlatformType, string> = {
 	juejin: "Markdown 草稿与发布，支持封面和内容图上传。",
 	zhihu: "知乎专栏 HTML 内容发布，适合保留图文结构。",
 	wechat: "微信公众号官方草稿发布流程，HTML 会做微信专属处理。",
+	wechat_v2: "公众号固定出口 IP 链路，微信 API 经自建服务器转发，流程与公众号一致。",
 	csdn: "CSDN 同时提交 Markdown 和 HTML，代码块使用 Prism。",
 	cnblogs: "博客园 Markdown 编辑器投稿流程。",
 	segmentfault: "SegmentFault Markdown 草稿与发布流程。",

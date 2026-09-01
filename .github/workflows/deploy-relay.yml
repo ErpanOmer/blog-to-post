@@ -1,0 +1,50 @@
+name: deploy-relay
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "relay/**"
+      - ".github/workflows/deploy-relay.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-relay
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build relay
+        working-directory: relay
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Package relay sources
+        run: tar -czf /tmp/relay.tgz --exclude=node_modules --exclude=dist --exclude=.env -C relay .
+
+      - name: Deploy to Oracle server
+        env:
+          SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}
+          SSH_HOST: ${{ secrets.ORACLE_HOST }}
+          SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
+        run: |
+          install -m 600 /dev/null "$HOME/deploy_key"
+          printf '%s\n' "$SSH_KEY" > "$HOME/deploy_key"
+          SCP_OPTS=(-i "$HOME/deploy_key" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+          SSH_CMD="ssh ${SCP_OPTS[*]} $SSH_USER@$SSH_HOST"
+          scp "${SCP_OPTS[@]}" /tmp/relay.tgz "$SSH_USER@$SSH_HOST:/tmp/relay.tgz"
+          # /opt/wechat-relay/.env (RELAY_API_KEY) is provisioned once and never overwritten:
+          # the tarball excludes .env.
+          $SSH_CMD "mkdir -p /opt/wechat-relay && tar -xzf /tmp/relay.tgz -C /opt/wechat-relay && rm /tmp/relay.tgz"
+          $SSH_CMD "cd /opt/wechat-relay && sudo docker compose up -d --build 2>&1 | tail -5"
+          $SSH_CMD "curl -fsS --max-time 10 http://127.0.0.1/healthz"
+          rm -f "$HOME/deploy_key"

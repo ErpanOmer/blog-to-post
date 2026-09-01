@@ -32,6 +32,7 @@ export {
 import "./juejin";
 import "./zhihu";
 import "./wechat";
+import "./wechat-v2";
 import "./csdn";
 import "./cnblogs";
 import "./segmentfault";

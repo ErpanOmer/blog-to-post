@@ -12,6 +12,7 @@ import {
 import { PlatformLogo } from "@/react-app/components/PlatformBrand";
 import { getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 import type { PlatformPublishSettingsMap, PublishablePlatformType } from "@/shared/types";
+import { isWechatFamilyPlatform } from "@/shared/platform-settings";
 import { Eye, EyeOff, Loader2, Shield, ShieldCheck, ShieldX } from "lucide-react";
 
 const platformOptions: { value: PublishablePlatformType; label: string }[] = PUBLISHABLE_PLATFORMS.map((platform) => ({
@@ -121,7 +122,7 @@ export function PlatformAccountForm({
 	const isEditing = !!account;
 	const readOnly = Boolean(account && isPlatformDisabled(account.platform, platformSettings));
 	const isPlatformLocked = isEditing || readOnly;
-	const isWechatPlatform = formData.platform === "wechat";
+	const isWechatPlatform = isWechatFamilyPlatform(formData.platform);
 	const isWebsitePlatform = formData.platform === "website";
 	const enabledPlatformOptions = useMemo(
 		() => platformOptions.filter((option) => platformSettings?.[option.value]?.enabled !== false),
@@ -132,7 +133,7 @@ export function PlatformAccountForm({
 		if (!open) return;
 
 		if (account) {
-			const parsedWechatCredential = account.platform === "wechat"
+			const parsedWechatCredential = isWechatFamilyPlatform(account.platform)
 				? parseWechatCredentialFromToken(account.authToken)
 				: null;
 			const parsedWebsiteCredential = account.platform === "website"
@@ -293,6 +294,12 @@ export function PlatformAccountForm({
 						</div>
 						{!isEditing && enabledPlatformOptions.length === 0 ? (
 							<p className="text-[12px] text-amber-600">所有平台都已禁用，请先到设置中启用至少一个平台。</p>
+						) : null}
+						{formData.platform === "wechat" && !isEditing ? (
+							<p className="text-[12px] text-design-textSecondary">新账号建议选择「公众号V2」：微信 API 经固定出口 IP 服务器转发，不受本机/部署环境 IP 变动影响。</p>
+						) : null}
+						{formData.platform === "wechat_v2" ? (
+							<p className="text-[12px] text-design-textSecondary">微信 API 经自建固定出口服务器（192.9.132.160）转发，请确保公众平台 IP 白名单保留该地址。</p>
 						) : null}
 					</div>
 

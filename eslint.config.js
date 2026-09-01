@@ -11,6 +11,7 @@ export default tseslint.config(
 			"node_modules",
 			"worker-configuration.d.ts",
 			"**/.*/**",
+			"relay/**",
 		],
 	},
 	{

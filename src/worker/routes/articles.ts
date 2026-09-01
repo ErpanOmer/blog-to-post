@@ -460,6 +460,8 @@ function hasExpectedPublicationUrlShape(platform: PlatformType, rawUrl: string):
 			);
 		case "wechat":
 			return host.endsWith("mp.weixin.qq.com") && pathname.startsWith("/s");
+		case "wechat_v2":
+			return host.endsWith("mp.weixin.qq.com") && pathname.startsWith("/s");
 		default:
 			return true;
 	}

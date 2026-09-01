@@ -43,6 +43,16 @@ export const PLATFORM_BRANDS: Record<PublishablePlatformType, PlatformBrandTone>
 		logoTextClass: "text-white",
 		ringClass: "ring-emerald-100",
 	},
+	wechat_v2: {
+		label: PLATFORM_DISPLAY_NAMES.wechat_v2,
+		shortName: PLATFORM_SHORT_ICONS.wechat_v2,
+		textClass: "text-emerald-700",
+		softClass: "bg-emerald-50 text-emerald-700 border-emerald-200/70",
+		badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+		logoClass: "bg-emerald-600",
+		logoTextClass: "text-white",
+		ringClass: "ring-emerald-100",
+	},
 	csdn: {
 		label: PLATFORM_DISPLAY_NAMES.csdn,
 		shortName: PLATFORM_SHORT_ICONS.csdn,

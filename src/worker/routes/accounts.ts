@@ -10,7 +10,7 @@ import {
 } from "@/worker/db/platform-accounts";
 import { getAccountStatistics, listAccountStatistics } from "@/worker/db/publications";
 import { getPlatformPublishSettings } from "@/worker/services/platform-settings";
-import { isPublishablePlatform } from "@/shared/platform-settings";
+import { isPublishablePlatform, isWechatFamilyPlatform } from "@/shared/platform-settings";
 import {
     AccountImageTestError,
     testAccountImageUpload,
@@ -62,7 +62,7 @@ function resolveAuthTokenForCreate(payload: {
     adminToken?: string | null;
     author?: string | null;
 }): string | null {
-    if (payload.platform === "wechat") {
+    if (isWechatFamilyPlatform(payload.platform)) {
         const wechatToken = buildWechatCredentialToken(payload.appId, payload.appSecret);
         if (wechatToken) return wechatToken;
     }
@@ -82,7 +82,7 @@ function resolveAuthTokenForUpdate(payload: {
     adminToken?: string | null;
     author?: string | null;
 }): string | null {
-    if (payload.platform === "wechat") {
+    if (isWechatFamilyPlatform(payload.platform)) {
         const wechatToken = buildWechatCredentialToken(payload.appId, payload.appSecret);
         if (wechatToken) return wechatToken;
     }

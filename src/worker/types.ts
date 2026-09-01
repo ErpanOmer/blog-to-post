@@ -38,4 +38,6 @@ export interface Env {
 	ENVIRONMENT?: "production" | "development" | undefined;
 	WEBSITE_BASE_URL?: string;
 	WEBSITE_ADMIN_TOKEN?: string;
+	WECHAT_RELAY_BASE_URL?: string;
+	WECHAT_RELAY_API_KEY?: string;
 }

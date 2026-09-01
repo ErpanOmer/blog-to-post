@@ -1,6 +1,7 @@
 import type {
 	PlatformPublishSetting,
 	PlatformPublishSettingsMap,
+	PlatformType,
 	PublishablePlatformType,
 } from "./types";
 
@@ -8,6 +9,7 @@ export const PUBLISHABLE_PLATFORMS = [
 	"juejin",
 	"zhihu",
 	"wechat",
+	"wechat_v2",
 	"csdn",
 	"cnblogs",
 	"segmentfault",
@@ -19,6 +21,7 @@ export const PLATFORM_DISPLAY_NAMES: Record<PublishablePlatformType, string> = {
 	juejin: "掘金",
 	zhihu: "知乎",
 	wechat: "公众号",
+	wechat_v2: "公众号V2",
 	csdn: "CSDN",
 	cnblogs: "博客园",
 	segmentfault: "SegmentFault",
@@ -30,12 +33,19 @@ export const PLATFORM_SHORT_ICONS: Record<PublishablePlatformType, string> = {
 	juejin: "J",
 	zhihu: "Z",
 	wechat: "W",
+	wechat_v2: "W2",
 	csdn: "C",
 	cnblogs: "B",
 	segmentfault: "S",
 	"51cto": "51",
 	website: "站",
 };
+
+// Both platforms share the appId/appSecret credential form and the WeChat-specific
+// publish behaviors; wechat_v2 only routes API calls through the fixed-egress relay.
+export function isWechatFamilyPlatform(platform: PlatformType | string): platform is "wechat" | "wechat_v2" {
+	return platform === "wechat" || platform === "wechat_v2";
+}
 
 export function createDefaultPlatformPublishSetting(
 	platform: PublishablePlatformType,

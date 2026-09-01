@@ -10,6 +10,7 @@ import type {
 import type { Env, PlatformType } from "@/worker/types";
 import type { AccountService, PublishTraceEvent } from "@/worker/accounts/types";
 import { getAccountService } from "@/worker/accounts";
+import { isWechatFamilyPlatform } from "@/shared/platform-settings";
 import { getPlatformAccount } from "@/worker/db/platform-accounts";
 import { getArticle } from "@/worker/db/articles";
 import {
@@ -896,7 +897,7 @@ export async function executePublishTask(
 
 					// For WeChat accounts that cannot call formal publish API,
 					// keep draft URL as the frontend jump link for manual publish.
-					if (accountConfig.platform === "wechat" && draftUrl) {
+					if (isWechatFamilyPlatform(accountConfig.platform) && draftUrl) {
 						publishedUrl = draftUrl;
 					}
 

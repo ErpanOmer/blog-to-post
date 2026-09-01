@@ -14,6 +14,9 @@
 		"enabled": true
 	},
 	"upload_source_maps": true,
+	"vars": {
+		"WECHAT_RELAY_BASE_URL": "http://192.9.132.160"
+	},
 	"assets": {
 		"directory": "./dist/client",
 		"not_found_handling": "single-page-application"

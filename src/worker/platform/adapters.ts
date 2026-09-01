@@ -61,6 +61,8 @@ export function getPlatformAdapter(platform: PlatformType): PlatformAdapter {
 			return new ZhihuAdapter();
 		case "wechat":
 			return new WechatAdapter();
+		case "wechat_v2":
+			return new WechatAdapter();
 		case "csdn":
 			return new CSDNAdapter();
 		case "cnblogs":
