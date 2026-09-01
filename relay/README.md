@@ -27,7 +27,11 @@
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `RELAY_API_KEY` | 是 | 与 Worker 端 `WECHAT_RELAY_API_KEY` 一致的共享密钥 |
-| `RELAY_PORT` | 否 | 监听端口，容器内固定 80 |
+| `RELAY_PORT` | 否 | HTTP 监听端口，容器内固定 80 |
+| `TLS_CERT_PATH` / `TLS_KEY_PATH` | 否 | 同时设置时在 `TLS_PORT`（443）额外启用 HTTPS；证书用 Cloudflare Origin CA，供 SSL Full (strict) 回源 |
+| `TLS_PORT` | 否 | HTTPS 监听端口，容器内固定 443 |
+
+服务器上证书放 `/opt/wechat-relay/certs/`（`origin.pem` + `origin-key.pem`，不在 git 仓库内）。
 
 ## 本地运行
 

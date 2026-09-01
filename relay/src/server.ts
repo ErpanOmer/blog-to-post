@@ -1,7 +1,12 @@
 import http from "node:http";
+import https from "node:https";
+import fs from "node:fs";
 import crypto from "node:crypto";
 
 const PORT = Number(process.env.RELAY_PORT ?? "80");
+const TLS_PORT = Number(process.env.TLS_PORT ?? "443");
+const TLS_CERT_PATH = process.env.TLS_CERT_PATH ?? "";
+const TLS_KEY_PATH = process.env.TLS_KEY_PATH ?? "";
 const UPSTREAM_ORIGIN = "https://api.weixin.qq.com";
 const ALLOWED_PATH_PREFIXES = ["/cgi-bin/"];
 const MAX_BODY_BYTES = 64 * 1024 * 1024;
@@ -123,7 +128,7 @@ async function handleEgressCheck(appid: string): Promise<{ status: number; paylo
   };
 }
 
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   const started = Date.now();
   const method = (req.method ?? "GET").toUpperCase();
   let path = "/";
@@ -212,18 +217,52 @@ const server = http.createServer(async (req, res) => {
     log("upstream_error", { method, path, ms: Date.now() - started, message });
     respond(502, JSON.stringify({ error: "bad_gateway" }));
   }
-});
+}
 
-server.requestTimeout = 300_000;
-server.headersTimeout = 120_000;
-server.keepAliveTimeout = 65_000;
+function tune(server: http.Server): http.Server {
+  server.requestTimeout = 300_000;
+  server.headersTimeout = 120_000;
+  server.keepAliveTimeout = 65_000;
+  return server;
+}
 
-server.listen(PORT, "0.0.0.0", () => {
+const httpServer = tune(http.createServer(handleRequest));
+const servers: http.Server[] = [httpServer];
+httpServer.listen(PORT, "0.0.0.0", () => {
   log("listening", { port: PORT });
 });
 
+// Optional TLS listener for Cloudflare Full (strict) origin pulls. Enabled only
+// when both cert paths resolve; keeps local/dev runs HTTP-only without certs.
+if (TLS_CERT_PATH && TLS_KEY_PATH) {
+  try {
+    const tlsServer = tune(
+      https.createServer(
+        {
+          cert: fs.readFileSync(TLS_CERT_PATH),
+          key: fs.readFileSync(TLS_KEY_PATH),
+        },
+        handleRequest,
+      ),
+    );
+    tlsServer.listen(TLS_PORT, "0.0.0.0", () => {
+      log("listening_tls", { port: TLS_PORT });
+    });
+    servers.push(tlsServer);
+  } catch (error) {
+    log("tls_disabled", {
+      reason: error instanceof Error ? redactUrls(error.message) : "unknown_error",
+    });
+  }
+}
+
 process.on("SIGTERM", () => {
   log("sigterm");
-  server.close(() => process.exit(0));
+  let pending = servers.length;
+  for (const server of servers) {
+    server.close(() => {
+      if (--pending === 0) process.exit(0);
+    });
+  }
   setTimeout(() => process.exit(0), 5_000).unref();
 });
