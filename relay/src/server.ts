@@ -150,7 +150,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
     const payload = typeof body === "string" ? Buffer.from(body, "utf8") : body;
-    res.writeHead(status, { "content-type": contentType, "content-length": String(payload.length) });
+    // no-store: the origin now sits behind Cloudflare; API GET responses must
+    // never be cached at the edge (token/draft payloads are per-request).
+    res.writeHead(status, {
+      "content-type": contentType,
+      "content-length": String(payload.length),
+      "cache-control": "no-store",
+    });
     res.end(payload);
   };
 

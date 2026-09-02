@@ -15,7 +15,7 @@
 	},
 	"upload_source_maps": true,
 	"vars": {
-		"WECHAT_RELAY_BASE_URL": "http://192.9.132.160"
+		"WECHAT_RELAY_BASE_URL": "https://wechat-static-ip.nurverse.com"
 	},
 	"assets": {
 		"directory": "./dist/client",

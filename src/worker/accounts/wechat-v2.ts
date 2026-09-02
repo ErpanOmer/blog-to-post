@@ -4,7 +4,9 @@ import { registerAccountService } from "@/worker/accounts/registry";
 
 // Same origin as the private constant inside wechat.ts; v2 rewrites this prefix only.
 const WECHAT_API_ORIGIN = "https://api.weixin.qq.com";
-const DEFAULT_WECHAT_RELAY_BASE_URL = "http://192.9.132.160";
+// Relay is reached through the Cloudflare-proxied domain (origin behind CF with an
+// Origin CA cert); never hardcode the origin IP so it can change freely.
+const DEFAULT_WECHAT_RELAY_BASE_URL = "https://wechat-static-ip.nurverse.com";
 
 /**
  * wechat_v2 reuses the entire WeChat adapter (article processing, image pipeline,

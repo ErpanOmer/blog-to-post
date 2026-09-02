@@ -299,7 +299,7 @@ export function PlatformAccountForm({
 							<p className="text-[12px] text-design-textSecondary">新账号建议选择「公众号V2」：微信 API 经固定出口 IP 服务器转发，不受本机/部署环境 IP 变动影响。</p>
 						) : null}
 						{formData.platform === "wechat_v2" ? (
-							<p className="text-[12px] text-design-textSecondary">微信 API 经自建固定出口服务器（192.9.132.160）转发，请确保公众平台 IP 白名单保留该地址。</p>
+							<p className="text-[12px] text-design-textSecondary">微信 API 经固定出口服务器转发（接入域名 wechat-static-ip.nurverse.com），公众平台 IP 白名单需保留 192.9.132.160。</p>
 						) : null}
 					</div>
 
