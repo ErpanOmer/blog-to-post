@@ -1,6 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { format } from "@/lib/utils";
 import type { PlatformAccount } from "@/react-app/api";
 import { PlatformBadge, PlatformLogo } from "@/react-app/components/PlatformBrand";
@@ -13,6 +14,7 @@ interface PlatformAccountListProps {
 	accounts: PlatformAccount[];
 	onEdit: (account: PlatformAccount) => void;
 	onDelete: (account: PlatformAccount) => void;
+	onToggleActive?: (account: PlatformAccount, nextActive: boolean) => void;
 	platformSettings?: PlatformPublishSettingsMap;
 }
 
@@ -23,7 +25,7 @@ function isAccountPlatformDisabled(
 	return isPublishablePlatform(account.platform) && settings?.[account.platform]?.enabled === false;
 }
 
-export function PlatformAccountList({ accounts, onEdit, onDelete, platformSettings }: PlatformAccountListProps) {
+export function PlatformAccountList({ accounts, onEdit, onDelete, onToggleActive, platformSettings }: PlatformAccountListProps) {
 	if (accounts.length === 0) {
 		return (
 			<div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-design-border bg-design-background py-16 text-center">
@@ -46,7 +48,7 @@ export function PlatformAccountList({ accounts, onEdit, onDelete, platformSettin
 				return (
 					<article
 						key={account.id}
-						className="rounded-xl border border-design-border bg-white p-4"
+						className={`rounded-xl border border-design-border bg-white p-4 ${!account.isActive ? "bg-design-background/40" : ""}`}
 					>
 						<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 							<div className="flex min-w-0 flex-1 items-start gap-3">
@@ -114,7 +116,21 @@ export function PlatformAccountList({ accounts, onEdit, onDelete, platformSettin
 								</div>
 							</div>
 
-							<div className="flex items-center gap-1.5">
+							<div className="flex items-center gap-2.5">
+								{onToggleActive ? (
+									<label
+										className="flex items-center gap-1.5 text-[12px] text-design-textSecondary"
+										title={account.isActive ? "停用后该账号不再出现在发布账号列表" : "启用后该账号恢复为可发布账号"}
+									>
+										<Switch
+											checked={account.isActive}
+											disabled={disabledByPlatform}
+											onCheckedChange={(checked) => onToggleActive(account, checked)}
+											aria-label={account.isActive ? "停用账号" : "启用账号"}
+										/>
+										{account.isActive ? "启用" : "停用"}
+									</label>
+								) : null}
 								<Button variant="ghost" size="xs" className="gap-1 text-design-textSecondary" onClick={() => onEdit(account)}>
 									{disabledByPlatform ? <Eye className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
 									{disabledByPlatform ? "查看" : "编辑"}

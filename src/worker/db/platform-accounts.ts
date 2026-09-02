@@ -106,7 +106,9 @@ async function refreshExistingPlatformAccountProfile(
 
 	await db
 		.prepare(
-			"UPDATE platform_accounts SET userId = ?, userName = ?, avatar = ?, authToken = ?, description = ?, isActive = 1, isVerified = 1, lastVerifiedAt = ?, updatedAt = ? WHERE id = ?",
+			// Preserve the existing isActive choice: re-adding credentials for a
+			// disabled account must not silently re-enable it for publishing.
+			"UPDATE platform_accounts SET userId = ?, userName = ?, avatar = ?, authToken = ?, description = ?, isVerified = 1, lastVerifiedAt = ?, updatedAt = ? WHERE id = ?",
 		)
 		.bind(
 			params.userInfo.id,

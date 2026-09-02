@@ -178,6 +178,19 @@ export function PlatformAccountsPanel() {
     });
   };
 
+  const handleToggleActive = async (account: PlatformAccount, nextActive: boolean) => {
+    try {
+      const updated = await updatePlatformAccount(account.id, { isActive: nextActive });
+      setAccounts((prev) => prev.map((item) => (item.id === account.id ? { ...item, isActive: updated.isActive } : item)));
+      const name = account.userName || getPlatformDisplayName(account.platform);
+      toast.success(nextActive ? `已启用「${name}」` : `已停用「${name}」，该账号不会再出现在发布账号列表`);
+    } catch (error) {
+      console.error("更新账号启用状态失败", error);
+      toast.error("更新账号状态失败，请稍后重试");
+      void fetchAccounts();
+    }
+  };
+
   const filteredAccounts = filter === "all" ? accounts : accounts.filter((item) => item.platform === filter);
 
   return (
@@ -222,6 +235,7 @@ export function PlatformAccountsPanel() {
             setFormOpen(true);
           }}
           onDelete={handleDelete}
+          onToggleActive={handleToggleActive}
           platformSettings={platformSettings}
         />
       )}
