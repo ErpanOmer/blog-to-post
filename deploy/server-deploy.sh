@@ -9,10 +9,14 @@ release="$base/releases/$revision"
 mkdir -p "$base/shared" /srv/backups/blog-to-post "$data"
 exec 9>"$base/deploy.lock"
 flock -w 1800 9
-[[ -s "$base/shared/runtime.env" && -s "$base/shared/deploy.env" ]] || { echo 'Provision shared/runtime.env and shared/deploy.env first'; exit 1; }
-set -a
-source "$base/shared/deploy.env"
-set +a
+[[ -s "$base/shared/runtime.env" ]] || { echo 'Provision shared/runtime.env first'; exit 1; }
+if [[ -f "$base/shared/deploy.env" ]]; then
+  set -a
+  source "$base/shared/deploy.env"
+  set +a
+fi
+export BLOG_BIND_IP="${BLOG_BIND_IP:-127.0.0.1}"
+export BLOG_PORT="${BLOG_PORT:-18473}"
 export BLOG_ENV_FILE="$base/shared/runtime.env" BLOG_DATA_DIR="$data"
 export BLOG_IMAGE="blog-to-post:$revision"
 export DEPLOY_REVISION="$revision"

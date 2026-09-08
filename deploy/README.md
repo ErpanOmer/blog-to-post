@@ -4,7 +4,7 @@
 
 - SSH：`erpan@urtopiaserver`
 - 应用：<https://blog-to-post.nurverse.com/>（Cloudflare Tunnel + Access）
-- 局域网源站：<http://192.168.1.15:18473/>
+- 本机源站：<http://127.0.0.1:18473/>（仅服务器自身可访问）
 - 容器：`blog-to-post-app-1`，自动重启，端口 `18473`
 - 当前代码：`/srv/projects/blog-to-post/current`，指向 `releases/` 下的具体版本
 - D1 / KV / R2：`/srv/data/blog-to-post/{d1,kv,r2}`
@@ -12,9 +12,10 @@
 - 部署设置：`/srv/projects/blog-to-post/shared/deploy.env`
 - 部署前备份：`/srv/backups/blog-to-post/`
 
-`shared/deploy.env` 设置 `BLOG_BIND_IP=192.168.1.15`、`BLOG_PORT=18473`，
-示例见 `deploy/urtopiaserver.env.example`。每次自动部署都会加载这个共享配置，
-应用端口只绑定局域网 IP，访问链路不依赖 Tailscale。
+默认使用 `BLOG_BIND_IP=127.0.0.1`、`BLOG_PORT=18473`，无需手动配置这两个变量。
+`shared/deploy.env` 是可选的覆盖文件，示例见 `deploy/urtopiaserver.env.example`。
+每次自动部署都会使用默认值，存在覆盖配置时才加载覆盖值。
+宿主机上的 systemd `cloudflared` 通过回环地址访问应用，不依赖局域网 IP 或 Tailscale。
 
 服务器数据是迁移后的唯一日常数据源。代码更新不再上传本地数据。
 保留在本机 `.wrangler/state/v3` 的数据仅作为迁移时的副本，不会自动与服务器双向同步。
@@ -93,7 +94,7 @@ ssh erpan@urtopiaserver
 docker ps --filter name=blog-to-post
 docker logs --tail 100 blog-to-post-app-1
 docker restart blog-to-post-app-1
-curl -fsS http://192.168.1.15:18473/__health
+curl -fsS http://127.0.0.1:18473/__health
 ```
 
 健康检查执行实际 D1 查询，返回当前部署版本。公开应用接口仍为 `/api/*`；
@@ -104,8 +105,12 @@ Miniflare 的内部控制和调试端点不会通过应用监听端口公开。
 ```sh
 cd /srv/projects/blog-to-post/current
 set -a
-. /srv/projects/blog-to-post/shared/deploy.env
+if [ -f /srv/projects/blog-to-post/shared/deploy.env ]; then
+  . /srv/projects/blog-to-post/shared/deploy.env
+fi
 set +a
+export BLOG_BIND_IP="${BLOG_BIND_IP:-127.0.0.1}"
+export BLOG_PORT="${BLOG_PORT:-18473}"
 export BLOG_ENV_FILE=/srv/projects/blog-to-post/shared/runtime.env
 export BLOG_DATA_DIR=/srv/data/blog-to-post
 export BLOG_IMAGE=$(cat /srv/projects/blog-to-post/shared/current-image)
@@ -145,20 +150,21 @@ docker exec blog-to-post-app-1 node deploy/runtime/data-report.mjs
 
 ## 接入 Cloudflare Tunnel
 
-应用已绑定局域网地址，宿主机现有 `cloudflared` 使用以下源站路由：
+应用默认仅绑定本机回环地址，宿主机现有 systemd `cloudflared` 使用以下源站路由：
 
 ```yaml
 ingress:
   - hostname: blog-to-post.nurverse.com
-    service: http://192.168.1.15:18473
+    service: http://127.0.0.1:18473
   # 保留已有规则及最后的兜底规则
   - service: http_status:404
 ```
 
 对于远程管理的 Tunnel，在控制台添加 Published application route，Service URL 填
-`http://192.168.1.15:18473`，类型选择 HTTP。公网浏览器仍通过 HTTPS 访问。
-如果 Tunnel 位于 Docker 内，也应使用这个宿主机地址，
-不要填写 Tunnel 容器自身的 `localhost`。
+`http://127.0.0.1:18473`，类型选择 HTTP。公网浏览器仍通过 HTTPS 访问。
+此配置要求 `cloudflared` 直接运行在宿主机网络中。
+如果将来把 Tunnel 改为独立网络的 Docker 容器，应将两者接入同一 Docker 网络，
+通过应用服务名连接，而不能使用 Tunnel 容器自身的 `127.0.0.1`。
 
 本应用管理接口没有统一登录入口；发布公网域名时需要给整个应用配置 Cloudflare Access
 或等效认证，避免文章与平台凭据向未授权访客开放。HTTPS 也会启用浏览器剪贴板等安全上下文功能。
