@@ -31,6 +31,7 @@
 		"hono": "4.11.1",
 		"js-md5": "^0.8.3",
 		"marked": "^17.0.1",
+		"miniflare": "4.20251125.0",
 		"prismjs": "^1.30.0",
 		"react": "19.2.1",
 		"react-dom": "19.2.1",
@@ -89,12 +90,19 @@
 		"db:exec": "wrangler d1 execute blog-to-post",
 		"db:local": "npm run db:exec -- --local",
 		"db:remote": "npm run db:exec -- --remote",
-		"deploy": "wrangler deploy",
+		"deploy": "node deploy/deploy.mjs",
 		"dev": "vite",
 		"dev:clean": "powershell -ExecutionPolicy Bypass -File ./dev-no-proxy.ps1",
 		"lint": "eslint .",
 		"test": "vitest run --config vitest.config.ts",
-		"preview": "npm run build && vite preview"
+		"preview": "npm run build && vite preview",
+		"start:server": "node --env-file=.env deploy/runtime/server.mjs",
+		"deploy:server": "node deploy/deploy.mjs",
+		"deploy:server:working": "node deploy/deploy.mjs --working-tree",
+		"deploy:install-hook": "node deploy/install-hook.mjs",
+		"data:snapshot": "node deploy/snapshot.mjs",
+		"deploy:cloudflare": "wrangler deploy",
+		"test:server": "node --test deploy/tests/runtime.test.mjs"
 	},
 	"type": "module"
 }

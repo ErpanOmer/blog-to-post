@@ -15,7 +15,8 @@ import {
 } from "@/react-app/api";
 import { PlatformAccountForm } from "./PlatformAccountForm";
 import { PlatformAccountList } from "./PlatformAccountList";
-import { Loader2, Plus } from "lucide-react";
+import { getVerifyStaleDays } from "@/react-app/utils/account-health";
+import { Loader2, Plus, ShieldCheck } from "lucide-react";
 import {
   PUBLISHABLE_PLATFORMS,
   isPublishablePlatform,
@@ -40,6 +41,7 @@ export function PlatformAccountsPanel() {
   const [filter, setFilter] = useState<PlatformType | "all">("all");
   const [formOpen, setFormOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<PlatformAccount | null>(null);
+  const [batchVerifying, setBatchVerifying] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -183,7 +185,19 @@ export function PlatformAccountsPanel() {
       const updated = await updatePlatformAccount(account.id, { isActive: nextActive });
       setAccounts((prev) => prev.map((item) => (item.id === account.id ? { ...item, isActive: updated.isActive } : item)));
       const name = account.userName || getPlatformDisplayName(account.platform);
-      toast.success(nextActive ? `已启用「${name}」` : `已停用「${name}」，该账号不会再出现在发布账号列表`);
+      if (!nextActive) {
+        toast.success(`已停用「${name}」，该账号不会再出现在发布账号列表`);
+        return;
+      }
+      // Re-enabling must prove the account is actually usable, not just flagged on.
+      await toast.promise(verifyPlatformAccount(account.id), {
+        loading: `已启用「${name}」，正在验证账号可用性…`,
+        success: (result) => result.valid
+          ? `「${name}」验证通过，账号可用`
+          : `「${name}」验证未通过：${result.message}`,
+        error: (error) => `验证请求失败：${error instanceof Error ? error.message : "未知错误"}`,
+      });
+      await fetchAccounts();
     } catch (error) {
       console.error("更新账号启用状态失败", error);
       toast.error("更新账号状态失败，请稍后重试");
@@ -191,17 +205,78 @@ export function PlatformAccountsPanel() {
     }
   };
 
+  const handleBatchVerify = async () => {
+    if (batchVerifying) return;
+    const targets = filteredAccounts.filter((item) => item.isActive);
+    if (targets.length === 0) {
+      toast.info("当前筛选下没有启用中的账号");
+      return;
+    }
+
+    setBatchVerifying(true);
+    const toastId = toast.loading(`开始验证 ${targets.length} 个账号…`);
+    const queue = [...targets];
+    let passed = 0;
+    let failed = 0;
+
+    const runNext = async (): Promise<void> => {
+      while (queue.length > 0) {
+        const account = queue.shift();
+        if (!account) return;
+        try {
+          const result = await verifyPlatformAccount(account.id);
+          if (result.valid) passed += 1; else failed += 1;
+        } catch {
+          failed += 1;
+        }
+        const done = targets.length - queue.length;
+        toast.loading(`验证中 ${done}/${targets.length}…`, { id: toastId });
+      }
+    };
+
+    try {
+      // Concurrency of 2: fast enough, while staying gentle on platform endpoints.
+      await Promise.all([runNext(), runNext()]);
+      if (failed === 0) {
+        toast.success(`批量验证完成：${passed} 个账号全部可用`, { id: toastId });
+      } else {
+        toast.warning(`批量验证完成：${passed} 个可用，${failed} 个异常，请检查账号`, { id: toastId });
+      }
+      await fetchAccounts();
+    } finally {
+      setBatchVerifying(false);
+    }
+  };
+
   const filteredAccounts = filter === "all" ? accounts : accounts.filter((item) => item.platform === filter);
+
+  const enabledCount = filteredAccounts.filter((item) => item.isActive).length;
+  const disabledCount = filteredAccounts.length - enabledCount;
+  const unverifiedCount = filteredAccounts.filter((item) => !item.isVerified).length;
+  const staleCount = filteredAccounts.filter((item) => getVerifyStaleDays(item) !== null).length;
+  const healthSummary = [
+    `${filteredAccounts.length} 个账号`,
+    `启用 ${enabledCount}`,
+    disabledCount > 0 ? `停用 ${disabledCount}` : null,
+    unverifiedCount > 0 ? `未验证 ${unverifiedCount}` : null,
+    staleCount > 0 ? `超期 ${staleCount}` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <p className="text-[13px] text-design-textSecondary">管理分发所需的平台认证信息</p>
-        <Button variant="default" size="sm" onClick={() => setFormOpen(true)} className="gap-1.5 self-start md:self-auto">
-          <Plus className="h-3.5 w-3.5" />
-          新增账号
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleBatchVerify} disabled={batchVerifying || loading} className="gap-1.5 self-start md:self-auto">
+            {batchVerifying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+            批量验证
+          </Button>
+          <Button variant="default" size="sm" onClick={() => setFormOpen(true)} className="gap-1.5 self-start md:self-auto">
+            <Plus className="h-3.5 w-3.5" />
+            新增账号
+          </Button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -220,7 +295,7 @@ export function PlatformAccountsPanel() {
             {item.label}
           </button>
         ))}
-        <span className="ml-auto text-[12px] text-design-neutral">{filteredAccounts.length} 个账号</span>
+        <span className="ml-auto text-[12px] text-design-neutral">{healthSummary}</span>
       </div>
 
       {loading ? (

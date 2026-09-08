@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, FlaskConical, KeyRound, Loader2, Save, Server } from "lucide-react";
+import { AlertCircle, CheckCircle2, FlaskConical, KeyRound, ListRestart, Loader2, Save, Server } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
 	createAIProviderProfile,
+	discoverAIProviderModels,
 	getAIModelRouting,
+	getAIProviderModels,
 	getAIProviderProfiles,
 	testAIProviderProfile,
 	testUnsavedAIProviderProfile,
@@ -17,6 +19,30 @@ import {
 	updateAIProviderProfile,
 } from "@/react-app/api";
 import type { AIProviderProfileSummary, AIProviderProtocol } from "@/shared/types";
+
+interface AIPlatformPreset {
+	id: string;
+	label: string;
+	protocol: AIProviderProtocol;
+	baseUrl: string;
+	defaultModel: string;
+	hint?: string;
+}
+
+// Presets only prefill the form; every platform here speaks either OpenAI-compatible
+// or Anthropic, which are the two protocols the worker already implements.
+const AI_PLATFORM_PRESETS: AIPlatformPreset[] = [
+	{ id: "deepseek", label: "DeepSeek 深度求索", protocol: "openai-compatible", baseUrl: "https://api.deepseek.com", defaultModel: "deepseek-chat" },
+	{ id: "zhipu", label: "智谱 GLM", protocol: "openai-compatible", baseUrl: "https://open.bigmodel.cn/api/paas/v4", defaultModel: "glm-4-plus" },
+	{ id: "qwen", label: "通义千问 Qwen", protocol: "openai-compatible", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", defaultModel: "qwen-plus" },
+	{ id: "moonshot", label: "月之暗面 Kimi", protocol: "openai-compatible", baseUrl: "https://api.moonshot.cn/v1", defaultModel: "moonshot-v1-8k" },
+	{ id: "gemini", label: "Google Gemini", protocol: "openai-compatible", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", defaultModel: "gemini-2.5-flash" },
+	{ id: "anthropic", label: "Anthropic Claude", protocol: "anthropic", baseUrl: "https://api.anthropic.com", defaultModel: "claude-sonnet-4-5" },
+	{ id: "nvidia", label: "NVIDIA NIM", protocol: "openai-compatible", baseUrl: "https://integrate.api.nvidia.com/v1", defaultModel: "meta/llama-3.3-70b-instruct" },
+	{ id: "siliconflow", label: "硅基流动 SiliconFlow", protocol: "openai-compatible", baseUrl: "https://api.siliconflow.cn/v1", defaultModel: "deepseek-ai/DeepSeek-V3" },
+	{ id: "openrouter", label: "OpenRouter", protocol: "openai-compatible", baseUrl: "https://openrouter.ai/api/v1", defaultModel: "openai/gpt-4o-mini" },
+	{ id: "ollama", label: "Ollama 本地", protocol: "openai-compatible", baseUrl: "http://localhost:11434/v1", defaultModel: "llama3.1", hint: "仅本地开发可用；生产环境要求 HTTPS" },
+];
 
 interface GlobalAIForm {
 	protocol: AIProviderProtocol;
@@ -60,6 +86,9 @@ export function AIConfigurationPanel() {
 	const [busyAction, setBusyAction] = useState<"save" | "test" | null>(null);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [notice, setNotice] = useState<ConfigurationNotice | null>(null);
+	const [presetId, setPresetId] = useState<string>("");
+	const [modelOptions, setModelOptions] = useState<string[]>([]);
+	const [discoveringModels, setDiscoveringModels] = useState(false);
 
 	const loadConfiguration = useCallback(async () => {
 		setIsLoading(true);
@@ -99,6 +128,47 @@ export function AIConfigurationPanel() {
 	useEffect(() => {
 		void loadConfiguration();
 	}, [loadConfiguration]);
+
+	const applyPreset = (id: string) => {
+		const preset = AI_PLATFORM_PRESETS.find((item) => item.id === id);
+		if (!preset) return;
+		setPresetId(preset.id);
+		setModelOptions([]);
+		setForm((current) => ({
+			...current,
+			protocol: preset.protocol,
+			baseUrl: preset.baseUrl,
+			model: preset.defaultModel,
+		}));
+		toast.info(`已填充 ${preset.label} 预设，请补全 API Key 后测试连接`);
+	};
+
+	const handleDiscoverModels = async () => {
+		if (discoveringModels) return;
+		if (!form.baseUrl.trim()) {
+			toast.error("请先填写 Base URL");
+			return;
+		}
+		setDiscoveringModels(true);
+		try {
+			const apiKey = form.apiKey.trim();
+			const result = apiKey
+				? await discoverAIProviderModels({ protocol: form.protocol, baseUrl: form.baseUrl.trim(), apiKey })
+				: configuration
+					? await getAIProviderModels(configuration.id)
+					: await discoverAIProviderModels({ protocol: form.protocol, baseUrl: form.baseUrl.trim() });
+			if (result.supported && result.models.length > 0) {
+				setModelOptions(result.models);
+				toast.success(`获取到 ${result.models.length} 个模型，点击模型输入框即可选择`);
+			} else {
+				toast.info(result.message || "该平台未提供模型列表接口，请手动填写模型 ID");
+			}
+		} catch (error) {
+			toast.error(`获取模型列表失败：${error instanceof Error ? error.message : "未知错误"}`);
+		} finally {
+			setDiscoveringModels(false);
+		}
+	};
 
 	const validate = (): string | null => {
 		if (!form.baseUrl.trim()) return "请填写 Base URL";
@@ -223,19 +293,52 @@ export function AIConfigurationPanel() {
 					</Badge>
 				</div>
 			</CardHeader>
-			<CardContent className="space-y-4">
-				<div className="grid gap-3 md:grid-cols-2">
+				<CardContent className="space-y-4">
 					<div className="space-y-1.5">
-						<Label>接口协议</Label>
-						<Select value={form.protocol} onValueChange={(protocol) => setForm((current) => ({ ...current, protocol: protocol as AIProviderProtocol }))}>
-							<SelectTrigger><SelectValue /></SelectTrigger>
-							<SelectContent><SelectItem value="openai-compatible">OpenAI-compatible</SelectItem><SelectItem value="anthropic">Anthropic</SelectItem></SelectContent>
+						<Label>平台预设</Label>
+						<Select value={presetId} onValueChange={applyPreset}>
+							<SelectTrigger><SelectValue placeholder="选择平台一键填充配置，之后可手动微调" /></SelectTrigger>
+							<SelectContent>
+								{AI_PLATFORM_PRESETS.map((preset) => (
+									<SelectItem key={preset.id} value={preset.id}>
+										{preset.label}
+										{preset.hint ? <span className="ml-1.5 text-[11px] text-design-neutral">{preset.hint}</span> : null}
+									</SelectItem>
+								))}
+							</SelectContent>
 						</Select>
 					</div>
-					<div className="space-y-1.5">
-						<Label>全局模型 ID</Label>
-						<Input value={form.model} onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))} placeholder="例如 deepseek-v4-pro" />
-					</div>
+					<div className="grid gap-3 md:grid-cols-2">
+						<div className="space-y-1.5">
+							<Label>接口协议</Label>
+							<Select value={form.protocol} onValueChange={(protocol) => setForm((current) => ({ ...current, protocol: protocol as AIProviderProtocol }))}>
+								<SelectTrigger><SelectValue /></SelectTrigger>
+								<SelectContent><SelectItem value="openai-compatible">OpenAI-compatible</SelectItem><SelectItem value="anthropic">Anthropic</SelectItem></SelectContent>
+							</Select>
+						</div>
+						<div className="space-y-1.5">
+							<div className="flex items-center justify-between gap-3">
+								<Label>全局模型 ID</Label>
+								<button
+									type="button"
+									onClick={() => void handleDiscoverModels()}
+									disabled={discoveringModels || !form.baseUrl.trim()}
+									className="inline-flex items-center gap-1 text-[12px] text-brand-600 transition-colors hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+								>
+									{discoveringModels ? <Loader2 className="h-3 w-3 animate-spin" /> : <ListRestart className="h-3 w-3" />}
+									获取模型列表
+								</button>
+							</div>
+							<Input
+								list="ai-model-options"
+								value={form.model}
+								onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))}
+								placeholder="例如 deepseek-chat；可点击上方获取候选"
+							/>
+							<datalist id="ai-model-options">
+								{modelOptions.map((model) => <option key={model} value={model} />)}
+							</datalist>
+						</div>
 					<div className="space-y-1.5 md:col-span-2">
 						<Label>Base URL</Label>
 						<Input value={form.baseUrl} onChange={(event) => setForm((current) => ({ ...current, baseUrl: event.target.value }))} placeholder="https://api.example.com/v1" />

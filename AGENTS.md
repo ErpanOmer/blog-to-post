@@ -12,6 +12,7 @@ This project is an active Blog-to-Post publishing dashboard. It combines a React
 - Data: Cloudflare D1 SQLite, KV for settings/prompts, R2 for article draft/published content.
 - Publishing: task orchestration in `src/worker/services/publish.ts`; platform behavior in `src/worker/accounts/*`.
 - Shared contracts: `src/shared/*` and `src/worker/types/*`.
+- WeChat egress: WeChat API calls can be routed through a self-hosted relay container on an Oracle server (see "Deployment Topology") so WeChat always sees a fixed egress IP.
 
 ## Important Commands
 
@@ -77,9 +78,12 @@ src/
     services/                 orchestration and domain services
     types/                    Worker-side type contracts
     utils/                    crypto, logging, media, highlighting, parsing
-    index.ts                  Worker entry and route mounting
+    index.ts                  Worker entry, route mounting, and scheduled (cron) handler
+    cron.ts                   scheduled AI draft generation pipeline (gated by cron expression)
     schema.sql                fresh local D1 bootstrap schema
 migrations/                   incremental D1 migrations
+relay/                        Node 22 relay service deployed to Oracle (WeChat fixed-egress proxy)
+.github/workflows/            CI: deploy-relay.yml builds and ships the relay container
 http-docs/                    API notes
 ```
 
@@ -156,6 +160,7 @@ Important tables:
 - `publish_task_steps`
 - `article_publications`
 - `account_statistics`
+- `ai_provider_profiles` / `ai_model_routes` (AI provider profiles and per-feature model routing)
 - website/D1 blog tables managed through website services/routes
 
 ## Publishing Flow
@@ -180,6 +185,23 @@ Operational details:
 - Processing tasks that do not advance for too long are marked failed by stale-task checks. Keep task `updatedAt`, `progressData`, and step updates meaningful.
 - Publish diagnostics must be visible in `publish_task_steps`, not only console logs.
 - Use draft-only testing first for risky adapter changes.
+- `platform_accounts.isActive` is the user-controlled enable/disable switch: `false` accounts are rejected before task creation and again in `validate_account`, and the publish dialog filters them out. Re-adding credentials for an existing account must preserve the current `isActive` value.
+
+## Scheduled (Cron) Behavior
+
+`src/worker/index.ts` exports the `scheduled` handler and branches on `event.cron`:
+
+- `*/30 * * * *` (enabled in `wrangler.json`): fetch `${WECHAT_RELAY_BASE_URL}/healthz` with a 10s timeout via `ctx.waitUntil`, logging `relay_healthz` / `relay_healthz_failed`. Purpose: continuous uptime probing of the relay server.
+- `0 2 * * *` (NOT scheduled in wrangler.json): runs `runDailyCron` from `src/worker/cron.ts` (AI title/draft generation). Do not add this expression casually — every trigger creates new AI draft articles.
+- `processScheduledTasks` (due scheduled publish tasks) runs on every cadence.
+
+## Deployment Topology
+
+- Cloudflare Worker (`blog-to-post`) serves the dashboard, API, and cron triggers; deploy with `npm run deploy` or Cloudflare Workers Builds.
+- WeChat API traffic for `wechat_v2` is routed through a Docker container (`wechat-relay`, source in `relay/`) running on an Oracle Always Free server. The relay is a stateless HTTP/HTTPS forwarder locked to `api.weixin.qq.com/cgi-bin/*` with an `x-relay-token` shared secret (`WECHAT_RELAY_API_KEY` on the Worker, `RELAY_API_KEY` on the server).
+- Public entry: `https://wechat-static-ip.nurverse.com` (Cloudflare proxied, SSL Full strict, Cloudflare Origin CA cert valid until 2041 at `/opt/wechat-relay/certs/`). The raw IP `http://192.9.132.160` still works and is used by monitoring.
+- Anti-idle: a systemd `oracle-keepalive` service burns ~30% CPU to avoid Oracle idle reclamation; a ZCode-side cron also probes healthz every 30 minutes.
+- Relay deploys: GitHub Actions (`deploy-relay.yml`) on `relay/**` pushes, or manually via `tar` + `docker compose up -d --build` in `/opt/wechat-relay` (server `.env` holds `RELAY_API_KEY` and is never overwritten by deploys).
 
 ## Platform Adapter Rules
 
@@ -203,6 +225,7 @@ Current publishable platforms include:
 - `juejin`
 - `zhihu`
 - `wechat`
+- `wechat_v2` (same WeChat flow, but all api.weixin.qq.com traffic is routed through the self-hosted relay so WeChat sees a fixed egress IP; preferred for new accounts)
 - `csdn`
 - `cnblogs`
 - `segmentfault`
@@ -233,7 +256,8 @@ Image handling:
 
 Platform notes:
 
-- WeChat requires official API access, IP whitelist, cover `thumb_media_id`, and content image upload through WeChat APIs.
+- WeChat requires official API access, IP whitelist, cover `thumb_media_id`, and content image upload through WeChat APIs. The public account IP whitelist must contain the relay server IP (currently `192.9.132.160`).
+- `wechat` calls WeChat directly from the Worker egress; `wechat_v2` subclasses it and only rewrites the `request()` choke point to the relay base URL (`WECHAT_RELAY_BASE_URL`) plus an `x-relay-token` header. All article processing, image, retry, and tracing logic is inherited unchanged from `wechat.ts` — do not duplicate it.
 - CSDN sends both markdown and rendered HTML and uses Prism-like code block output.
 - 51CTO supports a full draft-to-publish flow; keep publish URL shape aligned with the platform's final article URL.
 - Website adapter publishes to the app's D1-backed website/blog flow rather than an external platform.
@@ -285,16 +309,21 @@ Article editor:
 
 AI routes live under `/api/ai` and article generation routes under `/api/articles`.
 
+AI providers are stored as **profiles in D1** (`ai_provider_profiles`, API keys AES-encrypted with `ENCRYPTION_KEY`), not env vars. Two protocols cover all supported platforms: `openai-compatible` (DeepSeek, Gemini compat endpoint, NVIDIA NIM, Moonshot, Qwen/DashScope, Zhipu, SiliconFlow, OpenRouter, Ollama, ...) and `anthropic`. Adding a platform normally means adding a profile row — no code changes. The settings form offers platform presets (`AI_PLATFORM_PRESETS` in `AIConfigurationPanel.tsx`) and model discovery (`POST /api/ai/providers/discover-models` for unsaved configs, `GET /api/ai/providers/:id/models` for saved ones). Per-feature model overrides live in `ai_model_routes` (`/api/ai/routing`).
+
+Production enforces HTTPS base URLs; HTTP is only allowed for localhost in development, so local Ollama works in `npm run dev` but not in production.
+
 Prompt templates live in `src/worker/prompts/` and are served/overridden through prompt services backed by KV.
 
 Environment variables commonly used:
 
 ```txt
-OLLAMA_BASE_URL
-OLLAMA_MODEL
-OLLAMA_API_KEY
 ENCRYPTION_KEY
 ENVIRONMENT
+WEBSITE_BASE_URL
+WEBSITE_ADMIN_TOKEN
+WECHAT_RELAY_BASE_URL
+WECHAT_RELAY_API_KEY
 ```
 
 Rules:

@@ -88,14 +88,52 @@ app.get("/api/juejin/top", async (c) => {
 	return c.json(titlesData);
 });
 
+const HEALTH_CHECK_CRON = "*/30 * * * *";
+// Daily AI draft generation is intentionally NOT scheduled in wrangler.json;
+// it only runs if that exact expression is ever added to triggers.crons.
+const DAILY_GENERATION_CRON = "0 2 * * *";
+
 export default {
 	fetch: app.fetch,
-	scheduled: async (_event: unknown, env: Env) => {
+	scheduled: async (event: ScheduledController, env: Env, ctx: ExecutionContext) => {
 		setAccountServiceRuntimeEnv(env);
+
+		// Idempotent and cheap on every cadence: pick up publish tasks whose
+		// scheduleTime is due.
 		await processScheduledTasks(env.DB, {
 			encryptionKey: env.ENCRYPTION_KEY,
 			env,
 		});
-		await runDailyCron(env);
+
+		if (event.cron === HEALTH_CHECK_CRON) {
+			const relayBase = (env.WECHAT_RELAY_BASE_URL ?? "").trim().replace(/\/+$/, "");
+			if (!relayBase) return;
+			ctx.waitUntil((async () => {
+				const controller = new AbortController();
+				const timer = setTimeout(() => controller.abort(), 10_000);
+				try {
+					const response = await fetch(`${relayBase}/healthz`, { signal: controller.signal });
+					console.log(JSON.stringify({
+						t: new Date().toISOString(),
+						event: "relay_healthz",
+						ok: response.ok,
+						status: response.status,
+					}));
+				} catch (error) {
+					console.error(JSON.stringify({
+						t: new Date().toISOString(),
+						event: "relay_healthz_failed",
+						message: error instanceof Error ? error.message : "unknown_error",
+					}));
+				} finally {
+					clearTimeout(timer);
+				}
+			})());
+			return;
+		}
+
+		if (event.cron === DAILY_GENERATION_CRON) {
+			await runDailyCron(env);
+		}
 	},
 };

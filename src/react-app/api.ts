@@ -5,6 +5,7 @@ import type {
 	AIModelRoutingConfig,
 	AIProviderModelsResult,
 	AIProviderProfileSummary,
+	AIProviderProtocol,
 	AIProviderTestResult,
 	ArticleAISettings,
 	Article,
@@ -253,6 +254,20 @@ export async function testAIProviderProfile(id: string): Promise<AIProviderTestR
 
 export async function getAIProviderModels(id: string): Promise<AIProviderModelsResult> {
 	return parseJson<AIProviderModelsResult>(await fetch(`/api/ai/providers/${id}/models`));
+}
+
+export async function discoverAIProviderModels(input: {
+	protocol: AIProviderProtocol;
+	baseUrl: string;
+	apiKey?: string;
+}): Promise<AIProviderModelsResult> {
+	return parseJson<AIProviderModelsResult>(
+		await fetch("/api/ai/providers/discover-models", {
+			method: "POST",
+			headers: jsonHeaders,
+			body: JSON.stringify(input),
+		}),
+	);
 }
 
 export async function getAIModelRouting(): Promise<AIModelRoutingConfig> {

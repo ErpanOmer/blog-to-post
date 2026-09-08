@@ -63,11 +63,20 @@ Registered adapters:
 - `juejin`
 - `zhihu`
 - `wechat`
+- `wechat_v2` (inherits `wechat`; routes api.weixin.qq.com calls through the self-hosted relay on Oracle so WeChat sees a fixed egress IP)
 - `csdn`
 - `cnblogs`
 - `segmentfault`
+- `51cto`
+- `website`
 
 Each adapter implements `AccountService` from `src/worker/accounts/types.ts`.
+
+## Deployment Topology
+
+- Cloudflare Worker (`blog-to-post`) serves the dashboard/API and a `*/30 * * * *` cron that probes the relay's `/healthz`.
+- WeChat traffic for `wechat_v2` flows through a stateless relay container (`relay/`, zero-dependency Node 22) on an Oracle Always Free server, publicly reached via `https://wechat-static-ip.nurverse.com` (Cloudflare Full strict + Origin CA). Auth is a shared `x-relay-token` header; only `/cgi-bin/*` of `api.weixin.qq.com` is forwarded.
+- `platform_accounts.isActive` is the user-controlled enable/disable flag; disabled accounts are rejected by the publish pipeline and hidden from the publish dialog.
 
 ## AI Agent Guidance
 

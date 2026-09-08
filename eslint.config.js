@@ -9,6 +9,7 @@ export default tseslint.config(
 		ignores: [
 			"dist",
 			"node_modules",
+			"deployment-artifacts",
 			"worker-configuration.d.ts",
 			"**/.*/**",
 			"relay/**",

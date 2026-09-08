@@ -4,7 +4,7 @@ AI-assisted multi-platform article publishing system.
 
 Write a technical article once, then generate metadata, normalize images, create platform drafts, publish, and inspect every publish step from one workspace.
 
-Current status: active development, updated on 2026-04-27.
+Current status: active development, updated on 2026-09-02.
 
 ## What It Does
 
@@ -58,11 +58,16 @@ http-docs/                    # API notes
 | Zhihu | `src/worker/accounts/zhihu.ts` | cookie/session token | yes | yes | Includes image upload token flow and image URL replacement. |
 | Juejin | `src/worker/accounts/juejin.ts` | cookie/session token | yes | yes | Baseline official web API flow. |
 | WeChat Official Account | `src/worker/accounts/wechat.ts` | `appId` + `appSecret` | yes | yes | Requires official API access and IP whitelist. Uploads content images and `thumb_media_id`. |
+| WeChat Official Account V2 | `src/worker/accounts/wechat-v2.ts` | `appId` + `appSecret` | yes | yes | Same flow as WeChat, but all WeChat API traffic is routed through the self-hosted relay (`relay/`) so WeChat always sees the fixed egress IP. Preferred for new accounts. |
 | CSDN | `src/worker/accounts/csdn.ts` | cookie/session token | yes | yes | Sends both markdown and HTML content; Prism code tokens; title emoji cleanup. |
 | CNBlogs | `src/worker/accounts/cnblogs.ts` | cookie/session token | yes | yes | Uses CNBlogs editor APIs and image replacement flow. |
 | SegmentFault | `src/worker/accounts/segmentfault.ts` | cookie/session token | yes | yes | Handles draft/publish and platform image upload. |
+| 51CTO | `src/worker/accounts/cto51.ts` | cookie/session token | yes | yes | Full draft-to-publish flow with 51CTO image host upload. |
+| Personal Website | `src/worker/accounts/website.ts` | `baseUrl` + admin token | yes | yes | Publishes to the app's own D1-backed blog flow. |
 
 Every adapter implements the common `AccountService` contract from `src/worker/accounts/types.ts`.
+
+Accounts can be individually enabled/disabled from the accounts page (`platform_accounts.isActive`); disabled accounts are rejected by the publish pipeline and hidden from the publish dialog.
 
 ## Publishing Flow
 

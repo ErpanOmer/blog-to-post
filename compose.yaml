@@ -1,0 +1,34 @@
+name: blog-to-post
+services:
+  app:
+    image: ${BLOG_IMAGE:-blog-to-post:local}
+    build: .
+    init: true
+    restart: unless-stopped
+    env_file:
+      - path: ${BLOG_ENV_FILE:-./.env}
+        format: raw
+    environment:
+      DATA_DIR: /data
+      HOST: 0.0.0.0
+      PORT: 18473
+      DEPLOY_REVISION: ${DEPLOY_REVISION:-local}
+    ports:
+      - "${BLOG_BIND_IP:-127.0.0.1}:${BLOG_PORT:-18473}:18473"
+    volumes:
+      - ${BLOG_DATA_DIR:-./.wrangler/state/v3}:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 1536m
+    cpus: 2
+    stop_grace_period: 5m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

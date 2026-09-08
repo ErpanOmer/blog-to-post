@@ -21,6 +21,7 @@ import { getAccountStatistics, getPlatformAccounts, getPublications, getPublishT
 import type { Article, PlatformAccount, PlatformType } from "@/react-app/types";
 import type { AccountStatistics, ArticlePublication, PublicationStatus, PublishTask } from "@/react-app/types/publications";
 import { PlatformBadge, PlatformLogo } from "@/react-app/components/PlatformBrand";
+import { DashboardInsights } from "@/react-app/components/DashboardInsights";
 import { getPlatformBrand, getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 import { PUBLISHABLE_PLATFORMS, isPublishablePlatform } from "@/shared/platform-settings";
 import type { PublishablePlatformType } from "@/shared/types";
@@ -34,7 +35,7 @@ type PlatformFilter = "all" | PublishablePlatformType;
 type ActivityFilter = "all" | "published" | "draft_created" | "failed";
 type TrendRange = 7 | 14 | 30;
 
-type PlatformRollup = {
+export type PlatformRollup = {
   platform: PublishablePlatformType;
   published: number;
   drafts: number;
@@ -269,6 +270,15 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
     const averageTaskDuration = tasks.length > 0 ? Math.round(tasks.reduce((sum, task) => sum + getTaskDuration(task), 0) / tasks.length) : 0;
     const trend = getTrend(publications, trendRange, trendPlatform);
 
+    const recentTaskDurations = [...tasks]
+      .sort((a, b) => (b.completedAt || b.updatedAt) - (a.completedAt || a.updatedAt))
+      .slice(0, 20)
+      .reverse()
+      .map((task) => ({
+        label: formatDateKey(new Date(task.completedAt || task.updatedAt || task.createdAt)),
+        minutes: Math.round((getTaskDuration(task) / 60000) * 10) / 10,
+      }));
+
     return {
       totalArticles,
       totalFormalPublished,
@@ -283,6 +293,7 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
       verifiedAccounts: accounts.filter((account) => account.isActive && account.isVerified).length,
       totalAccounts: accounts.length,
       averageTaskDuration,
+      recentTaskDurations,
     };
   }, [accountStats, accounts, activityFilter, articles, linkPlatform, publications, tasks, trendPlatform, trendRange]);
 
@@ -381,6 +392,17 @@ export function Dashboard({ articles, onNavigate }: DashboardProps) {
           );
         })}
       </div>
+
+      <DashboardInsights
+        platformRows={summary.platformRows}
+        totals={{
+          published: summary.totalFormalPublished,
+          drafts: summary.totalDraftPublished,
+          failed: summary.totalFailed,
+        }}
+        taskDurations={summary.recentTaskDurations}
+        averageDurationMinutes={Math.round((summary.averageTaskDuration / 60000) * 10) / 10}
+      />
 
       <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(420px,0.8fr)]">
         <Card className="border-design-border bg-white">

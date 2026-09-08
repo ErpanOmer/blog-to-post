@@ -89,6 +89,25 @@ app.get("/providers/:id/models", async (c) => {
 	return c.json(await listModelsForProvider(profile));
 });
 
+// Model discovery for an UNSAVED configuration: the settings form calls this
+// with protocol/baseUrl and an optional apiKey before the profile exists.
+app.post("/providers/discover-models", async (c) => {
+	const input = await c.req.json<{
+		protocol: CreateAIProviderProfileInput["protocol"];
+		baseUrl?: string | null;
+		apiKey?: string | null;
+	}>();
+	const profile = candidateProfileWithSecret(c.env, {
+		name: "model-discovery",
+		protocol: input.protocol,
+		baseUrl: input.baseUrl ?? "",
+		apiKey: input.apiKey ?? "",
+		defaultModel: "model-discovery",
+		enabled: true,
+	});
+	return c.json(await listModelsForProvider(profile));
+});
+
 app.put("/providers/:id", async (c) => {
 	const input = await c.req.json<UpdateAIProviderProfileInput>();
 	return c.json(await updateProviderProfile(c.env, c.req.param("id"), input));

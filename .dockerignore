@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.wrangler
+.env*
+.dev.vars*
+**/.env*
+**/.dev.vars*
+.agents
+.codex
+.zcode
+.claude
+relay
+*.log
+deployment-artifacts

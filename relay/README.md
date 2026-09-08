@@ -4,6 +4,10 @@
 把 blog-to-post Worker 的微信请求原样转发到 `api.weixin.qq.com`，使微信看到的服务器出口 IP
 固定为 Oracle 服务器 IP，从而满足公众号 IP 白名单要求。
 
+公网入口：`https://wechat-static-ip.nurverse.com`（Cloudflare 代理，SSL 模式 Full (strict)，
+源站证书为 Cloudflare Origin CA，有效期至 2041 年，位于服务器 `/opt/wechat-relay/certs/`）。
+裸 IP `http://192.9.132.160` 仍可直接访问，主要用于监控拨测。
+
 零 npm 运行时依赖（仅 TypeScript 编译依赖），Node 22 原生 `node:http` + `fetch`。
 
 ## 安全模型
@@ -58,3 +62,16 @@ curl -s http://127.0.0.1/healthz
 CI（`.github/workflows/deploy-relay.yml`）在 `relay/**` 变更推送到 master 时自动执行相同部署。
 需要在 GitHub 仓库 Settings → Secrets and variables → Actions 配置三个 Secret：
 `ORACLE_HOST`（服务器 IP）、`ORACLE_SSH_USER`（opc）、`ORACLE_SSH_KEY`（部署专用私钥全文）。
+
+## 监控与防回收
+
+三层机制，互为冗余：
+
+1. **Worker cron**（`wrangler.json` triggers `*/30 * * * *`）：Cloudflare Worker 每 30 分钟请求一次
+   `${WECHAT_RELAY_BASE_URL}/healthz`，结果写入 Worker 日志（`relay_healthz` / `relay_healthz_failed`），
+   可用 `wrangler tail` 观察。
+2. **ZCode 定时任务**：每 30 分钟从本地直连 `http://192.9.132.160/healthz`（绕过 Cloudflare，
+   直接探测源站），异常时尝试 `docker start` 自愈并告警。
+3. **systemd `oracle-keepalive`**：以约 30% 占空比持续消耗 CPU，防止 Oracle 将 Always Free
+   实例判定为空闲而回收（注意：E2.Micro 基线 CPU 约 12.5%，单纯的外部 ping 无法满足其
+   空闲判定阈值，该服务是主要防回收手段）。

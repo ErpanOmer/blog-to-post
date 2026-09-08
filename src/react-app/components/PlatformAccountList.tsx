@@ -8,6 +8,7 @@ import { PlatformBadge, PlatformLogo } from "@/react-app/components/PlatformBran
 import { getPlatformDisplayName } from "@/react-app/components/platform-brand-data";
 import { isPublishablePlatform } from "@/shared/platform-settings";
 import type { PlatformPublishSettingsMap } from "@/shared/types";
+import { getVerifyStaleDays } from "@/react-app/utils/account-health";
 import { CheckCircle2, Clock, Eye, Key, Pencil, Shield, ShieldX, Trash2 } from "lucide-react";
 
 interface PlatformAccountListProps {
@@ -44,6 +45,7 @@ export function PlatformAccountList({ accounts, onEdit, onDelete, onToggleActive
 				const label = getPlatformDisplayName(account.platform);
 				const disabledByPlatform = isAccountPlatformDisabled(account, platformSettings);
 				const maskedToken = account.authToken ? `${account.authToken.slice(0, 4)}...${account.authToken.slice(-4)}` : null;
+				const staleDays = getVerifyStaleDays(account);
 
 				return (
 					<article
@@ -78,6 +80,18 @@ export function PlatformAccountList({ accounts, onEdit, onDelete, onToggleActive
 											</Badge>
 										)}
 										{!account.isActive && <Badge variant="outline" className="text-[10px]">已停用</Badge>}
+										{staleDays !== null && (
+											<Badge
+												variant="outline"
+												className={
+													staleDays >= 30
+														? "border-red-200 bg-red-50 text-red-600 text-[10px]"
+														: "border-amber-200/70 bg-amber-50 text-amber-700 text-[10px]"
+												}
+											>
+												{staleDays} 天未验证
+											</Badge>
+										)}
 										{disabledByPlatform && (
 											<Badge variant="outline" className="border-amber-200/70 bg-amber-50 text-amber-700 text-[10px]">
 												平台已禁用，只读

@@ -198,3 +198,6 @@ dist
 !.env.example
 .dev.vars*
 !.dev.vars.example
+
+# Source packages, migration snapshots and deployment reports
+deployment-artifacts/

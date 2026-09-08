@@ -1,71 +1,43 @@
-## 微信固定出口 IP 方案：wechat_v2 适配器 + Oracle 转发容器
+## 五项功能实施计划
 
-### 架构
+### 功能 1：账号健康面板（/accounts 页）
 
-```
-CF Worker (wechat_v2 适配器)
-   │  原 URL: https://api.weixin.qq.com/cgi-bin/xxx  (逻辑/代码不变)
-   │  v2 仅在 request() 汇聚点改写为:
-   ▼
-http://192.9.132.160/cgi-bin/xxx   + x-relay-token 鉴权头
-   │  Oracle Docker 容器 (relay，只允许转发到 api.weixin.qq.com)
-   ▼
-https://api.weixin.qq.com/cgi-bin/xxx   ← 微信看到的出口 IP = 192.9.132.160
-```
+- **过期预警**：`PlatformAccountList` 卡片在"验证于"旁增加时效徽章——`lastVerifiedAt` 超过 7 天显示琥珀色"7天未验证"，超过 30 天红色"30天未验证"（纯客户端计算，无后端改动）。
+- **健康摘要条 + 批量验证**：`PlatformAccountsPanel` 过滤栏增加统计（启用 x · 停用 y · 未验证 z · 超期 n）+ "批量验证"按钮：对当前筛选下**启用**的账号按并发 2 顺序调用现有 `POST /:id/verify`，sonner 进度 toast 实时更新（x/y），完成后汇总成功/失败并 `fetchAccounts()` 刷新。
+- **启用时自动验证**（你的核心诉求）：`handleToggleActive` 在 `nextActive=true` 时，更新状态后立即 `verifyPlatformAccount(id)`，用 `toast.promise` 展示"正在验证账号可用性…"，结果 toast 报告账号是否真实可用（valid 与否），完成后刷新列表。停用方向不验证。
+- 不新增 worker 路由，复用现有 verify 接口。
 
-- relay 是**无状态转发器**：AppSecret/access_token 不存储在服务器上，只随请求透传（满足"凭证带过去"且更安全）。
-- relay 强制鉴权（共享密钥 `x-relay-token`，常量时间比较），路径只放行 `/cgi-bin/` 前缀 → 不是开放代理。
-- 日志只记 method + 去掉 query 的 path + 状态码 + 耗时，永不记录 query/header/body → AppSecret、access_token、签名不出现在任何日志；Worker 侧 tracing 沿用现有 `sanitizeUrlForLog` 脱敏。
+### 功能 2：Dashboard 数据可视化（"数据洞察"新区块）
 
----
+用**已安装但从未使用的 recharts**（不新增依赖）在 Dashboard 双列区下方新增两个 SectionCard：
+1. **平台发布分布** donut 图：各平台成功发布次数占比（正式+草稿），颜色映射各平台品牌色（新增 platform→hex 常量表，与现有徽章色一致）。
+2. **发布构成与任务耗时**：左环形图（正式/草稿/失败占比），右折线图（最近 20 次发布任务耗时，含平均参考线）。
+- 数据全部来自现有 API（`/api/publish/history` + `/api/publish/tasks`，Dashboard 已在拉取），客户端聚合，**无后端改动**；遵循 DESIGN.md（SectionCard、无装饰渐变）。
 
-### Phase A：仓库内新建 `relay/` 转发服务（零依赖 Node 22 + TS）
+### 功能 3：Worker cron 健康检查（每 30 分钟）
 
-新建文件（`relay/` 自带 package.json/tsconfig，不进主工程 tsc/vitest/eslint 范围）：
-- `relay/src/server.ts` — Node 原生 `node:http` 服务（零 npm 依赖）：
-  - `GET /healthz` 免鉴权（供 CI/监控用，无信息泄露）
-  - `GET /debug/egress-ip` 需鉴权：用假 appid/secret 调 `/cgi-bin/token`，从微信 40164 错误里提取"微信实际看到的出口 IP"——用于白名单配置前的验证
-  - 其余：校验 `x-relay-token` → 路径前缀白名单（仅 `/cgi-bin/`）→ 读取原始 body（上限 64MB，覆盖 10MB 图片 multipart）→ 原样转发 method/query/`content-type` 到 `https://api.weixin.qq.com<path>?<query>` → 90s 超时 → 原样回传响应。JSON 和 FormData(multipart) 走同一透传路径，天然正确。
-- `relay/Dockerfile`（多阶段：builder 装 typescript 编译 → runtime 仅 `node:22-alpine` + dist，无 npm install）、`relay/compose.yml`（`unless-stopped`、内存限制 256MB、日志轮转 max-size=10m）、`.dockerignore`、`README.md`
+- `wrangler.json` 启用 `"triggers": { "crons": ["*/30 * * * *"] }`。
+- **关键安全点**：现有 `scheduled` handler 会无条件跑 `processScheduledTasks` + `runDailyCron`（后者每次生成 3 篇 AI 草稿并把全部草稿转 reviewed！）。改造为三参签名 `(event, env, ctx)` 按分支执行：
+  - `processScheduledTasks`（幂等、轻量）→ 所有 cron 都执行；
+  - `event.cron === "*/30 * * * *"` → `ctx.waitUntil(fetch ${WECHAT_RELAY_BASE_URL}/healthz)`（复用现有变量，10s 超时，结果写日志，失败不抛错）；
+  - `runDailyCron` 仅在 `"0 2 * * *"` 表达式时执行——**该表达式不排入 triggers**，保持休眠，避免 30 分钟一次的副作用；将来想开每日 AI 生成，triggers 加一行即可。
+- 期望管理：healthz 入站流量对 Oracle 空闲判定贡献很小，防回收主力仍是服务器上已部署的 systemd keep-alive；这个 cron 的价值是**持续拨测 + 生产日志留痕**（配合 `wrangler tail` 可观察）。
 
-### Phase B：Oracle 服务器部署（现在就手动做，验证可用后 CI 接管）
+### 功能 4：文档刷新
 
-1. 生成本机新部署专用密钥 `~/.ssh/oci_wechat_deploy_ed25519`（与个人密钥分离），pubkey 追加到服务器 `authorized_keys`
-2. 删除 `hello-server` 容器腾出 80 端口；scp relay 文件到 `/opt/wechat-relay/`；生成 `RELAY_API_KEY`（openssl rand -hex 32）写入服务器 `.env`；`docker compose up -d --build`
-3. 验收①：本机 `curl http://192.9.132.160/healthz` → ok
-4. 验收②（关键）：本机调 `/debug/egress-ip` → 微信 40164 错误里显示 `192.9.132.160` = 微信确认出口 IP 正确
-5. ⚠️ **需要你操作**：微信公众平台 → 设置与开发 → 基本配置 → IP 白名单，加入 `192.9.132.160`
-6. 验收③：从本地用真实 appid/secret 发起 `/cgi-bin/token`（经 relay）→ 拿到 `access_token` = 白名单生效。凭证来源：从生产 D1 读出 `wechat` 账户的加密 authToken，用 `.env` 的 ENCRYPTION_KEY 在本地解密（解密脚本放 `.tmp/`，不入库）
+- **AGENTS.md**：环境变量删掉 `OLLAMA_*` 换成真实清单（`ENCRYPTION_KEY`、`WECHAT_RELAY_BASE_URL/API_KEY` 等）；平台列表补 `wechat_v2`；仓库地图补 `relay/`、`.github/workflows/`、`cron.ts`；重要表清单补 `ai_provider_profiles`/`ai_model_routes`；"AI, Prompts, and Settings"章节改写为 provider profiles + 功能路由架构；新增"部署拓扑"节（CF Worker → 域名/CF Full(strict) → Oracle relay 容器 → 微信，含 keep-alive 与监控）；新增账号启用/停用说明（isActive 语义与发布门禁）。
+- **relay/README.md**：补域名接入 + CF 回源模式、证书位置与 2041 有效期、"监控与防回收"节（Worker cron、ZCode 定时任务、systemd keep-alive 三层）。
+- **.agents/skills/project-overview/SKILL.md**：适配器清单补 `51cto`/`website`/`wechat_v2`，补 relay 拓扑一段（该文件供 AI 代理阅读，与 AGENTS.md 同步）。
+- 根 README.md 如存在过期内容则同步关键段落。
 
-### Phase C：GitHub Actions 自动部署
+### 功能 5：AI 多平台接入（评估结论 + 两项优化）
 
-- `.github/workflows/deploy-relay.yml`：push 到 master 且 `relay/**` 有变更时（含 workflow_dispatch）触发：runner 上 `npm ci && tsc` 编译 relay → scp `dist + Dockerfile + compose.yml` 到 `/opt/wechat-relay/` → ssh `docker compose up -d --build` → curl healthz 验活。不用镜像仓库，只需 SSH secrets。
-- ⚠️ **需要你操作（一次性）**：GitHub 仓库 Settings → Secrets 添加 `ORACLE_HOST`、`ORACLE_SSH_USER=opc`、`ORACLE_SSH_KEY`（部署私钥）。我会把私钥内容输出到指定位置供你粘贴（本机无 gh CLI；若你装好 gh 并 `gh auth login`，我也可以代为写入）。
+**评估结论：不需要重构，也建议不引入 LiteLLM/OneAPI 等网关**（个人工具跑网关过重）。现有 `openai-compatible` + `anthropic` 双协议（Vercel AI SDK）已覆盖：DeepSeek、Claude、Gemini（compat baseUrl）、NVIDIA NIM、月之暗面、通义 DashScope、智谱 GLM、硅基流动、OpenRouter、Ollama 等——**加平台=加一条 provider profile，零代码**。真正的缺口是配置体验，补两项：
+1. **平台预设目录**：`AIConfigurationPanel` 协议/表单区增加预设下拉（约 10 个平台：名称、协议、baseUrl、默认模型、备注），选择即一键填充，减少查文档成本。
+2. **未保存配置的模型发现**：worker 新增 `GET /api/ai/models?protocol&baseUrl&apiKey`（复用现有 `listModelsForProvider`），表单在未保存状态下也能"获取模型列表"下拉选择（已保存配置的 `:id/models` 已存在）。
+3. 已知限制写入文档：生产环境 baseUrl 强制 HTTPS，故本地 Ollama 仅限本地开发使用。
 
-### Phase D：Worker 端 `wechat_v2` 适配器（不动 wechat.ts 逻辑）
+### 实施顺序与验收
 
-- 新建 `src/worker/accounts/wechat-v2.ts`：`class WechatV2AccountService extends WechatAccountService`，仅覆写 `request()`——`https://api.weixin.qq.com` 前缀改写为 `WECHAT_RELAY_BASE_URL`（默认 `http://192.9.132.160`）+ 注入 `x-relay-token`（缺 `WECHAT_RELAY_API_KEY` 时直接抛中文错误，publish steps 可见）；`registerAccountService("wechat_v2", ...)`。超时/延迟/tracing/重试/token 刷新/图片候选重试全部继承。
-- 平台注册面（探查已定位到行号）：`src/shared/types.ts:1`（PlatformType）、`src/shared/platform-settings.ts`（列表/显示名"公众号V2"/图标）、`src/worker/routes/publish.ts:36`、`src/worker/routes/accounts.ts:65,85`（appId/appSecret 表单分支，抽 `isWechatFamilyPlatform()` 共享判断）、`src/worker/services/publish.ts:899`（草稿 URL 特例）、`src/worker/platform/adapters.ts:62`、`src/worker/routes/articles.ts:461`（发布 URL 形状校验）、`src/react-app/components/platform-brand-data.ts`（Record 穷尽，TS 会强制）、`src/react-app/components/PlatformAccountForm.tsx:124`（凭证表单分支）、`PlatformPublishSettingsPanel.tsx`（描述文案）。**D1 无需迁移**；`cron.ts` 不加 v2（避免重复生成草稿）。
-- Env：`src/worker/types.ts` 加 `WECHAT_RELAY_BASE_URL?`、`WECHAT_RELAY_API_KEY?`；wrangler.json 加 base URL var；API key 用 `wrangler secret put` 写入生产，`.env` 加本地开发值。验证：`npm run lint && npm run build`。
-
-### Phase E：端到端验收（用最近一篇文章）
-
-1. `npm run deploy` 发布 Worker（与现有部署方式一致）
-2. 通过 API 创建 `wechat_v2` 账户（真实 appId/appSecret）→ 创建时的 verify 调 `/cgi-bin/getcallbackip` 走通全链路
-3. **草稿发布**（draftOnly）：选生产 D1 最新文章 → 走 `wechat_v2` 账户 → 验收：token 获取成功（=微信认 192.9.132.160）、`publish_task_steps` 无错误、草稿出现在公众平台后台、图片正常
-4. **完整发布**：同文章 freepublish → 验收：发布成功、`article_publications` URL 形状正确、文章在公众号可见
-5. **回滚能力验证**：旧 `wechat` 平台账户全程未动，随时可在发布对话框换回旧账户 = 秒级回滚；删掉 v2 账户即完全下线新链路
-
-### Phase F：转正
-
-验收通过后：账户表单中 `wechat_v2` 设为微信类平台默认选项，文案标注"推荐（固定出口 IP）"；旧 `wechat` 保留可用作为逃生通道。
-
-### 安全说明（按你的指示执行 + 一点提醒）
-
-- 仅代理 `api.weixin.qq.com`，路径限定 `/cgi-bin/`；鉴权失败/越径一律 403。
-- 明确风险：Worker→relay 是明文 HTTP，AppSecret（token 换取的 query 参数）在该段链路对网络观察者可见，靠 x-relay-token + 后续可做 NSG 限源（Cloudflare IP 段）缓解；未来若你有域名，可加 Caddy/Let's Encrypt 升级 HTTPS，Worker 只需改 `WECHAT_RELAY_BASE_URL` 一个变量。
-- `.tmp/` 下的解密脚本、私钥、RELAY_API_KEY 不进 git；所有日志/trace 脱敏规则两端都遵守。
-
-### 明确不做的事
-
-不改 `wechat.ts` 任何逻辑；不代理 `mmbiz.qpic.cn` 图片验证/下载（非 api.weixin.qq.com 域，按你要求只代理微信 API 域）；不动 D1 schema；不改发布编排流程；不新增付费资源。
+顺序：③ cron（最小）→ ① 账号健康 → ② Dashboard → ⑤ AI 预设 → ④ 文档（最后写，反映最终状态）。
+验收：`npm run lint` + `npm run build` 全绿；dev server 实测（启用开关自动 verify、批量验证进度、过期徽章、AI 预设填充、Dashboard 截图）；cron 用 `wrangler deploy --dry-run` 验证配置，部署后用 `wrangler tail` 观察首次触发日志。

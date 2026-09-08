@@ -109,6 +109,10 @@ const WECHAT_ARTICLE_INLINE_STYLE_MAP: ReadonlyArray<{
     style: "font-size:20px;font-weight:700;margin:1.2em 0 0.6em;color:#35b378;"
   },
   {
+    tagName: "h4",
+    style: "font-size:17px;font-weight:700;margin:1em 0 0.4em;color:#35b378;"
+  },
+  {
     tagName: "ul",
     style: "margin:8px 0;padding-left:25px;list-style-type:disc;color:#000;"
   },
