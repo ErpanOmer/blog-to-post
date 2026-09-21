@@ -3,10 +3,16 @@ set -Eeuo pipefail
 umask 077
 revision="${1:?revision required}"
 [[ "$revision" =~ ^[a-f0-9]{12,40}(-working-[0-9]+)?$ ]] || exit 2
-base=/srv/projects/blog-to-post
-data=/srv/data/blog-to-post
+# The destination server uses Docker rootless under the deploy user. Keep this
+# compatible with a rootful Docker installation on older servers.
+if [[ -x "$HOME/bin/docker" ]]; then
+  export PATH="$HOME/bin:$PATH"
+  export DOCKER_HOST="${DOCKER_HOST:-unix:///run/user/$(id -u)/docker.sock}"
+fi
+base="${BLOG_DEPLOY_ROOT:-/srv/data/projects/blog-to-post}"
+data="${BLOG_DATA_DIR:-/srv/data/blog-to-post}"
 release="$base/releases/$revision"
-mkdir -p "$base/shared" /srv/backups/blog-to-post "$data"
+mkdir -p "$base/shared" "${BLOG_BACKUP_DIR:-/srv/data/backups/blog-to-post}" "$data"
 exec 9>"$base/deploy.lock"
 flock -w 1800 9
 [[ -s "$base/shared/runtime.env" ]] || { echo 'Provision shared/runtime.env first'; exit 1; }
@@ -24,7 +30,7 @@ previous=$(readlink -f "$base/current" || true)
 previous_image=$(cat "$base/shared/current-image" 2>/dev/null || true)
 cd "$release"
 docker build --label "org.opencontainers.image.revision=$revision" -t "$BLOG_IMAGE" .
-backup="/srv/backups/blog-to-post/$(date -u +%Y%m%dT%H%M%SZ)-$revision.tar.gz"
+backup="${BLOG_BACKUP_DIR:-/srv/data/backups/blog-to-post}/$(date -u +%Y%m%dT%H%M%SZ)-$revision.tar.gz"
 snapshot_ready=false
 restore_previous() {
   trap - ERR

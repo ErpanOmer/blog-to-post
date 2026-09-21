@@ -2,15 +2,15 @@
 
 ## 当前服务器
 
-- SSH：`erpan@urtopiaserver`
+- SSH：`erpan@192.168.1.232`
 - 应用：<https://blog-to-post.nurverse.com/>（Cloudflare Tunnel + Access）
 - 本机源站：<http://127.0.0.1:18473/>（仅服务器自身可访问）
 - 容器：`blog-to-post-app-1`，自动重启，端口 `18473`
-- 当前代码：`/srv/projects/blog-to-post/current`，指向 `releases/` 下的具体版本
+- 当前代码：`/srv/data/projects/blog-to-post/current`，指向 `releases/` 下的具体版本
 - D1 / KV / R2：`/srv/data/blog-to-post/{d1,kv,r2}`
-- 运行密钥：`/srv/projects/blog-to-post/shared/runtime.env`，权限 `600`
-- 部署设置：`/srv/projects/blog-to-post/shared/deploy.env`
-- 部署前备份：`/srv/backups/blog-to-post/`
+- 运行密钥：`/srv/data/projects/blog-to-post/shared/runtime.env`，权限 `600`
+- 部署设置：`/srv/data/projects/blog-to-post/shared/deploy.env`
+- 部署前备份：`/srv/data/backups/blog-to-post/`
 
 默认使用 `BLOG_BIND_IP=127.0.0.1`、`BLOG_PORT=18473`，无需手动配置这两个变量。
 `shared/deploy.env` 是可选的覆盖文件，示例见 `deploy/urtopiaserver.env.example`。
@@ -18,6 +18,10 @@
 宿主机上的 systemd `cloudflared` 通过回环地址访问应用，不依赖局域网 IP 或 Tailscale。
 
 服务器数据是迁移后的唯一日常数据源。代码更新不再上传本地数据。
+当前目标服务器使用 Docker rootless，Docker CLI 位于 `/home/erpan/bin`，用户 socket 为
+`unix:///run/user/1000/docker.sock`；部署脚本会自动设置这两个值。
+rootless 目标的 `shared/deploy.env` 可设置 `BLOG_RUNTIME_USER=0`，让容器 root 映射到
+宿主机普通用户，以便写入 bind mount；rootless Docker 不授予该进程宿主机 root 权限。
 保留在本机 `.wrangler/state/v3` 的数据仅作为迁移时的副本，不会自动与服务器双向同步。
 不要同时启动本地开发服务并继续编辑旧副本。
 
@@ -59,7 +63,7 @@ npm run deploy:install-hook
 当前首次服务器部署采用完整工作区快照，保留迁移开始前已有的未提交功能修改。
 
 此机制在本机通过 SSH 执行，不依赖 GitHub Actions 或公网 SSH，也不要求 `git push`。
-本机必须能连接 `erpan@urtopiaserver`，commit 命令会等待部署完成。
+本机必须能连接 `erpan@192.168.1.232`，commit 命令会等待部署完成。
 其他机器或 GitHub 网页上的提交不会触发这个 checkout 的 Git 钩子。
 部署失败会显示错误，已经创建的 Git commit 仍然保留。
 
@@ -90,7 +94,7 @@ git config blog-to-post.autoDeploy true
 ## 常用运维
 
 ```sh
-ssh erpan@urtopiaserver
+ssh erpan@192.168.1.232
 docker ps --filter name=blog-to-post
 docker logs --tail 100 blog-to-post-app-1
 docker restart blog-to-post-app-1
@@ -103,18 +107,18 @@ Miniflare 的内部控制和调试端点不会通过应用监听端口公开。
 在服务器手动调用 Compose 时应加载共享配置，避免误用默认路径：
 
 ```sh
-cd /srv/projects/blog-to-post/current
+cd /srv/data/projects/blog-to-post/current
 set -a
 if [ -f /srv/projects/blog-to-post/shared/deploy.env ]; then
-  . /srv/projects/blog-to-post/shared/deploy.env
+. /srv/data/projects/blog-to-post/shared/deploy.env
 fi
 set +a
 export BLOG_BIND_IP="${BLOG_BIND_IP:-127.0.0.1}"
 export BLOG_PORT="${BLOG_PORT:-18473}"
-export BLOG_ENV_FILE=/srv/projects/blog-to-post/shared/runtime.env
+export BLOG_ENV_FILE=/srv/data/projects/blog-to-post/shared/runtime.env
 export BLOG_DATA_DIR=/srv/data/blog-to-post
-export BLOG_IMAGE=$(cat /srv/projects/blog-to-post/shared/current-image)
-export DEPLOY_REVISION=$(cat /srv/projects/blog-to-post/shared/current-revision)
+export BLOG_IMAGE=$(cat /srv/data/projects/blog-to-post/shared/current-image)
+export DEPLOY_REVISION=$(cat /srv/data/projects/blog-to-post/shared/current-revision)
 docker compose up -d --no-build --wait
 ```
 

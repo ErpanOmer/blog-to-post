@@ -5,6 +5,9 @@ services:
     build: .
     init: true
     restart: unless-stopped
+    # Rootless Docker maps container root to the deploy user on the host. The
+    # target server can opt into this for bind-mounted Miniflare storage.
+    user: "${BLOG_RUNTIME_USER:-node}"
     env_file:
       - path: ${BLOG_ENV_FILE:-./.env}
         format: raw

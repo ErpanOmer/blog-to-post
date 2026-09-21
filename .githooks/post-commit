@@ -3,7 +3,7 @@
 if [ "$(git config --bool blog-to-post.autoDeploy)" != "true" ]; then
   exit 0
 fi
-echo "Deploying this commit to urtopiaserver..."
+echo "Deploying this commit to erpan@192.168.1.232..."
 node deploy/deploy.mjs || {
   echo "Commit saved, but deployment FAILED. Previous server release was retained. Retry: npm run deploy:server" >&2
   exit 1
